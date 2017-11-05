@@ -15,170 +15,140 @@
 // You should have received a copy of the GNU General Public License
 // along with MIMORI.  If not, see <http://www.gnu.org/licenses/>.
 
-module NDCounterAddFlag(
+module NDAdder(
+	i_restart,
 	i_cur,
+	i_cur_noofs,
+	i_beg,    // not used if FROM_ZERO = 1
+	i_stride, // not used if UNIT_STRIDE = 1
 	i_end,
-	i_carry,
-	o_reset_counter,
-	o_add_counter,
-	o_done
+	i_global_end,
+	o_nxt,
+	o_nxt_noofs,
+	o_sel_beg,
+	o_sel_end,
+	o_sel_ret,
+	o_carry
 );
-
+//======================================
+// Parameter
+//======================================
 parameter BW = 8;
 parameter DIM = 2;
-localparam TOTAL_BW = BW*DIM;
+parameter FROM_ZERO = 0;
+parameter UNIT_STRIDE = 0;
 
-input        [BW-1:0] i_cur [DIM];
-input        [BW-1:0] i_end [DIM];
-input                 i_carry    ;
-output logic [DIM-1:0] o_reset_counter;
-output logic [DIM-1:0] o_add_counter;
-output logic           o_done;
+//======================================
+// I/O
+//======================================
+input           i_restart;
+input  [BW-1:0] i_cur        [DIM];
+input  [BW-1:0] i_cur_noofs  [DIM];
+input  [BW-1:0] i_beg        [DIM];
+input  [BW-1:0] i_stride     [DIM];
+input  [BW-1:0] i_end        [DIM];
+input  [BW-1:0] i_global_end [DIM];
+output logic [BW-1:0] o_nxt       [DIM];
+output logic [BW-1:0] o_nxt_noofs [DIM];
+output [DIM:0]  o_sel_beg;
+output [DIM:0]  o_sel_end;
+output [DIM:0]  o_sel_ret;
+output          o_carry;
 
-logic [DIM-1:0] equal;
-logic [DIM-1:0] reset_counter;
-logic [DIM-1:0] reset_counter_inv;
-logic [DIM-1:0] add_counter;
-logic           done;
-
-always_comb begin
-	for (int i = 0; i < DIM; i++) begin
-		equal[i] = i_cur[i] == i_end[i];
-	end
-end
-
-FindFromMsb#(DIM, 0) u_ff(equal, reset_counter_inv, {add_counter,done});
-assign reset_counter = ~reset_counter_inv;
-always_comb begin
-	if (i_carry) begin
-		o_add_counter = add_counter;
-		o_reset_counter = reset_counter;
-		o_done = done;
+//======================================
+// Internal
+//======================================
+logic [BW-1:0] added [DIM];
+logic [BW-1:0] added_noofs [DIM];
+logic [DIM-1:0] l_islast;
+logic [DIM-1:0] g_iszero;
+logic [DIM-1:0] g_islast;
+logic [DIM-1:0] cur_rst;
+always_comb for (int i = 0; i < DIM; i++) begin
+	if (UNIT_STRIDE) begin
+		added[i] = i_cur[i] + 'b1;
+		added_noofs[i] = i_cur_noofs[i] + 'b1;
 	end else begin
-		o_add_counter = '0;
-		o_reset_counter = '0;
-		o_done = 1'b0;
+		added[i] = i_cur[i] + i_stride[i];
+		added_noofs[i] = i_cur_noofs[i] + i_stride[i];
 	end
+	g_iszero[      i] = added[i] == '0;
+	g_islast[DIM-1-i] = added[i] == i_global_end[i];
+	l_islast[DIM-1-i] = added[i] == i_end[i];
 end
 
-endmodule
+//======================================
+// Submodule
+//======================================
+FindFromMsb#(DIM, 0) u_sel_beg(.i(g_iszero), .prefix(), .detect(o_sel_beg));
+FindFromLsb#(DIM, 0) u_sel_end(.i(g_islast), .prefix(), .detect(o_sel_end));
+FindFromLsb#(DIM, 0) u_sel_ret(.i(l_islast), .prefix(cur_rst), .detect(o_sel_ret));
 
-module NDCounterAddSelect(
-	i_augend,
-	o_sum,
-	i_start,
-	i_step,
-	i_frac,
-	i_shamt,
-	i_reset_counter,
-	i_add_counter
-);
-
-parameter BW = 32;
-parameter DIM = 4;
-parameter FRAC_BW = 2;
-parameter SHAMT_BW = 4;
-parameter UNIT_STEP = 0; // bool, i_step=(1,1, ...) if true
-localparam FBW = FRAC_BW == 0 ? 1 : FRAC_BW;
-localparam SBW = SHAMT_BW == 0 ? 1 : SHAMT_BW;
-localparam MBW = BW+FRAC_BW;
-localparam [FRAC_BW-1:0] PAD_ZERO = 0;
-localparam [BW-1:0] PAD_ONE = 1;
-// Workaround
-logic [BW-1:0] ND_ZERO [DIM] = '{DIM{0}};
-logic [BW-1:0] ND_ONE [DIM] = '{DIM{1}};
-
-input        [ BW-1:0] i_augend [DIM];
-output logic [ BW-1:0] o_sum    [DIM];
-input        [ BW-1:0] i_start  [DIM];
-input        [ BW-1:0] i_step   [DIM];
-input        [FBW-1:0] i_frac   [DIM];
-input        [SBW-1:0] i_shamt  [DIM];
-input        [DIM-1:0] i_reset_counter;
-input        [DIM-1:0] i_add_counter;
-
-logic [MBW-1:0] sum_raw     [DIM];
-logic [MBW-1:0] sum_shifted [DIM];
-
-generate case ({FRAC_BW == 0, UNIT_STEP != 0})
-	2'b00: begin: all_enable
-		always_comb begin
-			for (int i = 0; i < DIM; i++) begin
-				sum_raw[i] = {PAD_ZERO, i_step[i]} * {PAD_ONE, i_frac[i]};
-			end
+//======================================
+// Combinational
+//======================================
+assign o_carry = o_sel_ret[DIM];
+always_comb for (int i = 0; i < DIM; i++) begin
+	casez ({(i_restart|!cur_rst[DIM-1-i]), o_sel_ret[DIM-1-i]})
+		2'b1?: begin
+			o_nxt[i] = FROM_ZERO ? '0 : i_beg[i];
+			o_nxt_noofs[i] = '0;
 		end
-	end
-	2'b01: begin: frac_only
-		always_comb begin
-			for (int i = 0; i < DIM; i++) begin
-				sum_raw[i] = {PAD_ONE, i_frac[i]};
-			end
+		2'b01: begin
+			o_nxt[i] = added[i];
+			o_nxt_noofs[i] = added_noofs[i];
 		end
-	end
-	2'b10: begin: no_frac
-		assign sum_raw = i_step;
-	end
-	2'b11: begin: one
-		assign sum_raw = ND_ONE;
-	end
-endcase endgenerate
-
-generate if (SHAMT_BW == 0) begin
-	assign sum_shifted = sum_raw;
-end else begin
-	always_comb begin
-		for (int i = 0; i < DIM; i++) begin
-			sum_shifted[i] = sum_raw[i] << i_shamt[i];
+		2'b00: begin
+			o_nxt[i] = i_cur[i];
+			o_nxt_noofs[i] = i_cur_noofs[i];
 		end
-	end
-end endgenerate
-
-always_comb begin
-	for (int i = 0; i < DIM; i++) begin
-		if (i_reset_counter[i]) begin
-			o_sum[i] = i_start[i];
-		end else if (i_add_counter[i]) begin
-			o_sum[i] = i_augend[i] + sum_shifted[i][MBW-1-:BW];
-		end else begin
-			o_sum[i] = i_augend[i];
-		end
-	end
+	endcase
 end
 
 endmodule
 
 module NDShufAccum(
-	i_augend,
+	i_augend, // not used if ZERO_AUG = 1
 	o_sum,
 	i_addend,
-	i_shuf
+	i_shuf // not used if DIM_OUT = 1
 );
-
+//======================================
+// Parameter
+//======================================
 parameter BW = 8;
-parameter DIM = 2;
-parameter SUM_ALL = 0;
-localparam SDIM = SUM_ALL ? 1 : DIM;
-localparam CLOG2_DIM = $clog2(DIM);
+parameter DIM_IN = 2;
+parameter DIM_OUT = 2;
+parameter ZERO_AUG = 0;
+localparam CLOG2_DIM_OUT = $clog2(DIM_OUT);
 
-input        [BW-1:0] i_augend [SDIM];
-output logic [BW-1:0] o_sum    [SDIM];
-input        [BW-1:0] i_addend [DIM];
-input        [CLOG2_DIM-1:0] i_shuf [DIM];
+//======================================
+// I/O
+//======================================
+input        [BW-1:0] i_augend [DIM_OUT];
+output logic [BW-1:0] o_sum    [DIM_OUT];
+input        [BW-1:0] i_addend [DIM_IN];
+input        [CLOG2_DIM_OUT-1:0] i_shuf [DIM_IN];
 
-generate if (SUM_ALL) begin: sum_all_mode
+//======================================
+// Combinational
+//======================================
+generate if (DIM_OUT == 1) begin: sum_all_mode
 	always_comb begin
-		o_sum[0] = i_augend[0];
-		for (int i = 0; i < DIM; i++) begin
+		o_sum[0] = '0;
+		for (int i = 0; i < DIM_IN; i++) begin
 			o_sum[0] = o_sum[0] + i_addend[i];
 		end
+		o_sum[0] = o_sum[0] + (ZERO_AUG ? '0 : i_augend[0]);
 	end
 end else begin: sum_shuf_mode
 	always_comb begin
-		for (int i = 0; i < DIM; i++) begin
-			o_sum[i] = i_augend[i];
-			for (int j = 0; j < DIM; j++) begin
+		for (int i = 0; i < DIM_OUT; i++) begin
+			o_sum[i] = '0;
+			for (int j = 0; j < DIM_IN; j++) begin
 				o_sum[i] = o_sum[i] + ((i == i_shuf[j]) ? i_addend[j] : '0);
 			end
+			o_sum[i] = o_sum[i] + (ZERO_AUG ? '0 : i_augend[i]);
 		end
 	end
 end endgenerate
@@ -191,11 +161,16 @@ module IdSelect(
 	i_ends,
 	o_dat
 );
-
+//======================================
+// Parameter
+//======================================
 parameter BW = 8;
 parameter DIM = 2;
 parameter RETIRE = 0;
 
+//======================================
+// I/O
+//======================================
 input [DIM:0]  i_sel;
 input [BW-1:0] i_begs [DIM+1];
 input [BW-1:0] i_ends [DIM+1];

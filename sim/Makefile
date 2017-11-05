@@ -23,8 +23,8 @@ abl_sa1:
 rmc:
 	make ARGS="+define+DEFAULT_VSIZE=8" RemapCache
 
-bml:
-	make BlockMemoryLooper
+pbl:
+	make ParallelBlockLooper
 
 alloc:
 	make Allocator

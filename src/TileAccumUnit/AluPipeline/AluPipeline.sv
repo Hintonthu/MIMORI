@@ -23,7 +23,6 @@ module AluPipeline(
 	i_bofs,
 	i_aofs,
 	i_alast,
-	i_blocal_last,
 	i_bsubofs,
 	i_bsub_up_order,
 	i_bsub_lo_order,
@@ -49,6 +48,7 @@ localparam WBW = TauCfg::WORK_BW;
 localparam DBW = TauCfg::DATA_BW;
 localparam TDBW = TauCfg::TMP_DATA_BW;
 localparam DIM = TauCfg::DIM;
+localparam VDIM = TauCfg::VDIM;
 localparam N_INST = TauCfg::N_INST;
 localparam ISA_BW = TauCfg::ISA_BW;
 localparam VSIZE = TauCfg::VECTOR_SIZE;
@@ -68,10 +68,9 @@ localparam REG_ABW = $clog2(REG_ADDR);
 //======================================
 `clk_input;
 `rdyack_input(abofs);
-input [WBW-1:0]     i_bofs  [DIM];
-input [WBW-1:0]     i_aofs  [DIM];
-input [WBW-1:0]     i_alast [DIM];
-input [WBW-1:0]     i_blocal_last    [DIM];
+input [WBW-1:0]     i_bofs  [VDIM];
+input [WBW-1:0]     i_aofs  [VDIM];
+input [WBW-1:0]     i_alast [VDIM];
 input [CV_BW-1:0]   i_bsubofs [VSIZE][DIM];
 input [CCV_BW  :0]  i_bsub_up_order  [DIM];
 input [CCV_BW-1:0]  i_bsub_lo_order  [DIM];
@@ -108,7 +107,6 @@ SimdDriver u_simd_drv(
 	.i_bofs(i_bofs),
 	.i_aofs(i_aofs),
 	.i_alast(i_alast),
-	.i_blocal_last(i_blocal_last),
 	.i_bsub_up_order(i_bsub_up_order),
 	.i_bsub_lo_order(i_bsub_lo_order),
 	.i_aboundary(i_aboundary),

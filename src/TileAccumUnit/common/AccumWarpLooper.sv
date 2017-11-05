@@ -18,21 +18,22 @@
 import TauCfg::*;
 import Default::*;
 
-module AccumWarpLooper(
+module WarpLooper(
 	`clk_port,
 	`rdyack_port(abofs),
 	i_bofs,
 	i_aofs,
 	i_alast,
+	i_linears,
 	i_bboundary,
-	i_blocal_last,
 	i_bsubofs,
 	i_bsub_up_order,
 	i_bsub_lo_order,
 	i_aboundary,
-	i_mofs_bsteps,
-	i_mofs_bsubsteps,
-	i_mofs_asteps,
+	i_bstrides_frac,
+	i_bstrides_shamt,
+	i_astrides_frac,
+	i_astrides_shamt,
 	i_id_begs,
 	i_id_ends,
 	// only for i_stencil == 1 & STENCIL is enabled
@@ -40,9 +41,6 @@ module AccumWarpLooper(
 	i_stencil_begs,
 	i_stencil_ends,
 	i_stencil_lut,
-	`rdyack_port(mofs),
-	i_mofs,
-	i_id,
 	`rdyack_port(addrval),
 	o_id,
 	o_address,
@@ -53,15 +51,15 @@ module AccumWarpLooper(
 //======================================
 // Parameter
 //======================================
-parameter N_CFG = Default::N_CFG;
-parameter ABW = Default::ABW;
+parameter N_CFG = TauCfg::N_ICFG;
+parameter ABW = TauCfg::GLOBAL_ADDR_BW;
 parameter STENCIL = 0;
 localparam WBW = TauCfg::WORK_BW;
-localparam DIM = TauCfg::DIM;
+localparam VDIM = TauCfg::VDIM;
 localparam VSIZE = TauCfg::VECTOR_SIZE;
 localparam STSIZE = TauCfg::STENCIL_SIZE;
 // derived
-localparam NCFG_BW = $clog2(N_CFG+1);
+localparam NCFG_BW = $clog2(N_ICFG+1);
 localparam CV_BW = $clog2(VSIZE);
 localparam CCV_BW = $clog2(CV_BW+1);
 localparam ST_BW = $clog2(STSIZE+1);
@@ -71,27 +69,26 @@ localparam ST_BW = $clog2(STSIZE+1);
 //======================================
 `clk_input;
 `rdyack_input(abofs);
-input [WBW-1:0]     i_bofs  [DIM];
-input [WBW-1:0]     i_aofs  [DIM];
-input [WBW-1:0]     i_alast [DIM];
-input [WBW-1:0]     i_bboundary      [DIM];
-input [WBW-1:0]     i_blocal_last    [DIM];
-input [CV_BW-1:0]   i_bsubofs [VSIZE][DIM];
-input [CCV_BW  :0]  i_bsub_up_order  [DIM];
-input [CCV_BW-1:0]  i_bsub_lo_order  [DIM];
-input [WBW-1:0]     i_aboundary      [DIM];
-input [ABW-1:0]     i_mofs_bsteps    [N_CFG][DIM];
+input [WBW-1:0]     i_bofs  [VDIM];
+input [WBW-1:0]     i_aofs  [VDIM];
+input [WBW-1:0]     i_alast [VDIM];
+input [ABW-1:0]     i_linears [N_CFG][1];
+input [WBW-1:0]     i_bboundary      [VDIM];
+input [CV_BW-1:0]   i_bsubofs [VSIZE][VDIM];
+input [CCV_BW  :0]  i_bsub_up_order  [VDIM];
+input [CCV_BW-1:0]  i_bsub_lo_order  [VDIM];
+input [WBW-1:0]     i_aboundary      [VDIM];
 input [ABW-1:0]     i_mofs_bsubsteps [N_CFG][CV_BW];
-input [ABW-1:0]     i_mofs_asteps    [N_CFG][DIM];
-input [NCFG_BW-1:0] i_id_begs [DIM+1];
-input [NCFG_BW-1:0] i_id_ends [DIM+1];
+input [SF_BW-1:0]   i_bstrides_frac  [N_CFG][VDIM]
+input [SS_BW-1:0]   i_bstrides_shamt [N_CFG][VDIM]
+input [SF_BW-1:0]   i_astrides_frac  [N_CFG][VDIM]
+input [SS_BW-1:0]   i_astrides_shamt [N_CFG][VDIM]
+input [NCFG_BW-1:0] i_id_begs [VDIM+1];
+input [NCFG_BW-1:0] i_id_ends [VDIM+1];
 input               i_stencil;
 input [ST_BW-1:0]   i_stencil_begs [N_CFG];
 input [ST_BW-1:0]   i_stencil_ends [N_CFG];
 input [ABW-1:0]     i_stencil_lut [STSIZE];
-`rdyack_input(mofs);
-input [ABW-1:0]     i_mofs;
-input [NCFG_BW-1:0] i_id;
 `rdyack_output(addrval);
 output [NCFG_BW-1:0] o_id;
 output [ABW-1:0]     o_address [VSIZE];
@@ -101,7 +98,7 @@ output               o_retire;
 //======================================
 // Internal
 //======================================
-logic [WBW-1:0] aofs [DIM];
+logic [WBW-1:0] aofs [VDIM];
 logic [N_CFG-1:0] awlc_linear_rdys;
 logic [N_CFG-1:0] awlc_linear_acks;
 logic [ABW-1:0]   awlc_linears [N_CFG];
@@ -114,34 +111,34 @@ logic [ABW-1:0]   awlc_linears [N_CFG];
 `rdyack_logic(s3_dst);
 `rdyack_logic(s4_src);
 `dval_logic(s4_fin);
-logic [DIM-1:0]     s01_reset_flag;
-logic [DIM-1:0]     s01_add_flag;
-logic [DIM  :0]     s01_sel_beg;
-logic [DIM  :0]     s01_sel_end;
-logic [DIM  :0]     s01_sel_ret;
+logic [VDIM-1:0]     s01_reset_flag;
+logic [VDIM-1:0]     s01_add_flag;
+logic [VDIM  :0]     s01_sel_beg;
+logic [VDIM  :0]     s01_sel_end;
+logic [VDIM  :0]     s01_sel_ret;
 logic               s01_bypass;
 logic               s01_islast;
 logic [NCFG_BW-1:0] s01_id_beg;
 logic [NCFG_BW-1:0] s01_id_end;
 logic [NCFG_BW-1:0] s01_id_ret;
-logic [DIM-1:0]     s12_a_reset_flag;
-logic [DIM-1:0]     s12_a_add_flag;
-logic [DIM-1:0]     s12_bu_reset_flag;
-logic [DIM-1:0]     s12_bu_add_flag;
-logic [DIM-1:0]     s12_bl_reset_flag;
-logic [DIM-1:0]     s12_bl_add_flag;
+logic [VDIM-1:0]     s12_a_reset_flag;
+logic [VDIM-1:0]     s12_a_add_flag;
+logic [VDIM-1:0]     s12_bu_reset_flag;
+logic [VDIM-1:0]     s12_bu_add_flag;
+logic [VDIM-1:0]     s12_bl_reset_flag;
+logic [VDIM-1:0]     s12_bl_add_flag;
 logic [NCFG_BW-1:0] s12_id;
-logic [WBW-1:0]     s12_bofs [DIM];
+logic [WBW-1:0]     s12_bofs [VDIM];
 logic               s12_retire;
 logic               s12_islast;
 logic [NCFG_BW-1:0] s23_id;
 logic [ABW-1:0]     s23_linear;
-logic [WBW-1:0]     s23_bofs [DIM];
+logic [WBW-1:0]     s23_bofs [VDIM];
 logic               s23_retire;
 logic               s23_islast;
 logic [NCFG_BW-1:0] s34_id;
 logic [ABW-1:0]     s34_linear;
-logic [WBW-1:0]     s34_bofs [DIM];
+logic [WBW-1:0]     s34_bofs [VDIM];
 logic               s34_retire;
 logic               s34_islast;
 
@@ -154,7 +151,7 @@ assign s0_dst_ack = s1_src_ack || s0_dst_rdy && s01_bypass;
 assign wait_fin_ack = s4_fin_dval || s0_dst_rdy && s01_bypass && s01_islast;
 assign s4_src_rdy = s3_dst_rdy && awlc_linear_rdys[s34_id];
 assign s3_dst_ack = s4_src_ack;
-always_comb for (int i = 0; i < DIM; i++) begin
+always_comb for (int i = 0; i < VDIM; i++) begin
 	aofs[i] = (STENCIL != 0 && i_stencil) ? i_alast[i] : i_aofs[i];
 end
 always_comb begin
@@ -201,19 +198,19 @@ OffsetStage#(.FRAC_BW(0), .SHAMT_BW(0)) u_s0_ofs(
 	.o_sel_ret(s01_sel_ret),
 	.o_islast(s01_islast)
 );
-IdSelect#(.BW(NCFG_BW), .DIM(DIM), .RETIRE(0)) u_s0_sel_beg(
+IdSelect#(.BW(NCFG_BW), .DIM(VDIM), .RETIRE(0)) u_s0_sel_beg(
 	.i_sel(s01_sel_beg),
 	.i_begs(i_id_begs),
 	.i_ends(),
 	.o_dat(s01_id_beg)
 );
-IdSelect#(.BW(NCFG_BW), .DIM(DIM), .RETIRE(0)) u_s0_sel_end(
+IdSelect#(.BW(NCFG_BW), .DIM(VDIM), .RETIRE(0)) u_s0_sel_end(
 	.i_sel(s01_sel_end),
 	.i_begs(i_id_ends),
 	.i_ends(),
 	.o_dat(s01_id_end)
 );
-IdSelect#(.BW(NCFG_BW), .DIM(DIM), .RETIRE(1)) u_s0_sel_ret(
+IdSelect#(.BW(NCFG_BW), .DIM(VDIM), .RETIRE(1)) u_s0_sel_ret(
 	.i_sel(s01_sel_ret),
 	.i_begs(i_id_begs),
 	.i_ends(i_id_ends),

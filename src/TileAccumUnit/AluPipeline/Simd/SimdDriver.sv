@@ -23,7 +23,7 @@ module SimdDriver(
 	i_bofs,
 	i_aofs,
 	i_alast,
-	i_blocal_last,
+	i_bgrid_step,
 	i_bsub_up_order,
 	i_bsub_lo_order,
 	i_aboundary,
@@ -42,7 +42,7 @@ module SimdDriver(
 //======================================
 localparam N_INST = TauCfg::N_INST;
 localparam WBW = TauCfg::WORK_BW;
-localparam DIM = TauCfg::DIM;
+localparam VDIM = TauCfg::VDIM;
 localparam VSIZE = TauCfg::VECTOR_SIZE;
 localparam N_PENDING = Default::N_PENDING;
 localparam MAX_WARP = TauCfg::MAX_WARP;
@@ -57,18 +57,18 @@ localparam WID_BW = $clog2(MAX_WARP);
 //======================================
 `clk_input;
 `rdyack_input(abofs);
-input [WBW-1:0] i_bofs  [DIM];
-input [WBW-1:0] i_aofs  [DIM];
-input [WBW-1:0] i_alast [DIM];
-input [WBW-1:0]     i_blocal_last    [DIM];
-input [CCV_BW  :0]  i_bsub_up_order  [DIM];
-input [CCV_BW-1:0]  i_bsub_lo_order  [DIM];
-input [WBW-1:0]     i_aboundary      [DIM];
-input [INST_BW-1:0] i_inst_id_begs [DIM+1];
-input [INST_BW-1:0] i_inst_id_ends [DIM+1];
+input [WBW-1:0]     i_bofs           [VDIM];
+input [WBW-1:0]     i_aofs           [VDIM];
+input [WBW-1:0]     i_alast          [VDIM];
+input [WBW-1:0]     i_bgrid_step     [VDIM];
+input [CCV_BW  :0]  i_bsub_up_order  [VDIM];
+input [CCV_BW-1:0]  i_bsub_lo_order  [VDIM];
+input [WBW-1:0]     i_aboundary      [VDIM];
+input [INST_BW-1:0] i_inst_id_begs [VDIM+1];
+input [INST_BW-1:0] i_inst_id_ends [VDIM+1];
 `rdyack_output(inst);
-output [WBW-1:0]     o_bofs [DIM];
-output [WBW-1:0]     o_aofs [DIM];
+output [WBW-1:0]     o_bofs [VDIM];
+output [WBW-1:0]     o_aofs [VDIM];
 output [INST_BW-1:0] o_pc;
 output [WID_BW-1:0]  o_warpid;
 `dval_input(inst_commit);
@@ -82,9 +82,9 @@ output [WID_BW-1:0]  o_warpid;
 `rdyack_logic(s1_dst);
 `rdyack_logic(wait_last);
 `rdyack_logic(wait_fin);
-logic [WBW-1:0] s01_aofs [DIM];
-logic [DIM:0] s01_sel_beg;
-logic [DIM:0] s01_sel_end;
+logic [WBW-1:0] s01_aofs [VDIM];
+logic [VDIM:0] s01_sel_beg;
+logic [VDIM:0] s01_sel_end;
 logic [INST_BW-1:0] s01_id_beg;
 logic [INST_BW-1:0] s01_id_end;
 logic s01_islast;
@@ -128,13 +128,13 @@ OffsetStage#(.FRAC_BW(0), .SHAMT_BW(0)) u_s0_ofs(
 	.o_sel_ret(),
 	.o_islast(s01_islast)
 );
-IdSelect#(.BW(INST_BW), .DIM(DIM), .RETIRE(0)) u_s0_sel_beg(
+IdSelect#(.BW(INST_BW), .DIM(VDIM), .RETIRE(0)) u_s0_sel_beg(
 	.i_sel(s01_sel_beg),
 	.i_begs(i_inst_id_begs),
 	.i_ends(),
 	.o_dat(s01_id_beg)
 );
-IdSelect#(.BW(INST_BW), .DIM(DIM), .RETIRE(0)) u_s0_sel_end(
+IdSelect#(.BW(INST_BW), .DIM(VDIM), .RETIRE(0)) u_s0_sel_end(
 	.i_sel(s01_sel_end),
 	.i_begs(i_inst_id_ends),
 	.i_ends(),
@@ -151,7 +151,7 @@ AccumWarpLooperIndexStage#(.N_CFG(N_INST)) u_s1_idx(
 	.i_id_beg(s01_id_beg),
 	.i_id_end(s01_id_end),
 	.i_id_ret(),
-	.i_blocal_last(i_blocal_last),
+	.i_bgrid_step(i_bgrid_step),
 	.i_bsub_up_order(i_bsub_up_order),
 	.i_bsub_lo_order(i_bsub_lo_order),
 	`rdyack_connect(dst, s1_dst),

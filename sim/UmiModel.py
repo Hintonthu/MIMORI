@@ -49,26 +49,30 @@ def ExtractUFloat(i, frac_bw):
 def SkipInteger(i):
 	return (1, 0) if i == 0 else (0, i-1)
 
-def Clog2(i):
+def Clog2(i, exact=False):
+	ii = i
 	i -= 1
 	ret = 0
 	while i != 0:
 		ret += 1
 		i >>= 1
+	assert not exact or (1<<ret) == ii
 	return ret
 
 class UmiModel(object):
 	MEM_PAD, MEM_WRAP = range(2)
 	VSIZE = 32
 	DIM = 4
+	VDIM = 6
 	BW = 24
 	ABW = 32
 	LBW = 10
-	SIG_BW = 2
-	EXP_BW = 4
-	LG_VSIZE = ExtractUFloat(VSIZE, 0)[0]
+	STRIDE_SIG_BW = 8
+	STRIDE_EXP_BW = 3
+	LG_VSIZE = Clog2(VSIZE, True)
 	LLG_VSIZE = Clog2(LG_VSIZE+1)
-	LG_DIM = ExtractUFloat(DIM, 0)[0]
+	LG_DIM = Clog2(DIM)
+	LG_VDIM = Clog2(VDIM)
 	DRAM_ALIGN = 8
 	DRAM_ALIGN_MASK = DRAM_ALIGN-1
 	VSIZE_MASK = VSIZE-1
@@ -91,20 +95,20 @@ class UmiModel(object):
 		for i in appme:
 			l.append(l[-1] + i)
 
-	PCFG_DTYPE = ToIntTypes.__func__(['total', 'local', 'vsize', 'vshuf'], [DIM,DIM,DIM,DIM])
-	ACFG_DTYPE = ToIntTypes.__func__(['total', 'local'], [DIM,DIM])
+	PCFG_DTYPE = ToIntTypes.__func__(['total', 'local', 'vsize', 'vshuf'], [VDIM,VDIM,VDIM,VDIM])
+	ACFG_DTYPE = ToIntTypes.__func__(['total', 'local'], [VDIM,VDIM])
 	UMCFG_DTYPE = ToIntTypes.__func__(
 		['mwidth', 'mwrap', 'mlinear', 'ustart', 'ustride', 'udim', 'lmwidth', 'lmalign', 'xor_scheme'],
-		[DIM,DIM,1,2*DIM,2*DIM,2*DIM,DIM,DIM,LG_VSIZE]
+		[DIM,DIM,1,2*VDIM,2*VDIM,2*VDIM,DIM,DIM,LG_VSIZE]
 	)
 	# Internal data type
 	PCFG_IDTYPE = ToIntTypes.__func__(
-		['last', 'boundary', 'local', 'local_exp', 'local_sig', 'vsize', 'lg_vsize', 'vshuf', 'lg_vshuf'],
-		[DIM,DIM,DIM,DIM,DIM,DIM,DIM,DIM,DIM]
+		['end', 'boundary', 'local', 'vsize', 'lg_vsize', 'vshuf', 'lg_vshuf'],
+		[VDIM,VDIM,VDIM,VDIM,VDIM,VDIM,VDIM]
 	)
 	ACFG_IDTYPE = ToIntTypes.__func__(
-		['last', 'boundary', 'local', 'local_exp', 'local_sig'],
-		[DIM,DIM,DIM,DIM,DIM]
+		['end', 'boundary', 'local'],
+		[VDIM,VDIM,VDIM]
 	)
 	UMCFG_IDTYPE = ToIntTypes.__func__(
 		[
@@ -112,7 +116,7 @@ class UmiModel(object):
 			'ustride', 'lustride', 'udim', 'lmwidth', 'lmpad', 'lmsize', 'pad', 'vlinear',
 			'xor_scheme', 'xor_src', 'xor_dst', 'xor_swap',
 		],
-		[DIM,DIM,DIM,DIM,1,2*DIM,2*DIM,2*DIM,DIM,DIM,1,1,VSIZE,LG_VSIZE,LG_VSIZE,LG_VSIZE,1]
+		[DIM,DIM,DIM,DIM,1,2*VDIM,2*VDIM,2*VDIM,DIM,DIM,1,1,VSIZE,LG_VSIZE,LG_VSIZE,LG_VSIZE,1]
 	)
 	# cmd_type 0: fill addr[ofs:ofs+len] to SRAM
 	# cmd_type 1: repeat addr[ofs] len times to SRAM
@@ -124,6 +128,8 @@ class UmiModel(object):
 	)
 	DIM_O = npi.ones(DIM)
 	DIM_Z = npi.zeros(DIM)
+	VDIM_O = npi.ones(VDIM)
+	VDIM_Z = npi.zeros(VDIM)
 
 	@staticmethod
 	def _CalMemBound(width):
@@ -297,15 +303,16 @@ class UmiModel(object):
 
 	def _InitApcfg(self, pcfg, acfg):
 		# Init
+		VDIM = self.VDIM
 		ip = npd.empty(1, dtype=self.PCFG_IDTYPE)
 		ia = npd.empty(1, dtype=self.ACFG_IDTYPE)
 		# Convert some values
-		ip['last'] = (pcfg['total']-1)//pcfg['local']*pcfg['local']
+		ip['end'] = ((pcfg['total']-1)//pcfg['local']+1)*pcfg['local']
 		ip['boundary'] = pcfg['total']
 		ip['local'] = pcfg['local']
 		ip['vsize'] = pcfg['vsize']
 		ip['vshuf'] = pcfg['vshuf']
-		ia['last'] = (acfg['total']-1)//acfg['local']*acfg['local']
+		ia['end'] = ((acfg['total']-1)//acfg['local']+1)*acfg['local']
 		ia['boundary'] = acfg['total']
 		ia['local'] = acfg['local']
 		hi_nd_stride = ip['vsize']*ip['vshuf']
@@ -316,29 +323,14 @@ class UmiModel(object):
 		pv = pcfg['vsize'][0]
 		pf = pcfg['vshuf'][0]
 		al = acfg['local'][0]
-		iple = ip['local_exp'][0]
-		ipls = ip['local_sig'][0]
-		iplv = ip['lg_vsize'][0]
-		iplf = ip['lg_vshuf'][0]
-		iale = ia['local_exp'][0]
-		ials = ia['local_sig'][0]
-		for i in range(self.DIM):
-			plocal_tup = ExtractUFloat(pl[i], self.SIG_BW)
-			pvsize_tup = ExtractUFloat(pv[i], 0)
-			pvshuf_tup = ExtractUFloat(pf[i], 0)
-			alocal_tup = ExtractUFloat(al[i], self.SIG_BW)
-			iple[i], ipls[i] = plocal_tup
-			iale[i], ials[i] = alocal_tup
-			iplv[i] = pvsize_tup[0]
-			iplf[i] = pvshuf_tup[0]
-		v_nd = npi.indices(ip['vsize'][0]).reshape((self.DIM, -1)).T * ip['vshuf']
+		v_nd = npi.indices(ip['vsize'][0]).reshape((VDIM, -1)).T * ip['vshuf']
 		warp_nd = npi.indices(
 			npd.concatenate((
 				ip['local'][0]//hi_nd_stride[0],
 				ip['vshuf'][0]
 			))
-		).reshape((self.DIM*2, -1)).T
-		warp_nd = warp_nd[:,:self.DIM] * hi_nd_stride[0] + warp_nd[:,self.DIM:]
+		).reshape((VDIM*2, -1)).T
+		warp_nd = warp_nd[:,:VDIM] * hi_nd_stride[0] + warp_nd[:,VDIM:]
 		return ip, ia, warp_nd, v_nd
 
 	def __init__(self, pcfg, acfg, umcfg_i0, umcfg_i1, umcfg_o, insts, n_i0, n_i1, n_o, n_inst):
@@ -349,9 +341,11 @@ class UmiModel(object):
 		self.n_i1 = self._CvtRange(n_i1)
 		self.n_o = self._CvtRange(n_o)
 		self.n_inst = self._CvtRange(n_inst)
+		'''
 		self.umcfg_i0 = self._InitUmcfg(umcfg_i0, n_i0, is_local=True)
 		self.umcfg_i1 = self._InitUmcfg(umcfg_i1, n_i1, is_local=True)
 		self.umcfg_o = self._InitUmcfg(umcfg_o, n_o, is_local=False)
+		'''
 		self.insts = insts
 		self.n_reg = 1
 		self.luts = dict.fromkeys(UmiModel.limits.keys(), (0, npi.empty((1,))))
@@ -364,7 +358,7 @@ class UmiModel(object):
 		self.luts[name] = (l, a)
 
 	@staticmethod
-	def _CountBlockRoutine(ref_local, ref_last):
+	def _CountBlockRoutine(ref_local, ref_end):
 		"""
 			Input:
 				ref_local & ref_last = (d,)
@@ -372,10 +366,10 @@ class UmiModel(object):
 				n_ref(int)
 				ref_ofs = (n_ref, d)
 		"""
-		idx_last = ref_last//ref_local+1
+		idx_end = ref_end//ref_local
 		d = ref_local.shape[0]
 		# ref_ofs (n_ref, d)
-		ref_ofs = npi.indices(idx_last)
+		ref_ofs = npi.indices(idx_end)
 		ref_ofs = npd.reshape(ref_ofs, (d,-1)).T
 		ref_ofs *= ref_local
 		n_ref = ref_ofs.shape[0]
@@ -413,26 +407,7 @@ class UmiModel(object):
 		return mem_ofs
 
 	def CreateBlockTransaction(self):
-		n_bofs, bofs = self._CountBlockRoutine(self.pcfg['local'][0], self.pcfg['last'][0])
-		mofs_i0 = self._CountMemoryRoutine(
-			bofs,
-			self.umcfg_i0['mstart'],
-			self.umcfg_i0['ustride'][:,self.DIM:],
-			self.umcfg_i0['udim'][:,self.DIM:],
-		)
-		mofs_i1 = self._CountMemoryRoutine(
-			bofs,
-			self.umcfg_i1['mstart'],
-			self.umcfg_i1['ustride'][:,self.DIM:],
-			self.umcfg_i1['udim'][:,self.DIM:],
-		)
-		mofs_o = self._CountMemoryRoutine(
-			bofs,
-			npi.sum(self.umcfg_o['mstart'], axis=1),
-			self.umcfg_o['ustride'][:,self.DIM:],
-			None
-		) + self.umcfg_o['mlinear']
-		return n_bofs, bofs, mofs_i0, mofs_i1, mofs_o
+		return self._CountBlockRoutine(self.pcfg['local'][0], self.pcfg['end'][0])
 
 	def CreateDramReadTransaction(self, mem_start, um, idx):
 		DM = self.DRAM_ALIGN_MASK
@@ -649,11 +624,10 @@ verf_func = list()
 ##########
 ## TEST 0
 ##########
-n_i0 = ([0,0,0,0,0], [1,1,1,1,1])
-n_i1 = ([0,0,0,0,0], [1,1,1,1,1])
-n_o = ([0,0,0,0,0], [0,0,0,0,1])
-n_inst = ([0,2,2,2,2], [3,3,3,3,4])
-# n_inst = (list(range(5)), list(range(5,10)))
+n_i0 = ([0,0,0,0,0,0,0], [1,1,1,1,1,1,1])
+n_i1 = ([0,0,0,0,0,0,0], [1,1,1,1,1,1,1])
+n_o = ([0,0,0,0,0,0,0], [0,0,0,0,0,0,1])
+n_inst = ([0,0,0,2,2,2,2], [3,3,3,3,3,3,4])
 insts = npd.array([
 	# OOOSSSSSRDDTWWWAAAAABBBBBCCCCC
 	0b000000001110000000010000000000, # R0 = 1
@@ -667,17 +641,17 @@ um_i0 = npd.empty(1, UmiModel.UMCFG_DTYPE)
 um_i1 = npd.empty(1, UmiModel.UMCFG_DTYPE)
 um_o = npd.empty(1, UmiModel.UMCFG_DTYPE)
 
-p['total'] = [1,1,20,10]
-p['local'] = [1,1,16,8]
-p['vsize'] = [1,1,4,8]
-p['vshuf'] = [1,1,4,1]
-a['total'] = [1,1,3,3]
-a['local'] = [1,1,2,2]
+p['total'] = [1,1,1,1,20,10]
+p['local'] = [1,1,1,1,16,8]
+p['vsize'] = [1,1,1,1,4,8]
+p['vshuf'] = [1,1,1,1,4,1]
+a['total'] = [1,1,1,1,3,3]
+a['local'] = [1,1,1,1,2,2]
 um_i0['mwrap'].fill(UmiModel.MEM_WRAP)
 um_i0['mlinear'] = [0]
-um_i0['ustart'] = [[0,0,-1,-1,0,0,0,0],]
-um_i0['ustride'] = [[0,0,1,1,0,0,1,1],]
-um_i0['udim'] = [[0,0,2,3,0,0,2,3],]
+um_i0['ustart'] = [[0,0,0,0,-1,-1,0,0,0,0,0,0],]
+um_i0['ustride'] = [[0,0,0,0,1,1,0,0,0,0,1,1],]
+um_i0['udim'] = [[0,0,0,0,2,3,0,0,0,0,2,3],]
 um_i0['lmwidth'] = [[1,1,17,9],]
 um_i0['lmalign'] = [[192,192,192,10],]
 um_i0['mwidth'] = [[1,1,100,301],]
@@ -685,9 +659,9 @@ um_i0['xor_scheme'] = -1
 
 um_i1['mwrap'].fill(UmiModel.MEM_WRAP)
 um_i1['mlinear'] = [100000]
-um_i1['ustart'] = [[0,0,0,0,0,0,0,0],]
-um_i1['ustride'] = [[0,0,1,1,0,0,0,0],]
-um_i1['udim'] = [[0,0,2,3,0,0,0,0],]
+um_i1['ustart'] = [[0,0,0,0,0,0,0,0,0,0,0,0],]
+um_i1['ustride'] = [[0,0,0,0,1,1,0,0,0,0,0,0],]
+um_i1['udim'] = [[0,0,0,0,2,3,0,0,0,0,0,0],]
 um_i1['lmwidth'] = [[1,1,2,2],]
 um_i1['lmalign'] = [[32,32,32,2],]
 um_i1['mwidth'] = [[1,1,3,3],]
@@ -695,9 +669,9 @@ um_i1['xor_scheme'] = -1
 
 um_o['mwrap'].fill(UmiModel.MEM_WRAP)
 um_o['mlinear'] = [300000]
-um_o['ustart'] = [[0,0,0,0,0,0,0,0],]
-um_o['ustride'] = [[0,0,0,0,0,0,1,1],]
-um_o['udim'] = [[0,0,0,0,0,0,2,3],]
+um_o['ustart'] = [[0,0,0,0,0,0,0,0,0,0,0,0],]
+um_o['ustride'] = [[0,0,0,0,0,0,0,0,0,0,1,1],]
+um_o['udim'] = [[0,0,0,0,0,0,0,0,0,0,2,3],]
 um_o['mwidth'] = [[1,1,1000,1000],]
 
 cfg0 = UmiModel(p, a, um_i0, um_i1, um_o, insts, n_i0, n_i1, n_o, n_inst)
@@ -731,6 +705,7 @@ def VerfFunc0(CSIZE):
 sample_conf.append(cfg0)
 verf_func.append(VerfFunc0)
 
+'''
 ##########
 ## TEST 1
 ##########
@@ -1067,6 +1042,7 @@ def VerfFunc5(CSIZE):
 
 sample_conf.append(cfg5)
 verf_func.append(VerfFunc5)
+'''
 
 try:
 	from os import environ
@@ -1075,51 +1051,3 @@ except:
 	WHAT = 0
 default_sample_conf = sample_conf[WHAT]
 default_verf_func = verf_func[WHAT]
-
-if __name__ == '__main__':
-	# default is 1000, 75
-	npd.set_printoptions(threshold=npd.nan, linewidth=120)
-	(
-		n_bofs, bofs,
-		mofs_i0, mofs_i1, mofs_o
-	) = default_sample_conf.CreateBlockTransaction()
-	for i in range(n_bofs):
-		print(mofs_i0[i,0])
-		print(default_sample_conf.CreateDramReadTransaction(mofs_i0[i,0], default_sample_conf.umcfg_i0, 0))
-		continue
-		(
-			n_abofs, abofs, alast,
-			a_range_i0, a_range_i1, a_range_o,
-			abmofs_i0, abmofs_i1, abmofs_o
-		) = default_sample_conf.CreateAccumBlockTransaction(mofs_i0[i], mofs_i1[i], mofs_o[i])
-		sram_a0 = 0
-		sram_a1 = 0
-		for j in range(n_abofs):
-			sl_i0 = slice(a_range_i0[j,0], a_range_i0[j,1])
-			sl_i1 = slice(a_range_i1[j,0], a_range_i1[j,1])
-			sl_o = slice(a_range_o[j,0], a_range_o[j,1])
-			sram_a0, lmofs_i0 = default_sample_conf.AllocSram(sram_a0, default_sample_conf.umcfg_i0['lmsize'][sl_i0])
-			sram_a1, lmofs_i1 = default_sample_conf.AllocSram(sram_a1, default_sample_conf.umcfg_i1['lmsize'][sl_i1])
-			(
-				n_aofs, agofs,
-				accum_i0, accum_i1, accum_o, accum_inst,
-				warp_i0, warp_i1, warp_o, warp_inst,
-				rg_flat_i0, rg_flat_i1, rg_flat_o, rg_flat_inst,
-				rt_flat_i0, rt_flat_i1, rt_flat_o,
-				amofs_i0, amofs_i1, amofs_o
-			) = default_sample_conf.CreateAccumTransaction(
-				abofs[j], alast[j],
-				abmofs_i0[j,sl_i0], abmofs_i1[j,sl_i1], abmofs_o[j,sl_o],
-				a_range_i0[j], a_range_i1[j], a_range_o[j],
-				lmofs_i0, lmofs_i1
-			)
-			bvans_o = default_sample_conf.CreateBofsValidTransaction(bofs[i], warp_o)
-			ans = default_sample_conf.CreateVectorAddressTransaction(
-				bofs[i],
-				rg_flat_i0, rg_flat_i1, rg_flat_o,
-				amofs_i0, amofs_i1, amofs_o
-			)
-			# output part
-			if ans[2].size:
-				da, dm = default_sample_conf.CreateDramWriteTransaction(bvans_o[1], ans[2])
-

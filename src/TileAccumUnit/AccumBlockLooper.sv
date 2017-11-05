@@ -17,23 +17,31 @@
 
 import TauCfg::*;
 
-module CoreAccumLooper(
+module AccumBlockLooper(
 	`clk_port,
 	`rdyack_port(src),
 	i_bofs,
-	i_agrid_frac,
-	i_agrid_shamt,
-	i_agrid_last,
+	i_agrid_step,
+	i_agrid_end,
 	i_aboundary,
-	i_alocal_last,
 	`rdyack_port(i0_abofs),
 	o_i0_bofs,
 	o_i0_aofs,
 	o_i0_alast,
+	o_i0_beg,
+	o_i0_end,
 	`rdyack_port(i1_abofs),
 	o_i1_bofs,
 	o_i1_aofs,
 	o_i1_alast,
+	o_i1_beg,
+	o_i1_end,
+	`rdyack_port(o_abofs),
+	o_o_bofs,
+	o_o_aofs,
+	o_o_alast,
+	o_o_beg,
+	o_o_end,
 	`rdyack_port(alu_abofs),
 	o_alu_bofs,
 	o_alu_aofs,
@@ -45,7 +53,7 @@ module CoreAccumLooper(
 // Parameter
 //======================================
 localparam WBW = TauCfg::WORK_BW;
-localparam DIM = TauCfg::DIM;
+localparam VDIM = TauCfg::VDIM;
 localparam N_ICFG = TauCfg::N_ICFG;
 localparam N_INST = TauCfg::N_INST;
 localparam AF_BW = TauCfg::AOFS_FRAC_BW;
@@ -53,28 +61,34 @@ localparam AS_BW = TauCfg::AOFS_SHAMT_BW;
 // derived
 localparam ICFG_BW = $clog2(N_ICFG+1);
 localparam INST_BW = $clog2(N_INST+1);
-// Workaround
-logic [WBW-1:0] ND_WZERO [DIM] = '{default:0};
 
 //======================================
 // I/O
 //======================================
 `clk_input;
 `rdyack_input(src);
-input [WBW-1:0]     i_bofs        [DIM];
-input [AF_BW-1:0]   i_agrid_frac  [DIM];
-input [AS_BW-1:0]   i_agrid_shamt [DIM];
-input [WBW-1:0]     i_agrid_last  [DIM];
-input [WBW-1:0]     i_aboundary   [DIM];
-input [WBW-1:0]     i_alocal_last [DIM];
+input [WBW-1:0]     i_bofs        [VDIM];
+input [AF_BW-1:0]   i_agrid_step  [VDIM];
+input [AS_BW-1:0]   i_agrid_end   [VDIM];
+input [WBW-1:0]     i_aboundary   [VDIM];
 `rdyack_output(i0_abofs);
-output [WBW-1:0] o_i0_bofs  [DIM];
-output [WBW-1:0] o_i0_aofs  [DIM];
-output [WBW-1:0] o_i0_alast [DIM];
+output [WBW-1:0]     o_i0_bofs  [DIM];
+output [WBW-1:0]     o_i0_aofs  [DIM];
+output [WBW-1:0]     o_i0_alast [DIM];
+output [ICFG_BW-1:0] o_i0_beg;
+output [ICFG_BW-1:0] o_i0_end;
 `rdyack_output(i1_abofs);
-output [WBW-1:0] o_i1_bofs  [DIM];
-output [WBW-1:0] o_i1_aofs  [DIM];
-output [WBW-1:0] o_i1_alast [DIM];
+output [WBW-1:0]     o_i1_bofs  [DIM];
+output [WBW-1:0]     o_i1_aofs  [DIM];
+output [WBW-1:0]     o_i1_alast [DIM];
+output [OCFG_BW-1:0] o_i1_beg;
+output [OCFG_BW-1:0] o_i1_end;
+`rdyack_output(o_abofs);
+output [WBW-1:0]     o_o_bofs  [DIM];
+output [WBW-1:0]     o_o_aofs  [DIM];
+output [WBW-1:0]     o_o_alast [DIM];
+output [OCFG_BW-1:0] o_o_beg;
+output [OCFG_BW-1:0] o_o_end;
 `rdyack_output(alu_abofs);
 output [WBW-1:0] o_alu_bofs  [DIM];
 output [WBW-1:0] o_alu_aofs  [DIM];

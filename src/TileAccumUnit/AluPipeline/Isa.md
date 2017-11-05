@@ -23,9 +23,9 @@ shift amount
 	* shamt = 01XXX LOGIC_LUT[XXX](a,b,c)
 	* shamt = 1XXXX reserved
 * 111
-	* shamt = 000XX aofs[0-3]
-	* shamt = 001XX bofs[0-3]
-	* other shamt values are reserved.
+	* shamt = 00XXX aofs[0-5]
+	* shamt = 01XXX bofs[0-5]
+	* other shamt values are reserved, and XXX>5 is also invalid.
 	* AAAAA-CCCCC must be 0XXXX, but XXXX has no effect
 * 101 and 110 are not implemented yet
 
