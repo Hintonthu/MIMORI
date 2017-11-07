@@ -14,11 +14,8 @@ wc:
 chal:
 	make ChunkAddrLooper
 
-abl_sa0:
-	make ARGS="+define+SA=0" AccumBlockLooper
-
-abl_sa1:
-	make ARGS="+define+SA=1" AccumBlockLooper
+abl:
+	make AccumBlockLooper
 
 rmc:
 	make ARGS="+define+DEFAULT_VSIZE=8" RemapCache

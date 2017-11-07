@@ -143,14 +143,14 @@ class UmiModel(object):
 		return multiplier
 
 	@staticmethod
-	def _SelRangeIdx(curs, last):
+	def _SelRangeIdx(curs, step, end):
 		fv = npd.zeros(curs.shape[0], dtype=npd.bool)
-		l = UmiModel.DIM-npd.argmin(
+		l = UmiModel.VDIM-npd.argmin(
 			npd.column_stack((npd.fliplr(curs == 0), fv)),
 			axis=1
 		)
 		r = npd.argmin(
-			npd.column_stack((npd.fliplr(curs == last), fv)),
+			npd.column_stack((npd.fliplr(curs+step == end), fv)),
 			axis=1
 		)
 		return l, r
@@ -191,29 +191,6 @@ class UmiModel(object):
 			npi.arange(rg[i,0], rg[i,1]) for i in range(rg.shape[0])
 		])
 
-	def _FlatRange(self, rg):
-		n_warp = self.warp_nd.shape[0]
-		accum_idx = npd.concatenate([
-			npi.full(n_warp*(rg[i,1]-rg[i,0]), i) for i in range(rg.shape[0])
-		])
-		warp_idx = npd.concatenate([
-			npd.repeat(npi.arange(n_warp), rg[i,1]-rg[i,0]) for i in range(rg.shape[0])
-		])
-		rg_flat = npd.concatenate([
-			npd.tile(npi.arange(rg[i,0], rg[i,1]), n_warp) for i in range(rg.shape[0])
-		])
-		return accum_idx, warp_idx, rg_flat
-
-	def _CreateAccumFlatIndex(self, li, ri, rt_i, n):
-		rg = self._SelRangeSel(li, ri, n)
-		accum_idx, warp_idx, rg_flat = self._FlatRange(rg)
-		if rt_i is None:
-			return rg, accum_idx, warp_idx, rg_flat
-		else:
-			last_warp = self.warp_nd.shape[0] - 1
-			rt = self._SelRetireSel(rt_i, n)
-			rt_flat = npd.logical_and(rt[accum_idx] > rg_flat, warp_idx == last_warp)
-			return rg, accum_idx, warp_idx, rg_flat, rt_flat
 
 	@staticmethod
 	def _XorPosToSrc(pos):
@@ -321,16 +298,16 @@ class UmiModel(object):
 		# Since a field of structured array of shape (1,) is [[x,x,x,x]], so [0] is required
 		pl = pcfg['local'][0]
 		pv = pcfg['vsize'][0]
+		pv = pcfg['vsize'][0]
 		pf = pcfg['vshuf'][0]
-		al = acfg['local'][0]
-		v_nd = npi.indices(ip['vsize'][0]).reshape((VDIM, -1)).T * ip['vshuf']
-		warp_nd = npi.indices(
-			npd.concatenate((
-				ip['local'][0]//hi_nd_stride[0],
-				ip['vshuf'][0]
-			))
-		).reshape((VDIM*2, -1)).T
-		warp_nd = warp_nd[:,:VDIM] * hi_nd_stride[0] + warp_nd[:,VDIM:]
+		iplv = ip['lg_vsize'][0]
+		iplf = ip['lg_vshuf'][0]
+		for i in range(self.VDIM):
+			iplv[i] = Clog2(pv[i], True)
+			iplf[i] = Clog2(pf[i], True)
+		v_nd = npi.indices(ip['vsize'][0]).reshape((VDIM, -1)).T << iplf
+		warp_nd = npi.indices(pl >> iplv).reshape((VDIM, -1)).T
+		warp_nd = (warp_nd >> iplf << (iplv+iplf)) + npd.bitwise_and(warp_nd, (1<<iplf)-1)
 		return ip, ia, warp_nd, v_nd
 
 	def __init__(self, pcfg, acfg, umcfg_i0, umcfg_i1, umcfg_o, insts, n_i0, n_i1, n_o, n_inst):
@@ -358,7 +335,7 @@ class UmiModel(object):
 		self.luts[name] = (l, a)
 
 	@staticmethod
-	def _CountBlockRoutine(ref_local, ref_end):
+	def _CountBlockRoutine(ref_local, ref_end=None):
 		"""
 			Input:
 				ref_local & ref_last = (d,)
@@ -366,48 +343,98 @@ class UmiModel(object):
 				n_ref(int)
 				ref_ofs = (n_ref, d)
 		"""
-		idx_end = ref_end//ref_local
 		d = ref_local.shape[0]
-		# ref_ofs (n_ref, d)
+		idx_end = ref_local if ref_end is None else ref_end//ref_local
 		ref_ofs = npi.indices(idx_end)
 		ref_ofs = npd.reshape(ref_ofs, (d,-1)).T
-		ref_ofs *= ref_local
+		if not ref_end is None:
+			ref_ofs *= ref_local
 		n_ref = ref_ofs.shape[0]
 		return n_ref, ref_ofs
 
-	@staticmethod
-	def _CountMemoryRoutine(ref_ofs, mem_start, ustride, udim):
-		"""
-			Input:
-				ref_ofs = (n_ref, d)
-				mem_start = (n_mem, d) or (n_mem, 1)
-				ustride = (n_mem, d)
-				udim = (n_mem, d) or None. When None, mem_start is summed.
-			Output:
-				mem_ofs = (n_ref, n_mem, d) or (n_ref, n_mem, 1)
-		"""
-		d = ref_ofs.shape[1]
-		n_mem = mem_start.shape[0]
-		# broadcast (n_ref, n_mem, d) = (nblk, NEWAXIS, d) * (n_mem, d)
-		raw_mem_ofs = ref_ofs[:,newaxis,:] * ustride
-		if udim is None:
-			# broadcast
-			mem_ofs = npi.sum(raw_mem_ofs, 2) + mem_start
-		else:
-			mem_ofs = npi.zeros(
-				(raw_mem_ofs.shape[0], raw_mem_ofs.shape[1], mem_start.shape[1]),
-				dtype=raw_mem_ofs.dtype
-			)
-			# helper array
-			n_mem_range = npi.arange(n_mem)
-			for i in range(d):
-				mem_ofs[:,n_mem_range,udim[:,i]] += raw_mem_ofs[:,:,i]
-			# broadcast
-			mem_ofs += mem_start
-		return mem_ofs
-
+	"""
+		Important functions
+	"""
 	def CreateBlockTransaction(self):
 		return self._CountBlockRoutine(self.pcfg['local'][0], self.pcfg['end'][0])
+
+	def CreateAccumBlockTransaction(self, bofs):
+		glb_alocal = self.acfg['local'][0]
+		glb_aend = self.acfg['end'][0]
+		n_aofs, aofs_beg = self._CountBlockRoutine(glb_alocal, glb_aend)
+		aofs_end = npd.fmin(self.acfg['local']+aofs_beg, self.acfg['boundary'])
+		l, r = UmiModel._SelRangeIdx(aofs_beg, glb_alocal, glb_aend)
+		def Extract(nums):
+			a_range = UmiModel._SelRangeSel(l, r, nums)
+			diff_id = a_range[:,0] != a_range[:,1]
+			n_trim = npd.count_nonzero(diff_id)
+			bofs_trim = npd.broadcast_to(bofs, (n_trim, self.VDIM))
+			aofs_beg_trim = aofs_beg[diff_id]
+			aofs_end_trim = aofs_end[diff_id]
+			beg_trim = a_range[diff_id,0]
+			end_trim = a_range[diff_id,1]
+			return n_trim, bofs_trim, aofs_beg_trim, aofs_end_trim, beg_trim, end_trim
+		return (
+			Extract(self.n_i0) +
+			Extract(self.n_i1) +
+			Extract(self.n_o) +
+			Extract(self.n_inst)
+		)
+
+	def CreateAccumTransaction(self, abeg, aend):
+		adiff = aend-abeg
+		n_aofs, alofs = self._CountBlockRoutine(adiff)
+		agofs = alofs + abeg
+		# indices
+		rt_i = self._SelRetireIdx(alofs, adiff)
+		rg_li, rg_ri = self._SelRangeIdx(agofs, 1, self.acfg['boundary']) # 1 will be broadcasted
+		return (
+			n_aofs, agofs, alofs,
+			rt_i, rg_li, rg_ri
+		)
+
+	def CreateAccumWarpTransaction(self, agofs, alofs, rt_i, rg_li, rg_ri, n):
+		def FlatRange(rg):
+			n_warp = self.warp_nd.shape[0]
+			accum_idx = npd.concatenate([
+				npi.full(n_warp*(rg[i,1]-rg[i,0]), i) for i in range(rg.shape[0])
+			])
+			warp_idx = npd.concatenate([
+				npd.repeat(npi.arange(n_warp), rg[i,1]-rg[i,0]) for i in range(rg.shape[0])
+			])
+			rg_flat = npd.concatenate([
+				npd.tile(npi.arange(rg[i,0], rg[i,1]), n_warp) for i in range(rg.shape[0])
+			])
+			return accum_idx, warp_idx, rg_flat
+		def FlatIndex(li, ri, rt_i, n):
+			rg = self._SelRangeSel(li, ri, n)
+			accum_idx, warp_idx, rg_flat = FlatRange(rg)
+			if rt_i is None:
+				return rg, accum_idx, warp_idx, rg_flat
+			else:
+				last_warp = self.warp_nd.shape[0] - 1
+				rt = self._SelRetireSel(rt_i, n)
+				rt_flat = npd.logical_and(rt[accum_idx] > rg_flat, warp_idx == last_warp)
+				return rg, accum_idx, warp_idx, rg_flat, rt_flat
+		return FlatIndex(rg_li, rg_ri, rt_i, n)[1:]
+
+	def CreateBofsValidTransaction(self, bofs, warp_idx):
+		# v_nd -> (VSIZE, DIM)
+		# bofs -> (DIM)
+		# self... -> (n_flat, DIM)
+		all_bofs = bofs + self.warp_nd[warp_idx, newaxis, :] + self.v_nd
+		valid = npd.all(all_bofs < self.pcfg['boundary'], axis=2)
+		return all_bofs, valid
+
+	def CreateVectorAddressTransaction(
+		self, bofs,
+		rg_flat_i0, rg_flat_i1, rg_flat_o,
+		mofs_i0, mofs_i1, mofs_o
+	):
+		a_i0 = self._CalWarpMofs(self.umcfg_i0, rg_flat_i0, mofs_i0, True)
+		a_i1 = self._CalWarpMofs(self.umcfg_i1, rg_flat_i1, mofs_i1, True)
+		a_o = self._CalWarpMofs(self.umcfg_o, rg_flat_o, mofs_o, False)
+		return a_i0, a_i1, a_o
 
 	def CreateDramReadTransaction(self, mem_start, um, idx):
 		DM = self.DRAM_ALIGN_MASK
@@ -459,34 +486,6 @@ class UmiModel(object):
 		ret['islast'][-1] = 1
 		return ret
 
-	def CreateAccumBlockTransaction(self, mstart_i0, mstart_i1, mstart_o):
-		glb_alocal = self.acfg['local'][0]
-		glb_alast = self.acfg['last'][0]
-		n_aofs, aofs = self._CountBlockRoutine(glb_alocal, glb_alast)
-		l, r = UmiModel._SelRangeIdx(aofs, glb_alast)
-		alast = npd.fmin(self.acfg['local']+aofs-1, self.acfg['boundary']-1)
-		a_range_i0 = UmiModel._SelRangeSel(l, r, self.n_i0)
-		a_range_i1 = UmiModel._SelRangeSel(l, r, self.n_i1)
-		a_range_o = UmiModel._SelRangeSel(l, r, self.n_o)
-		mofs_i0 = UmiModel._SelRangeSel(l, r, self.n_i0)
-		mofs_i1 = UmiModel._SelRangeSel(l, r, self.n_i1)
-		mofs_o = UmiModel._SelRangeSel(l, r, self.n_o)
-		mofs_i0 = self._CountMemoryRoutine(
-			aofs, mstart_i0,
-			self.umcfg_i0['ustride'][:,:self.DIM],
-			self.umcfg_i0['udim'][:,:self.DIM]
-		)
-		mofs_i1 = self._CountMemoryRoutine(
-			aofs, mstart_i1,
-			self.umcfg_i1['ustride'][:,:self.DIM],
-			self.umcfg_i1['udim'][:,:self.DIM]
-		)
-		mofs_o = self._CountMemoryRoutine(
-			aofs, mstart_o,
-			self.umcfg_o['ustride'][:,:self.DIM], None
-		)
-		return n_aofs, aofs, alast, a_range_i0, a_range_i1, a_range_o, mofs_i0, mofs_i1, mofs_o
-
 	def _CreateAccumMemofsHead(self, accum_idx, warp_idx, rg_flat, stride, alofs, mstart):
 		mofs = (
 			stride[:,:self.DIM] * alofs[accum_idx] +
@@ -494,46 +493,6 @@ class UmiModel(object):
 		)
 		mofs = npi.sum(mofs, axis=1) + mstart[rg_flat]
 		return mofs
-
-	def CreateAccumTransaction(
-		self, astart, alast,
-		mstart_i0, mstart_i1, mstart_o,
-		a_range_i0, a_range_i1, a_range_o,
-		lmstart_i0, lmstart_i1
-	):
-		"""
-			Input:
-				astart, alast = (d)
-				a_range_i0, a_range_i1, a_range_o = (2)
-				mstart_i0, mstart_i1 = (#, 4)
-				mstart_o = (#, 1)
-				lmstart_* = (#)
-				# is the sizes of the correspinding range
-			Output:
-		"""
-		adiff = alast-astart
-		n_aofs, alofs = self._CountBlockRoutine(self.DIM_O, adiff)
-		agofs = alofs + astart
-		# indices
-		rt_i = self._SelRetireIdx(alofs, adiff)
-		rg_li, rg_ri = self._SelRangeIdx(agofs, self.acfg['boundary']-1)
-		(rg_i0, accum_i0, warp_i0, rg_flat_i0, rt_flat_i0) = self._CreateAccumFlatIndex(rg_li, rg_ri, rt_i, self.n_i0)
-		(rg_i1, accum_i1, warp_i1, rg_flat_i1, rt_flat_i1) = self._CreateAccumFlatIndex(rg_li, rg_ri, rt_i, self.n_i1)
-		(rg_o, accum_o, warp_o, rg_flat_o, rt_flat_o) = self._CreateAccumFlatIndex(rg_li, rg_ri, rt_i, self.n_o)
-		(rg_inst, accum_inst, warp_inst, rg_flat_inst) = self._CreateAccumFlatIndex(rg_li, rg_ri, None, self.n_inst)
-		mofs_i0 = self._CreateAccumMemofsHead(accum_i0, warp_i0, rg_flat_i0, self.umcfg_i0['lustride'], alofs, lmstart_i0)
-		mofs_i1 = self._CreateAccumMemofsHead(accum_i1, warp_i1, rg_flat_i1, self.umcfg_i1['lustride'], alofs, lmstart_i1)
-		mofs_o = self._CreateAccumMemofsHead(accum_o, warp_o, rg_flat_o, self.umcfg_o['ustride'], alofs, mstart_o)
-		mofs_i0 &= self.LBW_MASK
-		mofs_i1 &= self.LBW_MASK
-		return (
-			n_aofs, agofs,
-			accum_i0, accum_i1, accum_o, accum_inst,
-			warp_i0, warp_i1, warp_o, warp_inst,
-			rg_flat_i0, rg_flat_i1, rg_flat_o, rg_flat_inst,
-			rt_flat_i0, rt_flat_i1, rt_flat_o,
-			mofs_i0, mofs_i1, mofs_o
-		)
 
 	def _CalWarpMofs(self, umcfg, flat, mofs, is_local):
 		stride = umcfg['lustride'] if is_local else umcfg['ustride']
@@ -555,24 +514,6 @@ class UmiModel(object):
 			wmofs ^= npd.bitwise_or.reduce(los_b, axis=2)
 			wmofs &= self.LBW_MASK
 		return wmofs
-
-	def CreateVectorAddressTransaction(
-		self, bofs,
-		rg_flat_i0, rg_flat_i1, rg_flat_o,
-		mofs_i0, mofs_i1, mofs_o
-	):
-		a_i0 = self._CalWarpMofs(self.umcfg_i0, rg_flat_i0, mofs_i0, True)
-		a_i1 = self._CalWarpMofs(self.umcfg_i1, rg_flat_i1, mofs_i1, True)
-		a_o = self._CalWarpMofs(self.umcfg_o, rg_flat_o, mofs_o, False)
-		return a_i0, a_i1, a_o
-
-	def CreateBofsValidTransaction(self, bofs, warp_idx):
-		# v_nd -> (VSIZE, DIM)
-		# bofs -> (DIM)
-		# self... -> (n_flat, DIM)
-		all_bofs = bofs + self.warp_nd[warp_idx, newaxis, :] + self.v_nd
-		valid = npd.all(all_bofs < self.pcfg['boundary'], axis=2)
-		return all_bofs, valid
 
 	def CreateDramWriteTransaction(self, valid, addr):
 		dram_addr = list()

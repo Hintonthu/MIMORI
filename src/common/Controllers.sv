@@ -154,16 +154,19 @@ endmodule
 module IgnoreIf(
 	cond,
 	`rdyack_port(src),
-	`rdyack_port(dst)
+	`rdyack_port(dst),
+	skipped
 );
 parameter COND_ = 1;
 input cond;
 `rdyack_input(src);
 `rdyack_output(dst);
+output skipped;
 logic cond2;
 assign cond2 = cond == (COND_&1);
 assign dst_rdy = src_rdy && !cond2;
-assign src_ack = dst_ack || (src_rdy && cond2);
+assign skipped = src_rdy && cond2;
+assign src_ack = dst_ack || skipped;
 endmodule
 
 module OneCycleInit(

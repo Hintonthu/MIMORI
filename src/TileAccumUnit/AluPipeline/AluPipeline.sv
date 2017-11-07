@@ -21,8 +21,8 @@ module AluPipeline(
 	`clk_port,
 	`rdyack_port(abofs),
 	i_bofs,
-	i_aofs,
-	i_alast,
+	i_aofs_beg,
+	i_aofs_end,
 	i_bsubofs,
 	i_bsub_up_order,
 	i_bsub_lo_order,
@@ -68,13 +68,13 @@ localparam REG_ABW = $clog2(REG_ADDR);
 //======================================
 `clk_input;
 `rdyack_input(abofs);
-input [WBW-1:0]     i_bofs  [VDIM];
-input [WBW-1:0]     i_aofs  [VDIM];
-input [WBW-1:0]     i_alast [VDIM];
-input [CV_BW-1:0]   i_bsubofs [VSIZE][DIM];
-input [CCV_BW  :0]  i_bsub_up_order  [DIM];
-input [CCV_BW-1:0]  i_bsub_lo_order  [DIM];
-input [WBW-1:0]     i_aboundary      [DIM];
+input [WBW-1:0]     i_bofs     [VDIM];
+input [WBW-1:0]     i_aofs_beg [VDIM];
+input [WBW-1:0]     i_aofs_end [VDIM];
+input [CV_BW-1:0]   i_bsubofs [VSIZE][VDIM];
+input [CCV_BW-1:0]  i_bsub_up_order  [VDIM];
+input [CCV_BW-1:0]  i_bsub_lo_order  [VDIM];
+input [WBW-1:0]     i_aboundary      [VDIM];
 input [INST_BW-1:0] i_inst_id_begs [DIM+1];
 input [INST_BW-1:0] i_inst_id_ends [DIM+1];
 input [ISA_BW-1:0]  i_insts [N_INST];
@@ -92,8 +92,8 @@ output [DBW-1:0] o_dramwd [VSIZE];
 // Internal
 //======================================
 `rdyack_logic(drv_simd_inst);
-logic [WBW-1:0]     drv_simd_bofs [DIM];
-logic [WBW-1:0]     drv_simd_aofs [DIM];
+logic [WBW-1:0]     drv_simd_bofs [VDIM];
+logic [WBW-1:0]     drv_simd_aofs [VDIM];
 logic [INST_BW-1:0] drv_simd_pc;
 logic [WID_BW-1:0]  drv_simd_wid;
 `dval_logic(simd_drv_inst_commit);
@@ -105,8 +105,8 @@ SimdDriver u_simd_drv(
 	`clk_connect,
 	`rdyack_connect(abofs, abofs),
 	.i_bofs(i_bofs),
-	.i_aofs(i_aofs),
-	.i_alast(i_alast),
+	.i_aofs(i_aofs_beg),
+	.i_aofs(i_aofs_end),
 	.i_bsub_up_order(i_bsub_up_order),
 	.i_bsub_lo_order(i_bsub_lo_order),
 	.i_aboundary(i_aboundary),

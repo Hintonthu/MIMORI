@@ -19,10 +19,12 @@
 
 module AccumBlockLooper_test;
 
-logic i_clk, i_rst, da_canack, dm_canack;
-`rdyack_logic(s);
-`rdyack_logic(da);
-`rdyack_logic(dm);
+logic i_clk, i_rst, dst_i0_canack, dst_i1_canack, dst_o_canack, dst_alu_canack;
+`rdyack_logic(src);
+`rdyack_logic(dst_i0);
+`rdyack_logic(dst_i1);
+`rdyack_logic(dst_o);
+`rdyack_logic(dst_alu);
 `Pos(rst_out, i_rst)
 `PosIf(ck_ev, i_clk, i_rst)
 `WithFinish
@@ -41,13 +43,17 @@ initial begin
 	$finish;
 end
 
-assign da_ack = da_rdy && da_canack;
-assign dm_ack = dm_rdy && dm_canack;
-AccumBlockLooper#(.SUM_ALL(`SA)) dut(
+assign dst_i0_ack = dst_i0_rdy && dst_i0_canack;
+assign dst_i1_ack = dst_i1_rdy && dst_i1_canack;
+assign dst_o_ack = dst_o_rdy && dst_o_canack;
+assign dst_alu_ack = dst_alu_rdy && dst_alu_canack;
+AccumBlockLooper dut(
 	`clk_connect,
-	`rdyack_connect(src_bofs, s),
-	`rdyack_connect(dst_abofs, da),
-	`rdyack_connect(dst_mofs, dm)
+	`rdyack_connect(src, src),
+	`rdyack_connect(i0_abofs, dst_i0),
+	`rdyack_connect(i1_abofs, dst_i1),
+	`rdyack_connect(o_abofs, dst_o),
+	`rdyack_connect(alu_abofs, dst_alu)
 );
 
 endmodule

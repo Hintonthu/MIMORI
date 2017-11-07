@@ -218,6 +218,8 @@ output [CSIZE-1:0] o_dramw_mask;
 //======================================
 // Internal
 //======================================
+`rdyack_logic(bofs_in);
+logic [WBW-1:0] bofs_in_r [DIM];
 `rdyack_logic(abl_alu_abofs);
 logic [WBW-1:0] abl_alu_bofs  [VDIM];
 logic [WBW-1:0] abl_alu_aofs  [VDIM];
@@ -262,10 +264,15 @@ logic [DBW-1:0] i1_dramrd [CSIZE];
 //======================================
 // Submodule
 //======================================
-AccumBlockLooper u_abl(
+Forward u_fwd(
 	`clk_connect,
 	`rdyack_connect(src, bofs),
-	.i_bofs(i_abl_bofs),
+	`rdyack_connect(dst, bofs_in)
+);
+AccumBlockLooper u_abl(
+	`clk_connect,
+	`rdyack_connect(src, bofs_in),
+	.i_bofs(bofs_in_r),
 	.i_agrid_step(i_agrid_step),
 	.i_agrid_end(i_agrid_end),
 	.i_aboundary(i_aboundary),
@@ -293,7 +300,6 @@ AccumBlockLooper u_abl(
 	.o_alu_alast(abl_alu_alast),
 	`dval_connect(blkdone, blkdone)
 );
-
 AluPipeline u_alu(
 	`clk_connect,
 	`rdyack_connect(abofs, abl_alu_abofs),
@@ -317,7 +323,6 @@ AluPipeline u_alu(
 	`rdyack_connect(dramwd, alu_write_dat),
 	.o_dramwd(alu_write_dat)
 );
-
 WritePipeline u_w(
 	`clk_connect,
 	`rdyack_connect(bofs, abl_o_abofs),
@@ -346,7 +351,6 @@ WritePipeline u_w(
 	.o_dramwd(o_dramwd),
 	.o_dramw_mask(o_dramw_mask)
 );
-
 ReadPipeline#(.LBW(LBW0)) u_r0(
 	`clk_connect,
 	`rdyack_connect(warp_abofs, abl_i0_abofs),
@@ -388,7 +392,6 @@ ReadPipeline#(.LBW(LBW0)) u_r0(
 	`rdyack_connect(sramrd, i0_alu_sramrd),
 	.o_sramrd(i0_alu_sramrd)
 );
-
 ReadPipeline#(.LBW(LBW1)) u_r1(
 	`clk_connect,
 	`rdyack_connect(warp_abofs, abl_i1_abofs),
@@ -430,7 +433,6 @@ ReadPipeline#(.LBW(LBW1)) u_r1(
 	`rdyack_connect(sramrd, i1_alu_sramrd),
 	.o_sramrd(i1_alu_sramrd)
 );
-
 DramArbiter u_arb(
 	`clk_connect,
 	`rdyack_connect(i0_dramra, i0_dramra),
@@ -446,5 +448,16 @@ DramArbiter u_arb(
 	`rdyack_connect(dramrd, dramrd),
 	.i_dramrd(i_dramrd)
 );
+
+//======================================
+// Sequential
+//======================================
+`ff_rst
+	for (int i = 0; i < VDIM; i++) begin
+		bofs_in_r[i] <= '0;
+	end
+`ff_cg(bofs_in_ack)
+	bofs_in_r <= i_bofs;
+`ff_end
 
 endmodule

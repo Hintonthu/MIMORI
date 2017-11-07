@@ -55,44 +55,40 @@ output logic [WBW-1:0] o_bofs [VDIM];
 `rdyack_logic(wait_fin);
 logic block_full;
 logic block_empty;
-logic last_block;
-logic [WBW-1:0] bofs_nxt [VDIM];
+logic s0_last_block;
 
 //======================================
 // Combinational
 //======================================
-assign send_last_ack = s0_dst_ack;
 assign wait_fin_ack = wait_fin_rdy && block_empty;
 
 //======================================
 // Submodule
 //======================================
-Broadcast#(2) u_brd_0(
+BroadcastInorder#(2) u_brd(
 	`clk_connect,
 	`rdyack_connect(src, src),
-	.acked(),
-	.dst_rdys({fin_seq_rdy, s0_src_rdy}),
-	.dst_acks({fin_seq_ack, s0_src_ack})
+	.dst_rdys({wait_fin_rdy, s0_src_rdy}),
+	.dst_acks({wait_fin_ack, s0_src_ack})
 );
-BroadcastInorder#(2) u_brd_1(
-	`clk_connect,
-	`rdyack_connect(src, fin_seq),
-	.dst_rdys({wait_fin_rdy, send_last_rdy}),
-	.dst_acks({wait_fin_ack, send_last_ack})
-);
-Forward u_s0(
+OffsetStage#(.BW(WBW), .DIM(VDIM), .FROM_ZERO(1), .UNIT_STRIDE(0)) u_s0(
 	`clk_connect,
 	`rdyack_connect(src, s0_src),
-	`rdyack_connect(dst, s0_dst)
-);
-AcceptIf#(1) u_acc_if_last(
-	.cond(last_block),
-	`rdyack_connect(src, s0_dst),
-	`rdyack_connect(dst, s0_iflast)
+	.i_ofs_beg(),
+	.i_ofs_end(i_bgrid_end),
+	.i_ofs_gend(),
+	.i_stride(i_bgrid_step),
+	`rdyack_connect(dst, s0_dst),
+	.o_ofs(o_bofs),
+	.o_lofs(),
+	.o_sel_beg(),
+	.o_sel_end(),
+	.o_sel_ret(),
+	.o_islast(s0_last_block)
 );
 ForwardIf#(0) u_fwd_if_not_full(
 	.cond(block_full),
-	`rdyack_connect(src, s0_iflast),
+	`rdyack_connect(src, s0_dst),
 	`rdyack_connect(dst, bofs)
 );
 Semaphore#(N_PENDING) u_sem_done(
@@ -102,31 +98,5 @@ Semaphore#(N_PENDING) u_sem_done(
 	.o_full(block_full),
 	.o_empty(block_empty)
 );
-NDAdder#(.BW(WBW), .DIM(VDIM), .FROM_ZERO(1), .UNIT_STRIDE(0)) u_adder(
-	.i_restart(s0_src_ack),
-	.i_cur(o_bofs),
-	.i_cur_noofs(),
-	.i_beg(),
-	.i_stride(i_bgrid_step),
-	.i_end(i_bgrid_end),
-	.i_global_end(),
-	.o_nxt(bofs_nxt),
-	.o_nxt_noofs(),
-	.o_sel_beg(),
-	.o_sel_end(),
-	.o_sel_ret(),
-	.o_carry(last_block)
-);
-
-//======================================
-// Sequential
-//======================================
-`ff_rst
-	for (int i = 0; i < VDIM; i++) begin
-		o_bofs[i] <= '0;
-	end
-`ff_cg(src_ack || s0_iflast_ack)
-	o_bofs <= bofs_nxt;
-`ff_end
 
 endmodule

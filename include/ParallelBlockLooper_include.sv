@@ -3,4 +3,5 @@
 `include "common/BitOperation.sv"
 `include "common/Controllers.sv"
 `include "common/Semaphore.sv"
+`include "common/OffsetStage.sv"
 `include "ParallelBlockLooper.sv"

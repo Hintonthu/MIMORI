@@ -72,7 +72,7 @@ always_comb for (int i = 0; i < DIM; i++) begin
 		added[i] = i_cur[i] + i_stride[i];
 		added_noofs[i] = i_cur_noofs[i] + i_stride[i];
 	end
-	g_iszero[      i] = added[i] == '0;
+	g_iszero[      i] = i_cur[i] == '0;
 	g_islast[DIM-1-i] = added[i] == i_global_end[i];
 	l_islast[DIM-1-i] = added[i] == i_end[i];
 end
@@ -89,11 +89,7 @@ FindFromLsb#(DIM, 0) u_sel_ret(.i(l_islast), .prefix(cur_rst), .detect(o_sel_ret
 //======================================
 assign o_carry = o_sel_ret[DIM];
 always_comb for (int i = 0; i < DIM; i++) begin
-	casez ({(i_restart|!cur_rst[DIM-1-i]), o_sel_ret[DIM-1-i]})
-		2'b1?: begin
-			o_nxt[i] = FROM_ZERO ? '0 : i_beg[i];
-			o_nxt_noofs[i] = '0;
-		end
+	case ({(i_restart|!cur_rst[DIM-1-i]), o_sel_ret[DIM-1-i]})
 		2'b01: begin
 			o_nxt[i] = added[i];
 			o_nxt_noofs[i] = added_noofs[i];
@@ -101,6 +97,11 @@ always_comb for (int i = 0; i < DIM; i++) begin
 		2'b00: begin
 			o_nxt[i] = i_cur[i];
 			o_nxt_noofs[i] = i_cur_noofs[i];
+		end
+		// I want to use casez and 2'b1?, but nLint keeps complaining about this.
+		default: begin
+			o_nxt[i] = FROM_ZERO ? '0 : i_beg[i];
+			o_nxt_noofs[i] = '0;
 		end
 	endcase
 end
