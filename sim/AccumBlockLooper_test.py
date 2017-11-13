@@ -21,7 +21,7 @@ from itertools import repeat
 from UmiModel import UmiModel, default_sample_conf, npi, npd, newaxis
 
 def main():
-	scb = Scoreboard()
+	scb = Scoreboard("AccumBlockLooper")
 	test_i0 = scb.GetTest("test_i0")
 	test_i1 = scb.GetTest("test_i1")
 	test_o = scb.GetTest("test_o")

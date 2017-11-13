@@ -94,7 +94,7 @@ src_bus, inst_bus = CreateBuses([
 		(None , "o_warpid"),
 	),
 ])
-scb = Scoreboard()
+scb = Scoreboard("SimdDriver")
 tst = scb.GetTest("test", 10)
 col = Stacker(callbacks=[tst.Get])
 RegisterCoroutines([

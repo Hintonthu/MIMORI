@@ -23,7 +23,7 @@ from UmiModel import UmiModel, default_sample_conf, npi, npd, newaxis
 
 def main():
 	n_golden, bofs = cfg.CreateBlockTransaction()
-	scb = Scoreboard()
+	scb = Scoreboard("ParallelBlockLooper")
 	test_b = scb.GetTest("bofs")
 	st_b = Stacker(n_golden, [test_b.Get])
 	master = TwoWire.Master(rdy_bus_s, ack_bus_s, bus_s, ck_ev)
