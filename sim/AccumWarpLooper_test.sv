@@ -21,7 +21,6 @@ module AccumWarpLooper_test;
 
 logic i_clk, i_rst, av_canack;
 `rdyack_logic(bofs);
-`rdyack_logic(mofs);
 `rdyack_logic(av);
 `Pos(rst_out, i_rst)
 `PosIf(ck_ev, i_clk, i_rst)
@@ -42,10 +41,9 @@ initial begin
 end
 
 assign av_ack = av_rdy && av_canack;
-AccumWarpLooper#(.STENCIL(1)) dut(
+AccumWarpLooper#(.USE_LOFS(1), .STENCIL(1)) dut(
 	`clk_connect,
 	`rdyack_connect(abofs, bofs),
-	`rdyack_connect(mofs, mofs),
 	`rdyack_connect(addrval, av)
 );
 

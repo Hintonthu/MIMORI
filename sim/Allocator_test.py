@@ -68,7 +68,7 @@ def main():
 	const_bus.values[0][0] = 0
 	npd.copyto(const_bus.values[1], sizes)
 	const_bus.Write()
-	scb = Scoreboard()
+	scb = Scoreboard("Allocator")
 	test = scb.GetTest("test")
 	yield rst_out_ev
 	yield ck_ev

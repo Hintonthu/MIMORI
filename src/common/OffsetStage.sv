@@ -100,7 +100,7 @@ AcceptIf u_ac(
 // Sequential
 //======================================
 `ff_rst
-	for (int i = 0; i < VDIM; i++) begin
+	for (int i = 0; i < DIM; i++) begin
 		o_ofs[i] <= '0;
 		o_lofs[i] <= '0;
 	end

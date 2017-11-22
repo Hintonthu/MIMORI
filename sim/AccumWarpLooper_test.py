@@ -23,146 +23,130 @@ from UmiModel import UmiModel, default_sample_conf, npi, npd, newaxis
 def main():
 	yield rst_out_ev
 	master = TwoWire.Master(bofs_rdy, bofs_ack, bofs_bus, ck_ev)
-	master_linear = TwoWire.Master(mofs_rdy, mofs_ack, mofs_bus, ck_ev)
 	slave = TwoWire.Slave(av_rdy, av_ack, av_bus, ck_ev, callbacks=[dc.Get])
-	linear_bus = master_linear.values
 	data_bus = master.values
 
 	# simulation
-	(
-		n_bofs, bofs,
-		mofs_i0, mofs_i1, mofs_o
-	) = cfg.CreateBlockTransaction()
+	n_bofs, bofs = cfg.CreateBlockTransaction()
 	for i in range(n_bofs):
 		(
-			n_abofs, abofs, alast,
-			a_range_i0, a_range_i1, a_range_o,
-			abmofs_i0, abmofs_i1, abmofs_o
-		) = cfg.CreateAccumBlockTransaction(mofs_i0[i], mofs_i1[i], mofs_o[i])
-		sram_a0 = 0
-		sram_a1 = 0
-		for j in range(n_abofs):
-			# SRAM address
-			sl_i0 = slice(a_range_i0[j,0], a_range_i0[j,1])
-			sl_i1 = slice(a_range_i1[j,0], a_range_i1[j,1])
-			sl_o = slice(a_range_o[j,0], a_range_o[j,1])
-			sram_a0, lmofs_i0 = cfg.AllocSram(sram_a0, cfg.umcfg_i0["lmsize"][sl_i0])
-			sram_a1, lmofs_i1 = cfg.AllocSram(sram_a1, cfg.umcfg_i1["lmsize"][sl_i1])
-			for k in range(a_range_i0[j,1] - a_range_i0[j,0]):
-				npd.copyto(linear_bus[0], a_range_i0[j,0] + k)
-				npd.copyto(linear_bus[1], lmofs_i0[k])
-				yield from master_linear.Send(linear_bus)
-
+			n_i0, bofs_i0, abeg_i0, aend_i0, abeg_id_i0, aend_id_i0,
+		) = cfg.CreateAccumBlockTransaction(bofs[i])[:6]
+		for j in range(n_i0):
 			(
-				n_aofs, agofs,
-				accum_i0, accum_i1, accum_o, accum_inst,
-				warp_i0, warp_i1, warp_o, warp_inst,
-				rg_flat_i0, rg_flat_i1, rg_flat_o, rg_flat_inst,
-				rt_flat_i0, rt_flat_i1, rt_flat_o,
-				amofs_i0, amofs_i1, amofs_o
-			) = cfg.CreateAccumTransaction(
-				alast[j] if ST_MODE else abofs[j], alast[j],
-				abmofs_i0[j,sl_i0], abmofs_i1[j,sl_i1], abmofs_o[j,sl_o],
-				a_range_i0[j], a_range_i1[j], a_range_o[j],
-				lmofs_i0, lmofs_i1
+				n_aofs_i0, agofs_i0, alofs_i0,
+				rt_i_i0, rg_li_i0, rg_ri_i0
+			) = cfg.CreateAccumTransaction(abeg_i0[j], aend_i0[j])
+			linear_i0 = cfg.AllocSram(0, abeg_id_i0[j], aend_id_i0[j])
+			accum_idx_i0, warpid_i0, rg_flat_i0, rt_flat_i0 = cfg.CreateAccumWarpTransaction(
+				abeg_i0[j], aend_i0[j],
+				rt_i_i0, rg_li_i0, rg_ri_i0,
+				cfg.n_i0
 			)
-			bofs_i0, valid_i0 = cfg.CreateBofsValidTransaction(bofs[i], warp_i0)
-			a_i0, a_i1, a_o = cfg.CreateVectorAddressTransaction(
-				bofs[i],
-				rg_flat_i0, rg_flat_i1, rg_flat_o,
-				amofs_i0, amofs_i1, amofs_o
+			bgofs_i0, blofs_i0, valid_i0 = cfg.CreateBofsValidTransaction(bofs[i], warpid_i0)
+			addr_i0 = cfg.CreateVectorAddressTransaction(
+				blofs_i0[:,0,:], alofs_i0[accum_idx_i0],
+				rg_flat_i0, linear_i0, cfg.umcfg_i0, True
 			)
 			valid_i0_packed = npd.bitwise_or.reduce(valid_i0 << npi.arange(VSIZE)[newaxis,:], axis=1)
 
 			# Send source
-			npd.copyto(data_bus[ 0], bofs[j])
-			npd.copyto(data_bus[ 1], abofs[j])
-			npd.copyto(data_bus[ 2], alast[j])
-			npd.copyto(data_bus[ 3], cfg.pcfg["boundary"][0])
-			npd.copyto(data_bus[ 4], cfg.pcfg["local"][0]-(1<<(cfg.pcfg["lg_vshuf"][0]+cfg.pcfg["lg_vsize"][0])))
+			npd.copyto(data_bus[ 0], bofs[i])
+			npd.copyto(data_bus[ 1], abeg_i0[j])
+			npd.copyto(data_bus[ 2], aend_i0[j])
+			npd.copyto(data_bus[ 3], linear_i0)
+			npd.copyto(data_bus[ 4], cfg.pcfg["total"][0])
 			npd.copyto(data_bus[ 5], cfg.v_nd >> cfg.pcfg["lg_vshuf"][0])
-			npd.copyto(data_bus[ 6], cfg.pcfg["lg_vshuf"][0]+cfg.pcfg["lg_vsize"][0])
+			npd.copyto(data_bus[ 6], cfg.pcfg["lg_vsize"][0])
 			npd.copyto(data_bus[ 7], cfg.pcfg["lg_vshuf"][0])
-			npd.copyto(data_bus[ 8], cfg.acfg["boundary"][0])
-			npd.copyto(data_bus[ 9], cfg.umcfg_i0["lustride"][:,DIM:])
-			npd.copyto(data_bus[10], cfg.umcfg_i0["vlinear"][:,1<<npi.arange(CV_BW)])
-			npd.copyto(data_bus[11], cfg.umcfg_i0["lustride"][:,:DIM])
-			npd.copyto(data_bus[12], cfg.n_i0[0][i])
-			npd.copyto(data_bus[13], cfg.n_i0[1][i])
+			npd.copyto(data_bus[ 8], cfg.acfg["total"][0])
+			npd.copyto(data_bus[ 9], cfg.pcfg["local"][0])
+			npd.copyto(data_bus[10], cfg.umcfg_i0["udim"][:,VDIM:])
+			npd.copyto(data_bus[11], cfg.umcfg_i0["ustride_frac"][:,VDIM:])
+			npd.copyto(data_bus[12], cfg.umcfg_i0["ustride_shamt"][:,VDIM:])
+			npd.copyto(data_bus[13], cfg.umcfg_i0["udim"][:,:VDIM])
+			npd.copyto(data_bus[14], cfg.umcfg_i0["ustride_frac"][:,:VDIM])
+			npd.copyto(data_bus[15], cfg.umcfg_i0["ustride_shamt"][:,:VDIM])
+			npd.copyto(data_bus[16], cfg.umcfg_i0["vlinear"][:,1<<npi.arange(CV_BW)])
+			npd.copyto(data_bus[17], cfg.umcfg_i0["lmalign"][:,:DIM])
+			npd.copyto(data_bus[18], cfg.n_i0[0][i])
+			npd.copyto(data_bus[19], cfg.n_i0[1][i])
 			if ST_MODE:
-				dc.Resize(a_i0.shape[0]*2)
-				npd.copyto(data_bus[14], 1)
-				npd.copyto(data_bus[15], 0)
-				npd.copyto(data_bus[16], 2)
-				data_bus[17][:2] = [0,1]
+				dc.Resize(accum_idx_i0.shape[0]*2)
+				npd.copyto(data_bus[20], 1)
+				npd.copyto(data_bus[21], 0)
+				npd.copyto(data_bus[22], 2)
+				data_bus[23][:2] = [0,1]
 				tst.Expect((
 					npd.repeat(rg_flat_i0[:,newaxis], 2, axis=0),
-					(a_i0[:,newaxis,:]+data_bus[17][:2][:,newaxis]).reshape(-1, VSIZE),
+					(accum_idx_i0[:,newaxis,:]+data_bus[17][:2][:,newaxis]).reshape(-1, VSIZE),
 					npd.repeat(valid_i0_packed[:,newaxis], 2, axis=0),
 					# abcde --> 0a0b0c0d
 					npd.column_stack((npd.zeros_like(rt_flat_i0), rt_flat_i0)).reshape(-1, 1),
 				))
 			else:
-				dc.Resize(a_i0.shape[0])
-				npd.copyto(data_bus[14], 0)
-				tst.Expect((rg_flat_i0[:,newaxis], a_i0, valid_i0_packed[:,newaxis], rt_flat_i0[:,newaxis]))
+				dc.Resize(accum_idx_i0.shape[0])
+				npd.copyto(data_bus[20], 0)
+				tst.Expect((rg_flat_i0[:,newaxis], addr_i0, valid_i0_packed[:,newaxis], rt_flat_i0[:,newaxis]))
 			yield from master.Send(data_bus)
-			for i in range(30):
+			for ck in range(30):
 				yield ck_ev
-			assert dc.is_clean
-			FinishSim()
+		assert dc.is_clean
+		FinishSim()
+		break
 
 try:
 	from os import environ
 	ST_MODE = bool(environ["STENCIL"])
 except:
 	ST_MODE = False
+assert not ST_MODE, "TODO"
 cfg = default_sample_conf
 VSIZE = cfg.VSIZE
+VDIM = cfg.VDIM
 DIM = cfg.DIM
 CV_BW = cfg.LG_VSIZE
 N_CFG = cfg.n_i0[1][-1]
-N_SLUT = cfg.N_SLUT
-scb = Scoreboard()
+N_SLUT = 2
+scb = Scoreboard("AccumWarpLooper")
 tst = scb.GetTest("test")
 dc = Stacker(0, callbacks=[tst.Get])
 rst_out_ev, ck_ev = CreateEvents(["rst_out", "ck_ev"])
 (
 	bofs_rdy, bofs_ack,
-	mofs_rdy, mofs_ack,
 	av_rdy, av_ack
 ) = CreateBuses([
 	(("bofs_rdy",),),
 	(("bofs_ack",),),
-	(("mofs_rdy",),),
-	(("mofs_ack",),),
 	(("av_rdy",),),
 	(("av_canack",),),
 ])
-bofs_bus, mofs_bus, av_bus = CreateBuses([
+bofs_bus, av_bus = CreateBuses([
 	(
-		("dut", "i_bofs", (DIM,)),
-		(None , "i_aofs", (DIM,)),
-		(None , "i_alast", (DIM,)),
-		(None , "i_bboundary", (DIM,)),
-		(None , "i_blocal_last", (DIM,)),
-		(None , "i_bsubofs", (VSIZE,DIM,)),
-		(None , "i_bsub_up_order", (DIM,)),
-		(None , "i_bsub_lo_order", (DIM,)),
-		(None , "i_aboundary", (DIM,)),
-		(None , "i_mofs_bsteps", (N_CFG,DIM,)),
+		("dut", "i_bofs", (VDIM,)),
+		(None , "i_abeg", (VDIM,)),
+		(None , "i_aend", (VDIM,)),
+		(None , "i_linears", (N_CFG,)),
+		(None , "i_bboundary", (VDIM,)),
+		(None , "i_bsubofs", (VSIZE,VDIM,)),
+		(None , "i_bsub_up_order", (VDIM,)),
+		(None , "i_bsub_lo_order", (VDIM,)),
+		(None , "i_aboundary", (VDIM,)),
+		(None , "i_bgrid_step", (VDIM,)),
+		(None , "i_global_bshufs", (N_CFG,VDIM,)),
+		(None , "i_bstrides_frac", (N_CFG,VDIM,)),
+		(None , "i_bstrides_shamt", (N_CFG,VDIM,)),
+		(None , "i_global_ashufs", (N_CFG,VDIM,)),
+		(None , "i_astrides_frac", (N_CFG,VDIM,)),
+		(None , "i_astrides_shamt", (N_CFG,VDIM,)),
 		(None , "i_mofs_bsubsteps", (N_CFG,CV_BW,)),
-		(None , "i_mofs_asteps", (N_CFG,DIM,)),
-		(None , "i_id_begs", (DIM+1,)),
-		(None , "i_id_ends", (DIM+1,)),
+		(None , "i_mboundaries", (N_CFG,DIM,)),
+		(None , "i_id_begs", (VDIM+1,)),
+		(None , "i_id_ends", (VDIM+1,)),
 		(None , "i_stencil"),
 		(None , "i_stencil_begs", (N_CFG,)),
 		(None , "i_stencil_ends", (N_CFG,)),
 		(None , "i_stencil_lut", (N_SLUT,)),
-	),
-	(
-		("dut", "i_mofs"),
-		(None , "i_id"),
 	),
 	(
 		("dut", "o_id"),

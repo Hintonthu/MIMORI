@@ -8,6 +8,16 @@ top:
 tops:
 	make ARGS="+define+SDF=\\\"../$(SYN)/Top.sdf\\\" +define+GATE_LEVEL +define+SRAM_GEN_MODE=SYNOPSYS32 +incdir+../$(SYN)/SAED32_EDK/lib/sram/verilog/ +incdir+../$(SYN)/SAED32_EDK/lib/stdcell_rvt/verilog/ +incdir+../$(SYN)/ +nowarn+SDFNCAP:SDFNDP:MACRDF:CUVWSP" Top
 
+all_sub:
+	-make pbl
+	-make abl
+	-make simd_drv
+	-make awl
+	-make wc
+	-make cal
+	-make alloc
+	-make chal
+
 wc:
 	make WriteCollector
 
@@ -18,7 +28,12 @@ abl:
 	make AccumBlockLooper
 
 rmc:
-	make ARGS="+define+DEFAULT_VSIZE=8" RemapCache
+	-RMC_CONF=0 make RemapCache
+	-RMC_CONF=1 make RemapCache
+	-RMC_CONF=2 make RemapCache
+	-RMC_CONF=3 make RemapCache
+	# XOR scheme doesn't work, check?
+	#-RMC_CONF=4 make RemapCache
 
 pbl:
 	make ParallelBlockLooper
@@ -31,9 +46,6 @@ simd_drv:
 
 awl:
 	make AccumWarpLooper
-
-cal:
-	make CoreAccumLooper
 
 dump_scoreboard:
 	@echo -e \

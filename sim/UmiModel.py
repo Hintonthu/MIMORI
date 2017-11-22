@@ -34,17 +34,17 @@ for f in wrapped:
 
 def ExtractUFloat(i, frac_bw):
 	i = int(i)
-	if i <= 0:
-		raise ValueError("i({}) must be positive.".format(i))
+	if i < 0:
+		raise ValueError("i({}) must be non-negative.".format(i))
+	elif i == 0:
+		return 0, 0
 	expo = 0
-	mask = 1<<frac_bw
-	i <<= frac_bw
-	while (i&~mask) >= mask:
-		if i&1 != 0:
-			raise ValueError("Fraction part is too long.")
+	while (i&1) == 0:
 		i >>= 1
 		expo += 1
-	return (expo, i&~mask)
+	if (i>>frac_bw) != 0:
+		raise ValueError("Fraction part is too long.")
+	return expo, i
 
 def SkipInteger(i):
 	return (1, 0) if i == 0 else (0, i-1)
@@ -95,29 +95,23 @@ class UmiModel(object):
 		for i in appme:
 			l.append(l[-1] + i)
 
-	PCFG_DTYPE = ToIntTypes.__func__(['total', 'local', 'vsize', 'vshuf'], [VDIM,VDIM,VDIM,VDIM])
-	ACFG_DTYPE = ToIntTypes.__func__(['total', 'local'], [VDIM,VDIM])
-	UMCFG_DTYPE = ToIntTypes.__func__(
-		['mwidth', 'mwrap', 'mlinear', 'ustart', 'ustride', 'udim', 'lmwidth', 'lmalign', 'xor_scheme'],
-		[DIM,DIM,1,2*VDIM,2*VDIM,2*VDIM,DIM,DIM,LG_VSIZE]
-	)
-	# Internal data type
-	PCFG_IDTYPE = ToIntTypes.__func__(
-		['end', 'boundary', 'local', 'vsize', 'lg_vsize', 'vshuf', 'lg_vshuf'],
-		[VDIM,VDIM,VDIM,VDIM,VDIM,VDIM,VDIM]
-	)
-	ACFG_IDTYPE = ToIntTypes.__func__(
-		['end', 'boundary', 'local'],
-		[VDIM,VDIM,VDIM]
-	)
-	UMCFG_IDTYPE = ToIntTypes.__func__(
-		[
-			'mstart', 'mboundary', 'mmultiplier', 'mwrap', 'mlinear',
-			'ustride', 'lustride', 'udim', 'lmwidth', 'lmpad', 'lmsize', 'pad', 'vlinear',
-			'xor_scheme', 'xor_src', 'xor_dst', 'xor_swap',
-		],
-		[DIM,DIM,DIM,DIM,1,2*VDIM,2*VDIM,2*VDIM,DIM,DIM,1,1,VSIZE,LG_VSIZE,LG_VSIZE,LG_VSIZE,1]
-	)
+	PCFG_DTYPE = ToIntTypes.__func__([
+		'total', 'local', 'vsize', 'vshuf', # user filled
+		'end', 'lg_vsize', 'lg_vshuf'
+	], [VDIM,VDIM,VDIM,VDIM,VDIM,VDIM,VDIM])
+	ACFG_DTYPE = ToIntTypes.__func__([
+		'total', 'local', # user filled
+		'end'
+	], [VDIM,VDIM,VDIM])
+	UMCFG_DTYPE = ToIntTypes.__func__([
+		'mwidth', 'mwrap', 'mlinear', 'ustart', 'ustride', 'udim', 'lmwidth', 'lmalign', 'xor_scheme', # user filled
+		'ustride_frac', 'ustride_shamt', 'mboundary', 'mboundary_lmwidth', 'lmpad', 'lmsize', 'pad', 'vlinear',
+		'xor_src', 'xor_dst', 'xor_swap',
+	], [
+		DIM,DIM,1,2*VDIM,2*VDIM,2*VDIM,DIM,DIM,LG_VSIZE,
+		2*VDIM,2*VDIM,DIM,DIM,DIM,1,1,VSIZE,
+		LG_VSIZE,LG_VSIZE,1,
+	])
 	# cmd_type 0: fill addr[ofs:ofs+len] to SRAM
 	# cmd_type 1: repeat addr[ofs] len times to SRAM
 	# cmd_type 2: repeat padding value of len times to SRAM
@@ -134,13 +128,6 @@ class UmiModel(object):
 	@staticmethod
 	def _CalMemBound(width):
 		return npd.fliplr(npi.cumprod(npd.fliplr(width), axis=1))
-
-	@staticmethod
-	def _CalMemMul(boundary):
-		multiplier = boundary.copy()
-		multiplier = npd.roll(multiplier, -1, axis=1)
-		multiplier[:,-1] = 1
-		return multiplier
 
 	@staticmethod
 	def _SelRangeIdx(curs, step, end):
@@ -167,10 +154,10 @@ class UmiModel(object):
 		)
 
 	@staticmethod
-	def _SelRetireIdx(curs, last):
+	def _SelRetireIdx(curs, step, end):
 		tv = npd.ones(curs.shape[0], dtype=npd.bool)
 		return npd.argmax(
-			npd.column_stack((curs != last, tv)),
+			npd.column_stack((curs+step != end, tv)),
 			axis=1
 		)
 
@@ -181,16 +168,19 @@ class UmiModel(object):
 		return nn[idx]
 
 	@staticmethod
-	def AllocSram(base_addr, sizes):
-		alloced = npi.cumsum(npd.insert(sizes, 0, base_addr)) & UmiModel.LBW_MASK
-		return alloced[-1], alloced[:-1]
-
-	@staticmethod
 	def _FlatRangeNorep(rg):
 		return npd.concatenate([
 			npi.arange(rg[i,0], rg[i,1]) for i in range(rg.shape[0])
 		])
 
+	def _CalStride(self, um, is_local):
+		mul = npd.copy(um['lmalign'] if is_local else um['mboundary'])
+		mul = npd.roll(mul, -1, axis=1)
+		mul[:,-1] = 1
+		return (
+			  mul[npi.arange(um.shape[0]), um['udim'][:,UmiModel.VDIM:]]
+			* um['ustride'][:,UmiModel.VDIM:]
+		)
 
 	@staticmethod
 	def _XorPosToSrc(pos):
@@ -218,122 +208,6 @@ class UmiModel(object):
 			lo = npd.roll(lo, 1, axis=1)
 		return ret
 
-	def _ValidateXorScheme(self, umcfg):
-		# which bit do you flip?
-		st = umcfg['vlinear'][:,(1<<npi.arange(self.LG_VSIZE))]
-		xors = st & (st^(st-1))
-		or_xors = npd.bitwise_xor.reduce(xors, axis=1)
-		# check
-		lo_dst = npd.bitwise_or.reduce(umcfg['xor_dst'], axis=1)
-		hi_src = npd.bitwise_or.reduce(umcfg['xor_src'], axis=1)
-		masked_xors = (or_xors & ~hi_src)
-		assert npd.all(or_xors == npd.sum(xors))
-		assert npd.all((or_xors & lo_dst) == 0)
-		assert npd.all((masked_xors & self.VSIZE_MASK) == masked_xors)
-
-	def _InitUmcfg(self, umcfg, n, is_local):
-		# layout of umcfg
-		#   aaaapppp
-		n_total = n[1][-1]
-		assert n_total == umcfg.shape[0]
-		iumcfg = npd.empty_like(umcfg, dtype=self.UMCFG_IDTYPE)
-		if is_local:
-			# directly copy
-			iumcfg['lmwidth'] = umcfg['lmwidth']
-			iumcfg['lmsize'] = umcfg['lmalign'][:,0]
-			# Calaulate pad of local memory
-			pad = npd.copy(umcfg['lmalign'])
-			pad[:,:-1] -= umcfg['lmwidth'][:,:-1] * umcfg['lmalign'][:,1:]
-			pad[:,-1] -= umcfg['lmwidth'][:,-1]
-			iumcfg['lmpad'] = npd.fliplr(npi.cumsum(npd.fliplr(pad), axis=1))
-		# directly copy
-		iumcfg['udim'] = umcfg['udim']
-		iumcfg['mwrap'] = umcfg['mwrap']
-		iumcfg['mlinear'] = umcfg['mlinear']
-		iumcfg['xor_scheme'] = umcfg['xor_scheme']
-		# Calaulate memory shape cumsum (multiplier, boundary)
-		iumcfg['mboundary'] = self._CalMemBound(umcfg['mwidth'])
-		iumcfg['mmultiplier'] = self._CalMemMul(iumcfg['mboundary'])
-		if is_local:
-			mmultiplier_l = self._CalMemMul(umcfg['lmalign'])
-		# Calculate shuffled starts
-		iumcfg['mstart'].fill(0)
-		n_total_range = npi.arange(n_total)
-		for i in range(self.DIM*2):
-			iumcfg['mstart'][n_total_range,umcfg['udim'][:,i]] += umcfg['ustart'][:,i]
-		iumcfg['mstart'] *= iumcfg['mmultiplier']
-		# Calculate strides
-		ind = npi.arange(n_total)[:,newaxis]
-		iumcfg['ustride'] = iumcfg['mmultiplier'][ind,umcfg['udim']] * umcfg['ustride']
-		if is_local:
-			iumcfg['lustride'] = mmultiplier_l[ind,umcfg['udim']] * umcfg['ustride']
-		# Calculate vector related
-		if is_local:
-			iumcfg['vlinear'] = npd.dot(iumcfg['lustride'][:, self.DIM:], self.v_nd.T)
-			iumcfg['xor_dst'] = self._XorPosToDst(iumcfg['xor_scheme'])
-			iumcfg['xor_src'] = self._XorPosToSrc(iumcfg['xor_scheme'])
-			iumcfg['xor_swap'] = self._XorPosToSwap(iumcfg['vlinear'][:,(1<<npi.arange(self.LG_VSIZE))])
-			self._ValidateXorScheme(iumcfg)
-		else:
-			iumcfg['vlinear'] = npd.dot(iumcfg['ustride'][:, self.DIM:], self.v_nd.T)
-		return iumcfg
-
-	def _InitApcfg(self, pcfg, acfg):
-		# Init
-		VDIM = self.VDIM
-		ip = npd.empty(1, dtype=self.PCFG_IDTYPE)
-		ia = npd.empty(1, dtype=self.ACFG_IDTYPE)
-		# Convert some values
-		ip['end'] = ((pcfg['total']-1)//pcfg['local']+1)*pcfg['local']
-		ip['boundary'] = pcfg['total']
-		ip['local'] = pcfg['local']
-		ip['vsize'] = pcfg['vsize']
-		ip['vshuf'] = pcfg['vshuf']
-		ia['end'] = ((acfg['total']-1)//acfg['local']+1)*acfg['local']
-		ia['boundary'] = acfg['total']
-		ia['local'] = acfg['local']
-		hi_nd_stride = ip['vsize']*ip['vshuf']
-		assert not npd.any(pcfg['local'] % hi_nd_stride)
-		# Convert some more complex values
-		# Since a field of structured array of shape (1,) is [[x,x,x,x]], so [0] is required
-		pl = pcfg['local'][0]
-		pv = pcfg['vsize'][0]
-		pv = pcfg['vsize'][0]
-		pf = pcfg['vshuf'][0]
-		iplv = ip['lg_vsize'][0]
-		iplf = ip['lg_vshuf'][0]
-		for i in range(self.VDIM):
-			iplv[i] = Clog2(pv[i], True)
-			iplf[i] = Clog2(pf[i], True)
-		v_nd = npi.indices(ip['vsize'][0]).reshape((VDIM, -1)).T << iplf
-		warp_nd = npi.indices(pl >> iplv).reshape((VDIM, -1)).T
-		warp_nd = (warp_nd >> iplf << (iplv+iplf)) + npd.bitwise_and(warp_nd, (1<<iplf)-1)
-		return ip, ia, warp_nd, v_nd
-
-	def __init__(self, pcfg, acfg, umcfg_i0, umcfg_i1, umcfg_o, insts, n_i0, n_i1, n_o, n_inst):
-		# convert to internal format
-		# v_nd_shuf, v_nd = head of warp, warp sub idx
-		self.pcfg, self.acfg, self.warp_nd, self.v_nd = self._InitApcfg(pcfg, acfg)
-		self.n_i0 = self._CvtRange(n_i0)
-		self.n_i1 = self._CvtRange(n_i1)
-		self.n_o = self._CvtRange(n_o)
-		self.n_inst = self._CvtRange(n_inst)
-		'''
-		self.umcfg_i0 = self._InitUmcfg(umcfg_i0, n_i0, is_local=True)
-		self.umcfg_i1 = self._InitUmcfg(umcfg_i1, n_i1, is_local=True)
-		self.umcfg_o = self._InitUmcfg(umcfg_o, n_o, is_local=False)
-		'''
-		self.insts = insts
-		self.n_reg = 1
-		self.luts = dict.fromkeys(UmiModel.limits.keys(), (0, npi.empty((1,))))
-
-	def add_lut(self, name, a):
-		limit = UmiModel.limits[name]
-		a = npi.array(a)
-		l = a.size
-		assert len(a.shape) == 1 and l <= limit
-		self.luts[name] = (l, a)
-
 	@staticmethod
 	def _CountBlockRoutine(ref_local, ref_end=None):
 		"""
@@ -352,6 +226,126 @@ class UmiModel(object):
 		n_ref = ref_ofs.shape[0]
 		return n_ref, ref_ofs
 
+	def _ValidateXorScheme(self, umcfg):
+		# which bit do you flip?
+		st = umcfg['vlinear'][:,(1<<npi.arange(self.LG_VSIZE))]
+		xors = st & (st^(st-1))
+		or_xors = npd.bitwise_xor.reduce(xors, axis=1)
+		# check
+		lo_dst = npd.bitwise_or.reduce(umcfg['xor_dst'], axis=1)
+		hi_src = npd.bitwise_or.reduce(umcfg['xor_src'], axis=1)
+		masked_xors = (or_xors & ~hi_src)
+		assert npd.all(or_xors == npd.sum(xors))
+		assert npd.all((or_xors & lo_dst) == 0)
+		assert npd.all((masked_xors & self.VSIZE_MASK) == masked_xors)
+
+	def _InitUmcfg(self, umcfg, n, is_local):
+		# layout of umcfg
+		#   aaaapppp
+		n_total = n[1][-1]
+		assert n_total == umcfg.shape[0]
+		# Calaulate memory shape cumsum (multiplier, boundary)
+		umcfg['mboundary'] = self._CalMemBound(umcfg['mwidth'])
+		if is_local:
+			umcfg['lmsize'] = umcfg['lmalign'][:,0]
+			# Calaulate pad of local memory
+			pad = npd.copy(umcfg['lmalign'])
+			pad[:,:-1] -= umcfg['lmwidth'][:,:-1] * umcfg['lmalign'][:,1:]
+			pad[:,-1] -= umcfg['lmwidth'][:,-1]
+			umcfg['lmpad'] = npd.fliplr(npi.cumsum(npd.fliplr(pad), axis=1))
+			umcfg['mboundary_lmwidth'] = umcfg['lmwidth']
+			umcfg['mboundary_lmwidth'][:,:-1] *= umcfg['mboundary'][:,1:]
+		# Calculate vector related
+		if is_local:
+			umcfg['vlinear'] = npd.dot(self._CalStride(umcfg, True), self.v_nd.T)
+			umcfg['xor_dst'] = self._XorPosToDst(umcfg['xor_scheme'])
+			umcfg['xor_src'] = self._XorPosToSrc(umcfg['xor_scheme'])
+			umcfg['xor_swap'] = self._XorPosToSwap(umcfg['vlinear'][:,(1<<npi.arange(self.LG_VSIZE))])
+			self._ValidateXorScheme(umcfg)
+		else:
+			umcfg['vlinear'] = npd.dot(self._CalStride(umcfg, False), self.v_nd.T)
+		for i in range(n_total):
+			for j in range(UmiModel.VDIM*2):
+				s, f = ExtractUFloat(umcfg['ustride'][i,j], UmiModel.STRIDE_EXP_BW)
+				assert s < (1<<UmiModel.STRIDE_EXP_BW), "Stride too large"
+				umcfg['ustride_frac'][i,j] = f
+				umcfg['ustride_shamt'][i,j] = s
+		return umcfg
+
+	def _InitApcfg(self, pcfg, acfg):
+		# Init
+		VDIM = self.VDIM
+		# Convert some values
+		pcfg['end'] = ((pcfg['total']-1)//pcfg['local']+1)*pcfg['local']
+		acfg['end'] = ((acfg['total']-1)//acfg['local']+1)*acfg['local']
+		hi_nd_stride = pcfg['vsize']*pcfg['vshuf']
+		assert not npd.any(pcfg['local'] % hi_nd_stride)
+		# Convert some more complex values
+		# Since a field of structured array of shape (1,) is [[x,x,x,x]], so [0] is required
+		pl = pcfg['local'][0]
+		pv = pcfg['vsize'][0]
+		pf = pcfg['vshuf'][0]
+		plv = pcfg['lg_vsize'][0]
+		plf = pcfg['lg_vshuf'][0]
+		for i in range(self.VDIM):
+			plv[i] = Clog2(pv[i], True)
+			plf[i] = Clog2(pf[i], True)
+		v_nd = npi.indices(pv).reshape((VDIM, -1)).T << plf
+		warp_nd = npi.indices(pl >> plv).reshape((VDIM, -1)).T
+		warp_nd = (warp_nd >> plf << (plv+plf)) + npd.bitwise_and(warp_nd, (1<<plf)-1)
+		return pcfg, acfg, warp_nd, v_nd
+
+	@staticmethod
+	def _BA2M(bofs, aofs, stride_idx, um, is_local):
+		VDIM = UmiModel.VDIM
+		n_result = stride_idx.size
+		idx = npi.arange(n_result)
+		mofs = npi.zeros((n_result, UmiModel.DIM))
+		def ShufAccum(ofs, st, sh):
+			str_ofs = ofs * st[stride_idx]
+			for i in range(VDIM):
+				mofs[idx,sh[stride_idx,i]] += str_ofs[:,i]
+		ShufAccum(bofs, um['ustride'][:,VDIM:], um['udim'][:,VDIM:])
+		ShufAccum(aofs, um['ustride'][:,:VDIM], um['udim'][:,:VDIM])
+		mbound = um['lmalign'] if is_local else um['mboundary']
+		mofs[:,:-1] *= mbound[:,1:]
+		return mofs
+
+	def __init__(self, pcfg, acfg, umcfg_i0, umcfg_i1, umcfg_o, insts, n_i0, n_i1, n_o, n_inst):
+		# convert to internal format
+		# v_nd_shuf, v_nd = head of warp, warp sub idx
+		self.pcfg, self.acfg, self.warp_nd, self.v_nd = self._InitApcfg(pcfg, acfg)
+		self.sram_cur = [0, 0]
+		self.n_i0 = self._CvtRange(n_i0)
+		self.n_i1 = self._CvtRange(n_i1)
+		self.sram_linear = [
+			npi.empty(self.n_i0[1][-1]),
+			npi.empty(self.n_i1[1][-1]),
+		]
+		self.umcfg_i0 = self._InitUmcfg(umcfg_i0, n_i0, is_local=True)
+		self.umcfg_i1 = self._InitUmcfg(umcfg_i1, n_i1, is_local=True)
+		self.n_o = self._CvtRange(n_o)
+		self.umcfg_o = self._InitUmcfg(umcfg_o, n_o, is_local=False)
+		self.n_inst = self._CvtRange(n_inst)
+		self.insts = insts
+		self.n_reg = 1
+		self.luts = dict.fromkeys(UmiModel.limits.keys(), (0, npi.empty((1,))))
+
+	def add_lut(self, name, a):
+		limit = UmiModel.limits[name]
+		a = npi.array(a)
+		l = a.size
+		assert len(a.shape) == 1 and l <= limit
+		self.luts[name] = (l, a)
+
+	def AllocSram(self, which, beg, end):
+		linear = self.sram_linear[which]
+		um = self.umcfg_i0['lmsize'] if which == 0 else self.umcfg_i1['lmsize']
+		new_addr = npi.cumsum(npd.insert(um[beg:end], 0, self.sram_cur[which])) & UmiModel.LBW_MASK
+		linear[beg:end] = new_addr[:-1]
+		self.sram_cur[which] = new_addr[-1]
+		return linear
+
 	"""
 		Important functions
 	"""
@@ -362,7 +356,7 @@ class UmiModel(object):
 		glb_alocal = self.acfg['local'][0]
 		glb_aend = self.acfg['end'][0]
 		n_aofs, aofs_beg = self._CountBlockRoutine(glb_alocal, glb_aend)
-		aofs_end = npd.fmin(self.acfg['local']+aofs_beg, self.acfg['boundary'])
+		aofs_end = npd.fmin(self.acfg['local']+aofs_beg, self.acfg['total'])
 		l, r = UmiModel._SelRangeIdx(aofs_beg, glb_alocal, glb_aend)
 		def Extract(nums):
 			a_range = UmiModel._SelRangeSel(l, r, nums)
@@ -386,8 +380,8 @@ class UmiModel(object):
 		n_aofs, alofs = self._CountBlockRoutine(adiff)
 		agofs = alofs + abeg
 		# indices
-		rt_i = self._SelRetireIdx(alofs, adiff)
-		rg_li, rg_ri = self._SelRangeIdx(agofs, 1, self.acfg['boundary']) # 1 will be broadcasted
+		rt_i = self._SelRetireIdx(alofs, 1, adiff) # 1 will be broadcasted
+		rg_li, rg_ri = self._SelRangeIdx(agofs, 1, self.acfg['total']) # 1 will be broadcasted
 		return (
 			n_aofs, agofs, alofs,
 			rt_i, rg_li, rg_ri
@@ -422,29 +416,29 @@ class UmiModel(object):
 		# v_nd -> (VSIZE, DIM)
 		# bofs -> (DIM)
 		# self... -> (n_flat, DIM)
-		all_bofs = bofs + self.warp_nd[warp_idx, newaxis, :] + self.v_nd
-		valid = npd.all(all_bofs < self.pcfg['boundary'], axis=2)
-		return all_bofs, valid
+		blofs = self.warp_nd[warp_idx, newaxis, :] + self.v_nd
+		bgofs = bofs + blofs
+		valid = npd.all(bgofs < self.pcfg['total'], axis=2)
+		return bgofs, blofs, valid
 
-	def CreateVectorAddressTransaction(
-		self, bofs,
-		rg_flat_i0, rg_flat_i1, rg_flat_o,
-		mofs_i0, mofs_i1, mofs_o
-	):
-		a_i0 = self._CalWarpMofs(self.umcfg_i0, rg_flat_i0, mofs_i0, True)
-		a_i1 = self._CalWarpMofs(self.umcfg_i1, rg_flat_i1, mofs_i1, True)
-		a_o = self._CalWarpMofs(self.umcfg_o, rg_flat_o, mofs_o, False)
-		return a_i0, a_i1, a_o
+	def CreateChunkHead(self, bofs, aofs, beg, end, um):
+		rg = npi.arange(beg, end)
+		shape = (end-beg, UmiModel.VDIM)
+		bofs, aofs = npd.broadcast_to(bofs, shape), npd.broadcast_to(aofs, shape)
+		return self._BA2M(bofs, aofs, rg, um, False)
+
+	def CreateVectorAddressTransaction(self, bofs, aofs, rg_flat, linear, um, is_local):
+		adr = npi.sum(self._BA2M(bofs, aofs, rg_flat, um, is_local), axis=1) + linear[rg_flat]
+		return adr[:, newaxis] + um['vlinear'][rg_flat]
 
 	def CreateDramReadTransaction(self, mem_start, um, idx):
 		DM = self.DRAM_ALIGN_MASK
 		lmw = um['lmwidth'][idx]
 		lma = um['lmpad'][idx]
-		mul = um['mmultiplier'][idx]
 		mbo = um['mboundary'][idx]
 		mli = um['mlinear'][idx]
-		row_start = npi.indices(lmw[:-1]).reshape((self.DIM-1,-1)).T * mul[:-1] + mem_start[:-1]
-		row_start_clip = npd.clip(row_start, 0, mbo[:-1] - mul[:-1])
+		row_start = npi.indices(lmw[:-1]).reshape((self.DIM-1,-1)).T * mbo[1:] + mem_start[:-1]
+		row_start_clip = npd.clip(row_start, 0, mbo[:-1] - mbo[1:])
 		row_valid = npd.all(row_start == row_start_clip, axis=1)
 		fv = npd.zeros(row_start.shape[0], dtype=npd.bool)
 		row_pad_idx = self.DIM-1-npd.argmin(
@@ -485,35 +479,6 @@ class UmiModel(object):
 		ret['islast'][:-1] = ret['addr'][:-1] != ret['addr'][1:]
 		ret['islast'][-1] = 1
 		return ret
-
-	def _CreateAccumMemofsHead(self, accum_idx, warp_idx, rg_flat, stride, alofs, mstart):
-		mofs = (
-			stride[:,:self.DIM] * alofs[accum_idx] +
-			stride[:,self.DIM:] * self.warp_nd[warp_idx]
-		)
-		mofs = npi.sum(mofs, axis=1) + mstart[rg_flat]
-		return mofs
-
-	def _CalWarpMofs(self, umcfg, flat, mofs, is_local):
-		stride = umcfg['lustride'] if is_local else umcfg['ustride']
-		# mul -> (n_flat, 1, DIM) * (VSIZE, DIM)
-		# after sum -> (n_flat, VSIZE)
-		# add -> (n_flat, VSIZE) + (n_flat, 1)
-		wmofs = npi.sum(
-			stride[flat, newaxis, self.DIM:] * self.v_nd,
-			axis=2
-		) + mofs[:, newaxis]
-		if is_local:
-			# n_flat*VSIZE*LG_VSIZE
-			his_b, los_b, wmofs_b = npd.broadcast_arrays(
-				umcfg['xor_src'][flat, newaxis, :],
-				umcfg['xor_dst'][flat, newaxis, :],
-				wmofs[:,:,newaxis]
-			)
-			los_b[(his_b & wmofs_b) != 0] = 0
-			wmofs ^= npd.bitwise_or.reduce(los_b, axis=2)
-			wmofs &= self.LBW_MASK
-		return wmofs
 
 	def CreateDramWriteTransaction(self, valid, addr):
 		dram_addr = list()

@@ -45,14 +45,14 @@ def main():
 			None, rg_li_alu, rg_ri_alu,
 			cfg.n_inst
 		)
-		bofs_alu, valid_alu = cfg.CreateBofsValidTransaction(bofs[0], warpid_alu)
+		bofs_alu, blofs_alu, valid_alu = cfg.CreateBofsValidTransaction(bofs[0], warpid_alu)
 		npd.copyto(data_bus[0], bofs[0])
 		npd.copyto(data_bus[1], abeg_alu[i])
 		npd.copyto(data_bus[2], aend_alu[i])
 		npd.copyto(data_bus[3], cfg.pcfg["local"][0])
 		npd.copyto(data_bus[4], cfg.pcfg["lg_vsize"][0])
 		npd.copyto(data_bus[5], cfg.pcfg["lg_vshuf"][0])
-		npd.copyto(data_bus[6], cfg.acfg["boundary"][0])
+		npd.copyto(data_bus[6], cfg.acfg["total"][0])
 		npd.copyto(data_bus[7], cfg.n_inst[0])
 		npd.copyto(data_bus[8], cfg.n_inst[1])
 		col.Resize(rg_flat_alu.size)

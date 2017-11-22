@@ -21,8 +21,8 @@ from itertools import repeat
 from UmiModel import npi, npd, newaxis
 
 def main():
-	scb = Scoreboard()
-	test = scb.GetTest("test")
+	scb = Scoreboard("RemapCache")
+	test = scb.GetTest(f"test{RMC_CONF}")
 	st = Stacker(0, [test.Get])
 	wad_master = OneWire.Master(wad_dval_bus, wad_bus, ck_ev)
 	ra_master = TwoWire.Master(ra_rdy_bus, ra_ack_bus, ra_bus, ck_ev)
@@ -66,35 +66,27 @@ def main():
 	assert st.is_clean
 	FinishSim()
 
-VSIZE = 8
-DIM = 4
-CV_BW = 3
-
-# (1) normal
-STRIDES = [3,2,12]
-BS = 0
-XM = 0
-XS = 0
-# (2) broadcast
-# STRIDES = [3,0,12]
-# BS = 0
-# XM = 0
-# XS = 0
-# (3) shuffle
-# STRIDES = [3,2,12]
-# BS = 1
-# XM = 0
-# XS = 0
-# (4) shuffle+broadcast
-# STRIDES = [3,0,12]
-# BS = 1
-# XM = 0
-# XS = 0
-# (5) XORshuffle+broadcast
-# STRIDES = [3,8,12]
-# BS = 0
-# XM = 0b010
-# XS = [0,0,0]
+VSIZE = 32
+CV_BW = 5
+SBXX = (
+	# (1) normal
+	([3,2,12,8,16], 0, 0, 0),
+	# (2) broadcast
+	([3,0,12,8,16], 0, 0, 0),
+	# (3) shuffle
+	([3,2,12,8,16], 1, 0, 0),
+	# (4) shuffle+broadcast
+	([3,0,12,8,16], 1, 0, 0),
+	# (5) XOR+broadcast
+	([3,32,12,8,16], 0, 0b010, 0),
+)
+try:
+	from os import environ
+	RMC_CONF = int(environ["RMC_CONF"])
+	STRIDES, BS, XM, XS = SBXX[RMC_CONF]
+except:
+	RMC_CONF = 0
+	STRIDES, BS, XM, XS = SBXX[0]
 
 N_VEC = 10
 STEP = [0]

@@ -20,19 +20,19 @@ import TauCfg::*;
 module AccumWarpLooperMemofsStage(
 	`clk_port,
 	`rdyack_port(src),
-	i_a_reset_flag,
-	i_a_add_flag,
-	i_bu_reset_flag,
-	i_bu_add_flag,
-	i_bl_reset_flag,
-	i_bl_add_flag,
 	i_id,
 	i_bofs,
+	i_aofs,
 	i_retire,
 	i_islast,
-	i_bsub_up_order,
-	i_mofs_bsteps,
-	i_mofs_asteps,
+	i_global_bshuf,
+	i_global_ashuf,
+	i_bstride_frac,
+	i_bstride_shamt,
+	i_astride_frac,
+	i_astride_shamt,
+	i_linear,
+	i_mboundary,
 	`rdyack_port(dst),
 	o_id,
 	o_linear,
@@ -43,168 +43,142 @@ module AccumWarpLooperMemofsStage(
 //======================================
 // Parameter
 //======================================
-parameter N_CFG = Default::N_CFG;
-parameter ABW = Default::ABW;
+parameter N_CFG = TauCfg::N_ICFG;
+parameter ABW = TauCfg::GLOBAL_ADDR_BW;
 localparam WBW = TauCfg::WORK_BW;
+localparam VDIM = TauCfg::VDIM;
 localparam DIM = TauCfg::DIM;
-localparam VSIZE = TauCfg::VECTOR_SIZE;
+localparam VSIZE = TauCfg::VSIZE;
+localparam SS_BW = TauCfg::STRIDE_BW;
+localparam SF_BW = TauCfg::STRIDE_FRAC_BW;
 // derived
 localparam NCFG_BW = $clog2(N_CFG+1);
 localparam CV_BW = $clog2(VSIZE);
 localparam CCV_BW = $clog2(CV_BW+1);
-// Workaround
-logic [ABW-1:0] ND_AZERO [DIM] = '{default:0};
+localparam DIM_BW = $clog2(DIM);
 
 //======================================
 // I/O
 //======================================
 `clk_input;
 `rdyack_input(src);
-input [DIM-1:0]     i_a_reset_flag;
-input [DIM-1:0]     i_a_add_flag;
-input [DIM-1:0]     i_bu_reset_flag;
-input [DIM-1:0]     i_bu_add_flag;
-input [DIM-1:0]     i_bl_reset_flag;
-input [DIM-1:0]     i_bl_add_flag;
 input [NCFG_BW-1:0] i_id;
-input [WBW-1:0]     i_bofs [DIM];
+input [WBW-1:0]     i_bofs [VDIM];
+input [WBW-1:0]     i_aofs [VDIM];
 input               i_retire;
 input               i_islast;
-input [CCV_BW:0]    i_bsub_up_order [DIM];
-input [ABW-1:0]     i_mofs_bsteps   [N_CFG][DIM];
-input [ABW-1:0]     i_mofs_asteps   [N_CFG][DIM];
+input [DIM_BW-1:0]  i_global_bshuf    [VDIM];
+input [DIM_BW-1:0]  i_global_ashuf    [VDIM];
+input [SF_BW-1:0]   i_bstride_frac    [VDIM];
+input [SS_BW-1:0]   i_bstride_shamt   [VDIM];
+input [SF_BW-1:0]   i_astride_frac    [VDIM];
+input [SS_BW-1:0]   i_astride_shamt   [VDIM];
+input [ABW-1:0]     i_linear;
+input [ABW-1:0]     i_mboundary [DIM];
 `rdyack_output(dst);
 output logic [NCFG_BW-1:0] o_id;
 output logic [ABW-1:0]     o_linear;
-output logic [WBW-1:0]     o_bofs [DIM];
+output logic [WBW-1:0]     o_bofs [VDIM];
 output logic               o_retire;
 output logic               o_islast;
 
 //======================================
 // Internal
 //======================================
-logic [ABW-1:0] mofs_raw_accum_r [DIM];
-logic [ABW-1:0] mofs_raw_accum_w [DIM];
-logic [ABW-1:0] mofs_raw_upper_r [DIM];
-logic [ABW-1:0] mofs_raw_upper_w [DIM];
-logic [ABW-1:0] mofs_raw_lower_r [DIM];
-logic [ABW-1:0] mofs_raw_lower_w [DIM];
-logic [ABW-1:0] linear_w;
+logic [WBW-1:0] bofs_stride [VDIM];
+logic [WBW-1:0] aofs_stride [VDIM];
+logic [WBW-1:0]     s0_mofs_nd_r [DIM];
+logic [WBW-1:0]     s0_mofs_nd_w [DIM];
+logic [ABW-1:0]     s0_mult_r [DIM-1];
+logic [ABW-1:0]     s0_linear_r;
+logic [NCFG_BW-1:0] s0_id_r;
+logic               s0_islast_r;
+logic [WBW-1:0]     s0_bofs_r [VDIM];
+logic               s0_retire_r;
+logic [ABW-1:0]     o_linear_w;
 
 //======================================
 // Combinational
 //======================================
+always_comb for (int i = 0; i < VDIM; i++) begin
+	bofs_stride[i] = (i_bofs[i] * i_bstride_frac[i]) << i_bstride_shamt[i];
+	aofs_stride[i] = (i_aofs[i] * i_astride_frac[i]) << i_astride_shamt[i];
+end
+
 always_comb begin
-	linear_w = '0;
-	for (int i = 0; i < DIM; i++) begin
-		linear_w = linear_w
-			+ mofs_raw_accum_w[i]
-			+ mofs_raw_lower_w[i]
-			+ mofs_raw_upper_w[i];
+	// TODO: nLint bit length error here
+	o_linear_w = '0;
+	for (int i = 0; i < DIM-1; i++) begin
+		o_linear_w = o_linear_w + (s0_mofs_nd_r[i] * s0_mult_r[i]);
 	end
+	o_linear_w = o_linear_w + s0_linear_r + s0_mofs_nd_r[DIM-1]; // s0_mofs_nd_r nLint bit mismatch
 end
 
 //======================================
 // Submodule
 //======================================
-Forward u_fwd(
+Forward u_fwd0(
 	`clk_connect,
 	`rdyack_connect(src, src),
+	`rdyack_connect(dst, s0)
+);
+Forward u_fwd1(
+	`clk_connect,
+	`rdyack_connect(src, s0),
 	`rdyack_connect(dst, dst)
 );
-NDCounterAddSelect#(
-	.BW(ABW),
-	.DIM(DIM),
-	.FRAC_BW(0),
-	.SHAMT_BW(0),
-	.UNIT_STEP(0)
-) u_accumofs_sel(
-	.i_augend(mofs_raw_accum_r),
-	.o_sum(mofs_raw_accum_w),
-	.i_start(ND_AZERO),
-	.i_step(i_mofs_asteps[i_id]),
-	.i_frac(),
-	.i_shamt(),
-	.i_reset_counter(i_a_reset_flag),
-	.i_add_counter(i_a_add_flag)
-);
-NDCounterAddSelect#(
-	.BW(ABW),
-	.DIM(DIM),
-	.FRAC_BW(0),
-	.SHAMT_BW(CCV_BW+1),
-	.UNIT_STEP(0)
-) u_upperofs_sel(
-	.i_augend(mofs_raw_upper_r),
-	.o_sum(mofs_raw_upper_w),
-	.i_start(ND_AZERO),
-	.i_step(i_mofs_bsteps[i_id]),
-	.i_frac(),
-	.i_shamt(i_bsub_up_order),
-	.i_reset_counter(i_bu_reset_flag),
-	.i_add_counter(i_bu_add_flag)
-);
-NDCounterAddSelect#(
-	.BW(ABW),
-	.DIM(DIM),
-	.FRAC_BW(0),
-	.SHAMT_BW(0),
-	.UNIT_STEP(0)
-) u_lowerofs_sel(
-	.i_augend(mofs_raw_lower_r),
-	.o_sum(mofs_raw_lower_w),
-	.i_start(ND_AZERO),
-	.i_step(i_mofs_bsteps[i_id]),
-	.i_frac(),
-	.i_shamt(),
-	.i_reset_counter(i_bl_reset_flag),
-	.i_add_counter(i_bl_add_flag)
-);
-Registers2D#(.BW(ABW), .D1(DIM), .NDATA(N_CFG)) u_mofs_raw_reg_accum(
-	.i_clk(i_clk),
-	.i_rst(i_rst),
-	.i_we(src_ack),
-	.i_waddr(i_id),
-	.i_wdata(mofs_raw_accum_w),
-	.i_raddr(i_id),
-	.o_rdata(mofs_raw_accum_r)
-);
-Registers2D#(.BW(ABW), .D1(DIM), .NDATA(N_CFG)) u_mofs_raw_reg_upper(
-	.i_clk(i_clk),
-	.i_rst(i_rst),
-	.i_we(src_ack),
-	.i_waddr(i_id),
-	.i_wdata(mofs_raw_upper_w),
-	.i_raddr(i_id),
-	.o_rdata(mofs_raw_upper_r)
-);
-Registers2D#(.BW(ABW), .D1(DIM), .NDATA(N_CFG)) u_mofs_raw_reg_lower(
-	.i_clk(i_clk),
-	.i_rst(i_rst),
-	.i_we(src_ack),
-	.i_waddr(i_id),
-	.i_wdata(mofs_raw_lower_w),
-	.i_raddr(i_id),
-	.o_rdata(mofs_raw_lower_r)
+NDShufAccum#(.BW(WBW), .DIM_IN(VDIM), .DIM_OUT(DIM), .ZERO_AUG(1)) u_saccum(
+	.i_augend(),
+	.o_sum(s0_mofs_nd_w),
+	.i_addend1(bofs_stride),
+	.i_addend2(aofs_stride),
+	.i_shuf1(i_global_bshuf),
+	.i_shuf2(i_global_ashuf)
 );
 
 //======================================
 // Sequential
 //======================================
 `ff_rst
+	for (int i = 0; i < DIM-1; i++) begin
+		s0_mult_r[i] <= '0;
+	end
+	for (int i = 0; i < VDIM; i++) begin
+		s0_bofs_r[i] <= '0;
+	end
 	for (int i = 0; i < DIM; i++) begin
+		s0_mofs_nd_r[i] <= '0;
+	end
+	s0_linear_r <= '0;
+	s0_id_r <= '0;
+	s0_islast_r <= 1'b0;
+	s0_retire_r <= 1'b0;
+`ff_cg(src_ack)
+	for (int i = 0; i < DIM-1; i++) begin
+		s0_mult_r[i] <= i_mboundary[i+1];
+	end
+	s0_mofs_nd_r <= s0_mofs_nd_w;
+	s0_bofs_r <= i_bofs;
+	s0_linear_r <= i_linear;
+	s0_id_r <= i_id;
+	s0_islast_r <= i_islast;
+	s0_retire_r <= i_retire;
+`ff_end
+
+`ff_rst
+	for (int i = 0; i < VDIM; i++) begin
 		o_bofs[i] <= '0;
 	end
 	o_linear <= '0;
 	o_id <= '0;
 	o_islast <= 1'b0;
 	o_retire <= 1'b0;
-`ff_cg(src_ack)
-	o_linear <= linear_w;
-	o_id <= i_id;
-	o_islast <= i_islast;
-	o_bofs <= i_bofs;
-	o_retire <= i_retire;
+`ff_cg(s0_ack)
+	o_linear <= o_linear_w;
+	o_id <= s0_id_r;
+	o_islast <= s0_islast_r;
+	o_bofs <= s0_bofs_r;
+	o_retire <= s0_retire_r;
 `ff_end
 
 endmodule

@@ -3,7 +3,6 @@
 `include "common/BitOperation.sv"
 `include "common/Controllers.sv"
 `include "common/OffsetStage.sv"
-`include "common/IndexStage.sv"
 `include "common/Semaphore.sv"
 `include "TileAccumUnit/common/AccumWarpLooper/AccumWarpLooperIndexStage.sv"
 `include "TileAccumUnit/AluPipeline/Simd/SimdDriver.sv"

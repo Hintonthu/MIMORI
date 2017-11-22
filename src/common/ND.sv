@@ -111,8 +111,10 @@ endmodule
 module NDShufAccum(
 	i_augend, // not used if ZERO_AUG = 1
 	o_sum,
-	i_addend,
-	i_shuf // not used if DIM_OUT = 1
+	i_addend1,
+	i_addend2,
+	i_shuf1, // not used if DIM_OUT = 1
+	i_shuf2  // not used if DIM_OUT = 1
 );
 //======================================
 // Parameter
@@ -126,10 +128,12 @@ localparam CLOG2_DIM_OUT = $clog2(DIM_OUT);
 //======================================
 // I/O
 //======================================
-input        [BW-1:0] i_augend [DIM_OUT];
-output logic [BW-1:0] o_sum    [DIM_OUT];
-input        [BW-1:0] i_addend [DIM_IN];
-input        [CLOG2_DIM_OUT-1:0] i_shuf [DIM_IN];
+input        [BW-1:0] i_augend  [DIM_OUT];
+output logic [BW-1:0] o_sum     [DIM_OUT];
+input        [BW-1:0] i_addend1 [DIM_IN];
+input        [BW-1:0] i_addend2 [DIM_IN];
+input        [CLOG2_DIM_OUT-1:0] i_shuf1 [DIM_IN];
+input        [CLOG2_DIM_OUT-1:0] i_shuf2 [DIM_IN];
 
 //======================================
 // Combinational
@@ -138,7 +142,7 @@ generate if (DIM_OUT == 1) begin: sum_all_mode
 	always_comb begin
 		o_sum[0] = '0;
 		for (int i = 0; i < DIM_IN; i++) begin
-			o_sum[0] = o_sum[0] + i_addend[i];
+			o_sum[0] = o_sum[0] + i_addend1[i] + i_addend2[i];
 		end
 		o_sum[0] = o_sum[0] + (ZERO_AUG ? '0 : i_augend[0]);
 	end
@@ -147,7 +151,9 @@ end else begin: sum_shuf_mode
 		for (int i = 0; i < DIM_OUT; i++) begin
 			o_sum[i] = '0;
 			for (int j = 0; j < DIM_IN; j++) begin
-				o_sum[i] = o_sum[i] + ((i == i_shuf[j]) ? i_addend[j] : '0);
+				o_sum[i] = o_sum[i]
+					+ ((i == i_shuf1[j]) ? i_addend1[j] : '0)
+					+ ((i == i_shuf2[j]) ? i_addend2[j] : '0);
 			end
 			o_sum[i] = o_sum[i] + (ZERO_AUG ? '0 : i_augend[i]);
 		end

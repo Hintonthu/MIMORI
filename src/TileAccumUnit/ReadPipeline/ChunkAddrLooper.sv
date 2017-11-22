@@ -42,7 +42,7 @@ parameter LBW = TauCfg::LOCAL_ADDR_BW0;
 localparam GBW = TauCfg::GLOBAL_ADDR_BW;
 localparam DIM = TauCfg::DIM;
 localparam CSIZE = TauCfg::CACHE_SIZE;
-localparam VSIZE = TauCfg::VECTOR_SIZE;
+localparam VSIZE = TauCfg::VSIZE;
 // derived
 localparam V_BW = $clog2(VSIZE);
 localparam C_BW = $clog2(CSIZE);

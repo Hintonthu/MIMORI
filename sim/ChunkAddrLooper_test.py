@@ -24,33 +24,33 @@ from UmiModel import UmiModel, default_sample_conf, npi, npd, newaxis
 from os import getenv
 
 def main():
-	scb = Scoreboard()
+	scb = Scoreboard("ChunkAddrLooper")
 	test = scb.GetTest("test")
 	st = Stacker(0, [test.Get])
-	n_bofs, bofs, mofs_i0, mofs_i1, mofs_o = cfg.CreateBlockTransaction()
 	master = TwoWire.Master(mrdy_bus, mack_bus, mofs_bus, ck_ev)
 	i_data = master.values
 	slave = TwoWire.Slave(crdy_bus, cack_bus, cmd_bus, ck_ev, callbacks=[st.Get])
 	yield rst_out_ev
 
-	# start simulation
+	# simulation
+	n_bofs, bofs = cfg.CreateBlockTransaction()
 	TEST0 = not getenv("TEST0") is None
 	print(f"Testing {0 if TEST0 else 1}...")
 	TEST_UMCFG = cfg.umcfg_i0 if TEST0 else cfg.umcfg_i1
+	OFS = 0 if TEST0 else 6
 	for i in range(n_bofs):
 		(
-			n_abofs, abofs, alast,
-			a_range_i0, a_range_i1, a_range_o,
-			abmofs_i0, abmofs_i1, abmofs_o
-		) = cfg.CreateAccumBlockTransaction(mofs_i0[i], mofs_i1[i], mofs_o[i])
-		for j in range(n_abofs):
-			TEST_ABMOFS = abmofs_i0[j,0] if TEST0 else abmofs_i1[j,0]
+			n_i, bofs_i, abeg_i, aend_i, abeg_id_i, aend_id_i,
+		) = cfg.CreateAccumBlockTransaction(bofs[i])[OFS:OFS+6]
+		for j in range(n_i):
+			# only use the first one
+			TEST_ABMOFS = cfg.CreateChunkHead(bofs_i[j], abeg_i[j], abeg_id_i[j], aend_id_i[j], TEST_UMCFG)[0]
 			ans = cfg.CreateDramReadTransaction(TEST_ABMOFS, TEST_UMCFG, 0)
 			st.Resize(ans.shape[0])
 			npd.copyto(i_data[0], TEST_ABMOFS)
 			npd.copyto(i_data[1], TEST_UMCFG["lmpad"][0])
-			npd.copyto(i_data[2], TEST_UMCFG["mboundary"][0]-TEST_UMCFG["mmultiplier"][0])
-			npd.copyto(i_data[3], (TEST_UMCFG["lmwidth"][0]-1)*TEST_UMCFG["mmultiplier"][0])
+			npd.copyto(i_data[2], TEST_UMCFG["mboundary"][0])
+			npd.copyto(i_data[3], TEST_UMCFG["mboundary_lmwidth"][0])
 			i_data[4][0] = TEST_UMCFG["mlinear"][0]
 			test.Expect(tuple(
 				ans[k][:,newaxis] for k in ("cmd_type","islast","addr","ofs","len")
