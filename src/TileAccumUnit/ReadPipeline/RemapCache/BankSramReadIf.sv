@@ -48,9 +48,6 @@ localparam CCLOG2_NBANK = $clog2(CLOG2_NBANK+1);
 localparam ABW = CLOG2_NDATA+CLOG2_NBANK;
 localparam CLOG2_XOR_BW = $clog2(XOR_BW);
 localparam BANK_MASK = NBANK-1;
-// Workaround
-logic [CLOG2_NBANK-1:0] ZERO_LOW [NBANK] = '{default:0};
-logic [BW-1:0] ZERO_DATA [NBANK] = '{default:0};
 
 //======================================
 // I/O
@@ -155,7 +152,9 @@ Forward u_fwd_dat(
 // Sequential
 //======================================
 `ff_rst
-	s1_lower_r <= ZERO_LOW;
+	for (int i = 0; i < NBANK; i++) begin
+		s1_lower_r[i] <= '0;
+	end
 	s1_bit_swap_r <= '0;
 	o_free_id <= '0;
 	s1_retire <= 1'b0;
@@ -167,7 +166,9 @@ Forward u_fwd_dat(
 `ff_end
 
 `ff_rst
-	o_rdata <= ZERO_DATA;
+	for (int i = 0; i < NBANK; i++) begin
+		o_rdata[i] <= '0;
+	end
 	dout_retire <= 1'b0;
 `ff_cg(s1_ack)
 	o_rdata <= rdata_w[CLOG2_NBANK+CCLOG2_NBANK];

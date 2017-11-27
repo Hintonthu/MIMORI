@@ -26,6 +26,7 @@ module TileAccumUnit(
 	i_bsub_up_order,
 	i_bsub_lo_order,
 	i_agrid_step,
+	i_bgrid_step,
 	i_agrid_end,
 	i_aboundary,
 	i_i0_local_xor_masks,
@@ -39,9 +40,9 @@ module TileAccumUnit(
 	i_i0_global_cboundaries,
 	i_i0_global_boundaries,
 	i_i0_global_bshufs,
-	i_i0_global_ashufs,
 	i_i0_bstrides_frac,
 	i_i0_bstrides_shamt,
+	i_i0_global_ashufs,
 	i_i0_astrides_frac,
 	i_i0_astrides_shamt,
 	i_i0_id_begs,
@@ -61,9 +62,9 @@ module TileAccumUnit(
 	i_i1_global_cboundaries,
 	i_i1_global_boundaries,
 	i_i1_global_bshufs,
-	i_i1_global_ashufs,
 	i_i1_bstrides_frac,
 	i_i1_bstrides_shamt,
+	i_i1_global_ashufs,
 	i_i1_astrides_frac,
 	i_i1_astrides_shamt,
 	i_i1_id_begs,
@@ -74,9 +75,11 @@ module TileAccumUnit(
 	i_i1_stencil_lut,
 	i_o_global_boundaries,
 	i_o_global_bsubsteps,
-	i_o_global_linears,
+	i_o_global_linears,//forconvenience
+	i_o_global_bshufs,
 	i_o_bstrides_frac,
 	i_o_bstrides_shamt,
+	i_o_global_ashufs,
 	i_o_astrides_frac,
 	i_o_astrides_shamt,
 	i_o_id_begs,
@@ -112,10 +115,10 @@ localparam VDIM = TauCfg::DIM;
 localparam N_ICFG = TauCfg::N_ICFG;
 localparam N_OCFG = TauCfg::N_OCFG;
 localparam N_INST = TauCfg::N_INST;
-localparam SF_BW = TauCfg::STRIDE_FRAC_BW;
-localparam SS_BW = TauCfg::STRIDE_SHAMT_BW;
+localparam SF_BW = TauCfg::STRIDE_BW;
+localparam SS_BW = TauCfg::STRIDE_FRAC_BW;
 localparam ISA_BW = TauCfg::ISA_BW;
-localparam VSIZE = TauCfg::VECTOR_SIZE;
+localparam VSIZE = TauCfg::VSIZE;
 localparam CSIZE = TauCfg::CACHE_SIZE;
 localparam XOR_BW = TauCfg::XOR_BW;
 localparam REG_ADDR = TauCfg::WARP_REG_ADDR_SPACE;
@@ -144,6 +147,7 @@ input [CV_BW-1:0]   i_bsubofs [VSIZE][VDIM];
 input [CCV_BW  :0]  i_bsub_up_order  [VDIM];
 input [CCV_BW-1:0]  i_bsub_lo_order  [VDIM];
 input [WBW-1:0]     i_agrid_step     [VDIM];
+input [WBW-1:0]     i_bgrid_step     [VDIM];
 input [WBW-1:0]     i_agrid_end      [VDIM];
 input [WBW-1:0]     i_aboundary      [VDIM];
 input [CV_BW-1:0]   i_i0_local_xor_masks    [N_ICFG];
@@ -157,11 +161,11 @@ input [GBW-1:0]     i_i0_global_linears     [N_ICFG];
 input [GBW-1:0]     i_i0_global_cboundaries [N_ICFG][DIM];
 input [GBW-1:0]     i_i0_global_boundaries  [N_ICFG][DIM];
 input [DIM_BW-1:0]  i_i0_global_bshufs      [N_ICFG][VDIM];
+input [SF_BW-1:0]   i_i0_bstrides_frac      [N_ICFG][VDIM];
+input [SS_BW-1:0]   i_i0_bstrides_shamt     [N_ICFG][VDIM];
 input [DIM_BW-1:0]  i_i0_global_ashufs      [N_ICFG][VDIM];
-input [SF_BW-1:0]   i_i0_bstrides_frac;     [N_ICFG][VDIM]
-input [SS_BW-1:0]   i_i0_bstrides_shamt;    [N_ICFG][VDIM]
-input [SF_BW-1:0]   i_i0_astrides_frac;     [N_ICFG][VDIM]
-input [SS_BW-1:0]   i_i0_astrides_shamt;    [N_ICFG][VDIM]
+input [SF_BW-1:0]   i_i0_astrides_frac      [N_ICFG][VDIM];
+input [SS_BW-1:0]   i_i0_astrides_shamt     [N_ICFG][VDIM];
 input [ICFG_BW-1:0] i_i0_id_begs [DIM+1];
 input [ICFG_BW-1:0] i_i0_id_ends [DIM+1];
 input               i_i0_stencil;
@@ -179,11 +183,11 @@ input [GBW-1:0]     i_i1_global_linears     [N_ICFG];
 input [GBW-1:0]     i_i1_global_cboundaries [N_ICFG][DIM];
 input [GBW-1:0]     i_i1_global_boundaries  [N_ICFG][DIM];
 input [DIM_BW-1:0]  i_i1_global_bshufs      [N_ICFG][VDIM];
+input [SF_BW-1:0]   i_i1_bstrides_frac      [N_ICFG][VDIM];
+input [SS_BW-1:0]   i_i1_bstrides_shamt     [N_ICFG][VDIM];
 input [DIM_BW-1:0]  i_i1_global_ashufs      [N_ICFG][VDIM];
-input [SF_BW-1:0]   i_i1_bstrides_frac;     [N_ICFG][VDIM]
-input [SS_BW-1:0]   i_i1_bstrides_shamt;    [N_ICFG][VDIM]
-input [SF_BW-1:0]   i_i1_astrides_frac;     [N_ICFG][VDIM]
-input [SS_BW-1:0]   i_i1_astrides_shamt;    [N_ICFG][VDIM]
+input [SF_BW-1:0]   i_i1_astrides_frac      [N_ICFG][VDIM];
+input [SS_BW-1:0]   i_i1_astrides_shamt     [N_ICFG][VDIM];
 input [ICFG_BW-1:0] i_i1_id_begs [DIM+1];
 input [ICFG_BW-1:0] i_i1_id_ends [DIM+1];
 input               i_i1_stencil;
@@ -193,10 +197,12 @@ input [LBW1-1:0]    i_i1_stencil_lut [STSIZE];
 input [LBW1-1:0]    i_o_global_boundaries [N_OCFG][DIM];
 input [LBW1-1:0]    i_o_global_bsubsteps  [N_OCFG][CV_BW];
 input [GBW-1:0]     i_o_global_linears    [N_OCFG][1]; // [1] for convenience
-input [SF_BW-1:0]   i_o_bstrides_frac     [N_OCFG][VDIM]
-input [SS_BW-1:0]   i_o_bstrides_shamt    [N_OCFG][VDIM]
-input [SF_BW-1:0]   i_o_astrides_frac     [N_OCFG][VDIM]
-input [SS_BW-1:0]   i_o_astrides_shamt    [N_OCFG][VDIM]
+input [DIM_BW-1:0]  i_o_global_bshufs     [N_OCFG][VDIM];
+input [SF_BW-1:0]   i_o_bstrides_frac     [N_OCFG][VDIM];
+input [SS_BW-1:0]   i_o_bstrides_shamt    [N_OCFG][VDIM];
+input [DIM_BW-1:0]  i_o_global_ashufs     [N_OCFG][VDIM];
+input [SF_BW-1:0]   i_o_astrides_frac     [N_OCFG][VDIM];
+input [SS_BW-1:0]   i_o_astrides_shamt    [N_OCFG][VDIM];
 input [OCFG_BW-1:0] i_o_id_begs [DIM+1];
 input [OCFG_BW-1:0] i_o_id_ends [DIM+1];
 input [INST_BW-1:0] i_inst_id_begs [DIM+1];
@@ -221,31 +227,27 @@ output [CSIZE-1:0] o_dramw_mask;
 `rdyack_logic(bofs_in);
 logic [WBW-1:0] bofs_in_r [DIM];
 `rdyack_logic(abl_alu_abofs);
-logic [WBW-1:0] abl_alu_bofs  [VDIM];
-logic [WBW-1:0] abl_alu_aofs  [VDIM];
-logic [WBW-1:0] abl_alu_alast [VDIM];
+logic [WBW-1:0] abl_alu_bofs [VDIM];
+logic [WBW-1:0] abl_alu_aofs [VDIM];
+logic [WBW-1:0] abl_alu_aend [VDIM];
 `rdyack_logic(abl_i0_abofs);
-logic [WBW-1:0]     abl_i0_bofs  [VDIM];
-logic [WBW-1:0]     abl_i0_aofs  [VDIM];
-logic [WBW-1:0]     abl_i0_alast [VDIM];
+logic [WBW-1:0]     abl_i0_bofs [VDIM];
+logic [WBW-1:0]     abl_i0_aofs [VDIM];
+logic [WBW-1:0]     abl_i0_aend [VDIM];
 logic [ICFG_BW-1:0] abl_i0_beg;
 logic [ICFG_BW-1:0] abl_i0_end;
 `rdyack_logic(abl_i1_abofs);
-logic [WBW-1:0]     abl_i1_bofs  [VDIM];
-logic [WBW-1:0]     abl_i1_aofs  [VDIM];
-logic [WBW-1:0]     abl_i1_alast [VDIM];
+logic [WBW-1:0]     abl_i1_bofs [VDIM];
+logic [WBW-1:0]     abl_i1_aofs [VDIM];
+logic [WBW-1:0]     abl_i1_aend [VDIM];
 logic [ICFG_BW-1:0] abl_i1_beg;
 logic [ICFG_BW-1:0] abl_i1_end;
 `rdyack_logic(abl_o_abofs);
-logic [WBW-1:0]     abl_o_bofs  [VDIM];
-logic [WBW-1:0]     abl_o_aofs  [VDIM];
-logic [WBW-1:0]     abl_o_alast [VDIM];
+logic [WBW-1:0]     abl_o_bofs [VDIM];
+logic [WBW-1:0]     abl_o_aofs [VDIM];
+logic [WBW-1:0]     abl_o_aend [VDIM];
 logic [OCFG_BW-1:0] abl_o_beg;
 logic [OCFG_BW-1:0] abl_o_end;
-`rdyack_logic(abl_alu_abofs);
-logic [WBW-1:0] abl_alu_bofs  [VDIM];
-logic [WBW-1:0] abl_alu_aofs  [VDIM];
-logic [WBW-1:0] abl_alu_alast [VDIM];
 `rdyack_logic(i0_alu_sramrd);
 logic [DBW-1:0] i0_alu_sramrd [VSIZE];
 `rdyack_logic(i1_alu_sramrd);
@@ -278,34 +280,35 @@ AccumBlockLooper u_abl(
 	.i_aboundary(i_aboundary),
 	`rdyack_connect(i0_abofs, abl_i0_abofs),
 	.o_i0_bofs(abl_i0_bofs),
-	.o_i0_aofs(abl_i0_aofs),
-	.o_i0_alast(abl_i0_alast),
+	.o_i0_aofs_beg(abl_i0_aofs),
+	.o_i0_aofs_end(abl_i0_aend),
 	.o_i0_beg(abl_i0_beg),
 	.o_i0_end(abl_i0_end),
 	`rdyack_connect(i1_abofs, abl_i1_abofs),
 	.o_i1_bofs(abl_i1_bofs),
-	.o_i1_aofs(abl_i1_aofs),
-	.o_i1_alast(abl_i1_alast),
+	.o_i1_aofs_beg(abl_i1_aofs),
+	.o_i1_aofs_end(abl_i1_aend),
 	.o_i1_beg(abl_i1_beg),
 	.o_i1_end(abl_i1_end),
 	`rdyack_connect(o_abofs, abl_o_abofs),
 	.o_o_bofs(abl_o_bofs),
-	.o_o_aofs(abl_o_aofs),
-	.o_o_alast(abl_o_alast),
+	.o_o_aofs_beg(abl_o_aofs),
+	.o_o_aofs_end(abl_o_aend),
 	.o_o_beg(abl_o_beg),
 	.o_o_end(abl_o_end),
 	`rdyack_connect(alu_abofs, abl_alu_abofs),
 	.o_alu_bofs(abl_alu_bofs),
-	.o_alu_aofs(abl_alu_aofs),
-	.o_alu_alast(abl_alu_alast),
+	.o_alu_aofs_beg(abl_alu_aofs),
+	.o_alu_aofs_end(abl_alu_aend),
 	`dval_connect(blkdone, blkdone)
 );
 AluPipeline u_alu(
 	`clk_connect,
 	`rdyack_connect(abofs, abl_alu_abofs),
 	.i_bofs(abl_alu_bofs),
-	.i_aofs(abl_alu_aofs),
-	.i_alast(abl_alu_alast),
+	.i_aofs_beg(abl_alu_aofs),
+	.i_aofs_end(abl_alu_aend),
+	.i_bgrid_step(i_bgrid_step),
 	.i_bsubofs(i_bsubofs),
 	.i_bsub_up_order(i_bsub_up_order),
 	.i_bsub_lo_order(i_bsub_lo_order),
@@ -327,25 +330,27 @@ WritePipeline u_w(
 	`clk_connect,
 	`rdyack_connect(bofs, abl_o_abofs),
 	.i_bofs(abl_i0_bofs),
-	.i_aofs(abl_i0_aofs),
-	.i_alast(abl_i0_alast),
+	.i_abeg(abl_i0_aofs),
+	.i_aend(abl_i0_aend),
 	.i_bboundary(i_bboundary),
 	.i_bsubofs(i_bsubofs),
 	.i_bsub_up_order(i_bsub_up_order),
 	.i_bsub_lo_order(i_bsub_lo_order),
 	.i_aboundary(i_aboundary),
-	.i_global_boundaries(i_o_global_boundaries),
-	.i_global_bsubsteps(i_o_global_bsubsteps),
+	.i_mboundaries(i_o_global_boundaries),
+	.i_mofs_bsubsteps(i_o_global_bsubsteps),
 	.i_global_linears(i_o_global_linears),
+	.i_bgrid_step(i_bgrid_step),
+	.i_global_bshufs(i_o_global_bshufs),
 	.i_bstrides_frac(i_o_bstrides_frac),
 	.i_bstrides_shamt(i_o_bstrides_shamt),
+	.i_global_ashufs(i_o_global_ashufs),
 	.i_astrides_frac(i_o_astrides_frac),
 	.i_astrides_shamt(i_o_astrides_shamt),
 	.i_id_begs(i_o_id_begs),
 	.i_id_ends(i_o_id_ends),
 	`rdyack_connect(alu_dat, alu_write_dat),
 	.i_alu_dat(alu_write_dat),
-	`dval_connect(blkdone, blkdone),
 	`rdyack_connect(dramw, dramw),
 	.o_dramwa(o_dramwa),
 	.o_dramwd(o_dramwd),
@@ -353,31 +358,34 @@ WritePipeline u_w(
 );
 ReadPipeline#(.LBW(LBW0)) u_r0(
 	`clk_connect,
-	`rdyack_connect(warp_abofs, abl_i0_abofs),
+	`rdyack_connect(bofs, abl_i0_abofs),
 	.i_bofs(abl_i0_bofs),
-	.i_aofs(abl_i0_aofs),
-	.i_alast(abl_i0_alast),
+	.i_abeg(abl_i0_aofs),
+	.i_aend(abl_i0_aend),
+	.i_beg(abl_i0_beg),
+	.i_end(abl_i0_end),
 	.i_bboundary(i_bboundary),
 	.i_bsubofs(i_bsubofs),
 	.i_bsub_up_order(i_bsub_up_order),
 	.i_bsub_lo_order(i_bsub_lo_order),
 	.i_aboundary(i_aboundary),
-	.i_local_xor_masks(i_i0_local_xor_masks),
-	.i_local_xor_schemes(i_i0_local_xor_schemes),
-	.i_local_bit_swaps(i_i0_local_bit_swapsk),
-	.i_local_boundaries(i_i0_local_boundaries),
-	.i_local_bsubsteps(i_i0_local_bsubsteps),
-	.i_local_pads(i_i0_local_pads),
-	.i_global_starts(i_i0_global_starts),
+	.i_bgrid_step(i_bgrid_step),
 	.i_global_linears(i_i0_global_linears),
+	.i_global_mofs(i_i0_global_starts),
+	.i_global_mboundaries(i_i0_global_boundaries),
 	.i_global_cboundaries(i_i0_global_cboundaries),
-	.i_global_boundaries(i_i0_global_boundaries),
 	.i_global_bshufs(i_i0_global_bshufs),
-	.i_global_ashufs(i_i0_global_ashufs),
 	.i_bstrides_frac(i_i0_bstrides_frac),
 	.i_bstrides_shamt(i_i0_bstrides_shamt),
+	.i_global_ashufs(i_i0_global_ashufs),
 	.i_astrides_frac(i_i0_astrides_frac),
 	.i_astrides_shamt(i_i0_astrides_shamt),
+	.i_local_xor_masks(i_i0_local_xor_masks),
+	.i_local_xor_schemes(i_i0_local_xor_schemes),
+	.i_local_bit_swaps(i_i0_local_bit_swaps),
+	.i_local_pads(i_i0_local_pads),
+	.i_local_bsubsteps(i_i0_local_bsubsteps),
+	.i_local_mboundaries(i_i0_local_boundaries),
 	.i_id_begs(i_i0_id_begs),
 	.i_id_ends(i_i0_id_ends),
 	.i_stencil(i_i0_stencil),
@@ -394,31 +402,34 @@ ReadPipeline#(.LBW(LBW0)) u_r0(
 );
 ReadPipeline#(.LBW(LBW1)) u_r1(
 	`clk_connect,
-	`rdyack_connect(warp_abofs, abl_i1_abofs),
+	`rdyack_connect(bofs, abl_i1_abofs),
 	.i_bofs(abl_i1_bofs),
-	.i_aofs(abl_i1_aofs),
-	.i_alast(abl_i1_alast),
+	.i_abeg(abl_i1_aofs),
+	.i_aend(abl_i1_aend),
+	.i_beg(abl_i1_beg),
+	.i_end(abl_i1_end),
 	.i_bboundary(i_bboundary),
 	.i_bsubofs(i_bsubofs),
 	.i_bsub_up_order(i_bsub_up_order),
 	.i_bsub_lo_order(i_bsub_lo_order),
 	.i_aboundary(i_aboundary),
-	.i_local_xor_masks(i_i1_local_xor_masks),
-	.i_local_xor_schemes(i_i1_local_xor_schemes),
-	.i_local_bit_swaps(i_i1_local_bit_swapsk),
-	.i_local_boundaries(i_i1_local_boundaries),
-	.i_local_bsubsteps(i_i1_local_bsubsteps),
-	.i_local_pads(i_i1_local_pads),
-	.i_global_starts(i_i1_global_starts),
+	.i_bgrid_step(i_bgrid_step),
 	.i_global_linears(i_i1_global_linears),
+	.i_global_mofs(i_i1_global_starts),
+	.i_global_mboundaries(i_i1_global_boundaries),
 	.i_global_cboundaries(i_i1_global_cboundaries),
-	.i_global_boundaries(i_i1_global_boundaries),
 	.i_global_bshufs(i_i1_global_bshufs),
-	.i_global_ashufs(i_i1_global_ashufs),
 	.i_bstrides_frac(i_i1_bstrides_frac),
 	.i_bstrides_shamt(i_i1_bstrides_shamt),
+	.i_global_ashufs(i_i1_global_ashufs),
 	.i_astrides_frac(i_i1_astrides_frac),
 	.i_astrides_shamt(i_i1_astrides_shamt),
+	.i_local_xor_masks(i_i1_local_xor_masks),
+	.i_local_xor_schemes(i_i1_local_xor_schemes),
+	.i_local_bit_swaps(i_i1_local_bit_swaps),
+	.i_local_pads(i_i1_local_pads),
+	.i_local_bsubsteps(i_i1_local_bsubsteps),
+	.i_local_mboundaries(i_i1_local_boundaries),
 	.i_id_begs(i_i1_id_begs),
 	.i_id_ends(i_i1_id_ends),
 	.i_stencil(i_i1_stencil),

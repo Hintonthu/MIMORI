@@ -23,6 +23,7 @@ module AluPipeline(
 	i_bofs,
 	i_aofs_beg,
 	i_aofs_end,
+	i_bgrid_step,
 	i_bsubofs,
 	i_bsub_up_order,
 	i_bsub_lo_order,
@@ -51,7 +52,7 @@ localparam DIM = TauCfg::DIM;
 localparam VDIM = TauCfg::VDIM;
 localparam N_INST = TauCfg::N_INST;
 localparam ISA_BW = TauCfg::ISA_BW;
-localparam VSIZE = TauCfg::VECTOR_SIZE;
+localparam VSIZE = TauCfg::VSIZE;
 localparam MAX_WARP = TauCfg::MAX_WARP;
 localparam REG_ADDR = TauCfg::WARP_REG_ADDR_SPACE;
 localparam CONST_LUT = TauCfg::CONST_LUT;
@@ -71,6 +72,7 @@ localparam REG_ABW = $clog2(REG_ADDR);
 input [WBW-1:0]     i_bofs     [VDIM];
 input [WBW-1:0]     i_aofs_beg [VDIM];
 input [WBW-1:0]     i_aofs_end [VDIM];
+input [WBW-1:0]     i_bgrid_step     [VDIM];
 input [CV_BW-1:0]   i_bsubofs [VSIZE][VDIM];
 input [CCV_BW-1:0]  i_bsub_up_order  [VDIM];
 input [CCV_BW-1:0]  i_bsub_lo_order  [VDIM];
@@ -105,8 +107,9 @@ SimdDriver u_simd_drv(
 	`clk_connect,
 	`rdyack_connect(abofs, abofs),
 	.i_bofs(i_bofs),
-	.i_aofs(i_aofs_beg),
-	.i_aofs(i_aofs_end),
+	.i_aofs_beg(i_aofs_beg),
+	.i_aofs_end(i_aofs_end),
+	.i_bgrid_step(i_bgrid_step),
 	.i_bsub_up_order(i_bsub_up_order),
 	.i_bsub_lo_order(i_bsub_lo_order),
 	.i_aboundary(i_aboundary),
@@ -119,7 +122,6 @@ SimdDriver u_simd_drv(
 	.o_warpid(drv_simd_wid),
 	`dval_connect(inst_commit, simd_drv_inst_commit)
 );
-
 Simd u_simd(
 	`clk_connect,
 	`rdyack_connect(inst, drv_simd_inst),

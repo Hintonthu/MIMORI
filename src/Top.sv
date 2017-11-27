@@ -76,8 +76,10 @@ module Top(
 	i_o_global_boundaries,
 	i_o_global_bsubsteps,
 	i_o_global_linears,
+	i_o_global_bshufs,
 	i_o_bstrides_frac,
 	i_o_bstrides_shamt,
+	i_o_global_ashufs,
 	i_o_astrides_frac,
 	i_o_astrides_shamt,
 	i_o_id_begs,
@@ -112,10 +114,10 @@ localparam VDIM = TauCfg::DIM;
 localparam N_ICFG = TauCfg::N_ICFG;
 localparam N_OCFG = TauCfg::N_OCFG;
 localparam N_INST = TauCfg::N_INST;
-localparam SF_BW = TauCfg::STRIDE_FRAC_BW;
-localparam SS_BW = TauCfg::STRIDE_SHAMT_BW;
+localparam SF_BW = TauCfg::STRIDE_BW;
+localparam SS_BW = TauCfg::STRIDE_FRAC_BW;
 localparam ISA_BW = TauCfg::ISA_BW;
-localparam VSIZE = TauCfg::VECTOR_SIZE;
+localparam VSIZE = TauCfg::VSIZE;
 localparam CSIZE = TauCfg::CACHE_SIZE;
 localparam XOR_BW = TauCfg::XOR_BW;
 localparam REG_ADDR = TauCfg::WARP_REG_ADDR_SPACE;
@@ -159,10 +161,10 @@ input [GBW-1:0]     i_i0_global_cboundaries   [N_ICFG][DIM];
 input [GBW-1:0]     i_i0_global_boundaries    [N_ICFG][DIM];
 input [DIM_BW-1:0]  i_i0_global_bshufs        [N_ICFG][VDIM];
 input [DIM_BW-1:0]  i_i0_global_ashufs        [N_ICFG][VDIM];
-input [SF_BW-1:0]   i_i0_bstrides_frac        [N_ICFG][VDIM]
-input [SS_BW-1:0]   i_i0_bstrides_shamt       [N_ICFG][VDIM]
-input [SF_BW-1:0]   i_i0_astrides_frac        [N_ICFG][VDIM]
-input [SS_BW-1:0]   i_i0_astrides_shamt       [N_ICFG][VDIM]
+input [SF_BW-1:0]   i_i0_bstrides_frac        [N_ICFG][VDIM];
+input [SS_BW-1:0]   i_i0_bstrides_shamt       [N_ICFG][VDIM];
+input [SF_BW-1:0]   i_i0_astrides_frac        [N_ICFG][VDIM];
+input [SS_BW-1:0]   i_i0_astrides_shamt       [N_ICFG][VDIM];
 input [ICFG_BW-1:0] i_i0_id_begs [DIM+1];
 input [ICFG_BW-1:0] i_i0_id_ends [DIM+1];
 input               i_i0_stencil;
@@ -181,23 +183,23 @@ input [GBW-1:0]     i_i1_global_cboundaries   [N_ICFG][DIM];
 input [GBW-1:0]     i_i1_global_boundaries    [N_ICFG][DIM];
 input [DIM_BW-1:0]  i_i1_global_bshufs        [N_ICFG][VDIM];
 input [DIM_BW-1:0]  i_i1_global_ashufs        [N_ICFG][VDIM];
-input [SF_BW-1:0]   i_i1_bstrides_frac        [N_ICFG][VDIM]
-input [SS_BW-1:0]   i_i1_bstrides_shamt       [N_ICFG][VDIM]
-input [SF_BW-1:0]   i_i1_astrides_frac        [N_ICFG][VDIM]
-input [SS_BW-1:0]   i_i1_astrides_shamt       [N_ICFG][VDIM]
+input [SF_BW-1:0]   i_i1_bstrides_frac        [N_ICFG][VDIM];
+input [SS_BW-1:0]   i_i1_bstrides_shamt       [N_ICFG][VDIM];
+input [SF_BW-1:0]   i_i1_astrides_frac        [N_ICFG][VDIM];
+input [SS_BW-1:0]   i_i1_astrides_shamt       [N_ICFG][VDIM];
 input [ICFG_BW-1:0] i_i1_id_begs [DIM+1];
 input [ICFG_BW-1:0] i_i1_id_ends [DIM+1];
 input               i_i1_stencil;
 input [ST_BW-1:0]   i_i1_stencil_begs [N_ICFG];
 input [ST_BW-1:0]   i_i1_stencil_ends [N_ICFG];
 input [LBW1-1:0]    i_i1_stencil_lut [STSIZE];
-input [LBW1-1:0]    i_o_local_boundaries     [N_OCFG][DIM];
-input [LBW1-1:0]    i_o_local_bsubsteps      [N_OCFG][CV_BW];
 input [GBW-1:0]     i_o_global_linears       [N_OCFG][1]; // [1] for convenience
-input [SF_BW-1:0]   i_o_bstrides_frac;       [N_OCFG][VDIM]
-input [SS_BW-1:0]   i_o_bstrides_shamt;      [N_OCFG][VDIM]
-input [SF_BW-1:0]   i_o_astrides_frac;       [N_OCFG][VDIM]
-input [SS_BW-1:0]   i_o_astrides_shamt;      [N_OCFG][VDIM]
+input [DIM_BW-1:0]  i_o_global_bshufs        [N_OCFG][VDIM];
+input [SF_BW-1:0]   i_o_bstrides_frac        [N_OCFG][VDIM];
+input [SS_BW-1:0]   i_o_bstrides_shamt       [N_OCFG][VDIM];
+input [DIM_BW-1:0]  i_o_global_ashufs        [N_OCFG][VDIM];
+input [SF_BW-1:0]   i_o_astrides_frac        [N_OCFG][VDIM];
+input [SS_BW-1:0]   i_o_astrides_shamt       [N_OCFG][VDIM];
 input [OCFG_BW-1:0] i_o_id_begs [DIM+1];
 input [OCFG_BW-1:0] i_o_id_ends [DIM+1];
 input [INST_BW-1:0] i_inst_id_begs [DIM+1];
@@ -228,13 +230,12 @@ logic [WBW-1:0] blk_tau_bofs [VDIM];
 ParallelBlockLooper u_pbl(
 	`clk_connect,
 	`rdyack_connect(src, src),
-	.i_stride(i_bgrid_step),
-	.i_end(i_bgrid_end),
+	.i_bgrid_step(i_bgrid_step),
+	.i_bgrid_end(i_bgrid_end),
 	`rdyack_connect(bofs, blk_tau_bofs),
 	.o_bofs(blk_tau_bofs),
 	`dval_connect(blkdone, tau_blk_done)
 );
-
 TileAccumUnit u_tau(
 	`clk_connect,
 	`rdyack_connect(bofs, blk_tau_bofs),
@@ -244,6 +245,7 @@ TileAccumUnit u_tau(
 	.i_bsub_up_order(i_bsub_up_order),
 	.i_bsub_lo_order(i_bsub_lo_order),
 	.i_agrid_step(i_agrid_step),
+	.i_bgrid_step(i_bgrid_step),
 	.i_agrid_end(i_agrid_end),
 	.i_aboundary(i_aboundary),
 	.i_i0_local_xor_masks(i_i0_local_xor_masks),
@@ -257,9 +259,9 @@ TileAccumUnit u_tau(
 	.i_i0_global_cboundaries(i_i0_global_cboundaries),
 	.i_i0_global_boundaries(i_i0_global_boundaries),
 	.i_i0_global_bshufs(i_i0_global_bshufs),
-	.i_i0_global_ashufs(i_i0_global_ashufs),
 	.i_i0_bstrides_frac(i_i0_bstrides_frac),
 	.i_i0_bstrides_shamt(i_i0_bstrides_shamt),
+	.i_i0_global_ashufs(i_i0_global_ashufs),
 	.i_i0_astrides_frac(i_i0_astrides_frac),
 	.i_i0_astrides_shamt(i_i0_astrides_shamt),
 	.i_i0_id_begs(i_i0_id_begs),
@@ -279,9 +281,9 @@ TileAccumUnit u_tau(
 	.i_i1_global_cboundaries(i_i1_global_cboundaries),
 	.i_i1_global_boundaries(i_i1_global_boundaries),
 	.i_i1_global_bshufs(i_i1_global_bshufs),
-	.i_i1_global_ashufs(i_i1_global_ashufs),
 	.i_i1_bstrides_frac(i_i1_bstrides_frac),
 	.i_i1_bstrides_shamt(i_i1_bstrides_shamt),
+	.i_i1_global_ashufs(i_i1_global_ashufs),
 	.i_i1_astrides_frac(i_i1_astrides_frac),
 	.i_i1_astrides_shamt(i_i1_astrides_shamt),
 	.i_i1_id_begs(i_i1_id_begs),
@@ -293,8 +295,10 @@ TileAccumUnit u_tau(
 	.i_o_global_boundaries(i_o_global_boundaries),
 	.i_o_global_bsubsteps(i_o_global_bsubsteps),
 	.i_o_global_linears(i_o_global_linears),
+	.i_o_global_bshufs(i_o_global_bshufs),
 	.i_o_bstrides_frac(i_o_bstrides_frac),
 	.i_o_bstrides_shamt(i_o_bstrides_shamt),
+	.i_o_global_ashufs(i_o_global_ashufs),
 	.i_o_astrides_frac(i_o_astrides_frac),
 	.i_o_astrides_shamt(i_o_astrides_shamt),
 	.i_o_id_begs(i_o_id_begs),

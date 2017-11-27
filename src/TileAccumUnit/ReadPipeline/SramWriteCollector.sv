@@ -45,7 +45,7 @@ module SramWriteCollector(
 parameter LBW = TauCfg::LOCAL_ADDR_BW0;
 localparam DBW = TauCfg::DATA_BW;
 localparam N_ICFG = TauCfg::N_ICFG;
-localparam VSIZE = TauCfg::VECTOR_SIZE;
+localparam VSIZE = TauCfg::VSIZE;
 localparam CSIZE = TauCfg::CACHE_SIZE;
 localparam XOR_BW = TauCfg::XOR_BW;
 // derived

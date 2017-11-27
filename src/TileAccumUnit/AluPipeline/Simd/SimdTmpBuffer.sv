@@ -27,7 +27,7 @@ module SimdTmpBuffer(
 //======================================
 // Parameter
 //======================================
-localparam VSIZE = TauCfg::VECTOR_SIZE;
+localparam VSIZE = TauCfg::VSIZE;
 localparam TDBW = TauCfg::TMP_DATA_BW;
 localparam TBUF_SIZE = TauCfg::ALU_DELAY_BUF_SIZE;
 

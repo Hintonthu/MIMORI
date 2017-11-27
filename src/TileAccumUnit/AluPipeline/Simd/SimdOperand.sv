@@ -53,7 +53,7 @@ module SimdOperand(
 // Parameter
 //======================================
 localparam WBW = TauCfg::WORK_BW;
-localparam DIM = TauCfg::DIM;
+localparam VDIM = TauCfg::VDIM;
 localparam N_INST = TauCfg::N_INST;
 localparam ISA_BW = TauCfg::ISA_BW;
 localparam DBW = TauCfg::DATA_BW;
@@ -75,16 +75,16 @@ localparam WID_BW = $clog2(MAX_WARP);
 `rdyack_input(inst);
 input [ISA_BW-1:0]  i_insts [N_INST];
 input [TDBW-1:0]    i_consts [CONST_LUT];
-input [WBW-1:0]     i_bofs [DIM];
-input [WBW-1:0]     i_aofs [DIM];
+input [WBW-1:0]     i_bofs [VDIM];
+input [WBW-1:0]     i_aofs [VDIM];
 input [INST_BW-1:0] i_pc;
 input [WID_BW-1:0]  i_wid;
 input [REG_ABW-1:0] i_reg_per_warp;
 `rdyack_output(op);
 output logic [2:0]          o_opcode;
 output logic [4:0]          o_shamt;
-output logic [WBW-1:0]      o_bofs [DIM];
-output logic [WBW-1:0]      o_aofs [DIM];
+output logic [WBW-1:0]      o_bofs [VDIM];
+output logic [WBW-1:0]      o_aofs [VDIM];
 output logic [TDBW-1:0]     o_const_a;
 output logic [TDBW-1:0]     o_const_b;
 output logic [TDBW-1:0]     o_const_c;
@@ -185,7 +185,7 @@ end
 	// bypass
 	o_opcode <= '0;
 	o_shamt <= '0;
-	for (int i = 0; i < DIM; i++) begin
+	for (int i = 0; i < VDIM; i++) begin
 		o_bofs[i] <= '0;
 		o_aofs[i] <= '0;
 	end
