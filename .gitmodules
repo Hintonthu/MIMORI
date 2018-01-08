@@ -1,0 +1,6 @@
+[submodule "nicotb"]
+	path = nicotb
+	url = https://github.com/johnjohnlin/nicotb.git
+[submodule "ramulator"]
+	path = ramulator
+	url = https://github.com/CMU-SAFARI/ramulator.git

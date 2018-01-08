@@ -1,7 +1,10 @@
 *
 !*/
 !.gitignore
+!.gitmodules
 !*.py
 !*.v
 !*.sv
 !Makefile
+!nicotb
+!ramulator
