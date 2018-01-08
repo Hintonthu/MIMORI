@@ -27,7 +27,9 @@ class DramRespChan(object):
 		ra_rdy_bus, ra_ack_bus, ra_bus,
 		rd_rdy_bus, rd_ack_bus, rd_bus,
 		w_rdy_bus, w_ack_bus, w_bus,
-		ck_ev, mspace
+		ck_ev, mspace,
+		# dram freq / clk freq
+		dram_speed,
 	):
 		self.sending = list()
 		self.pending = list()
@@ -49,11 +51,14 @@ class DramRespChan(object):
 		self.rd.Write()
 		self.w_rdy.Write()
 		self.w.Write()
-		Fork(self.Tick())
+		self.dram_counter = 0.
+		self.dram_speed_inc = 1 / dram_speed
+		Fork(self.MainLoop())
 
-	def Tick(self):
+	def MainLoop(self):
 		ramu = CDLL("ramulator_wrap.so")
 		c_RamuTick = ramu.RamulatorTick
+		self.c_RamuReport = ramu.RamulatorReport
 		c_r = c_long()
 		c_w = c_long()
 		c_has_r = c_bool()
@@ -66,35 +71,48 @@ class DramRespChan(object):
 		c_w_full_ptr = byref(c_w_full)
 		c_has_resp_ptr = byref(c_has_resp)
 		while True:
-			yield self.ck_ev
-			self.rd_ack.Read()
-			self.ra_rdy.Read()
-			self.w_rdy.Read()
-			c_has_r.value = not self.ra_rdy.x[0] and self.ra_rdy.value[0] and self.ra_ack.value[0]
-			c_has_w.value = not self.w_rdy.x[0] and self.w_rdy.value[0] and self.w_ack.value[0]
-			c_resp_got.value = self.rd_rdy.value[0] and self.rd_ack.value[0]
-			if c_has_r.value:
-				c_r.value = self.ra.value[0]
-				self.ra.Read()
-				self.q.append(self.mspace.Read(self.ra.value))
-			if c_has_w.value:
-				c_w.value = self.w.value[0]
-				self.w.Read()
-				self.mspace.WriteScalarMask(*self.w.values)
-			c_RamuTick(
-				c_has_r, c_has_w, c_resp_got, c_r, c_w,
-				c_r_full_ptr, c_w_full_ptr, c_has_resp_ptr
-			)
-			update_resp = not self.rd_rdy.value[0] or self.rd_ack.value[0]
-			self.ra_ack.value[0] = not c_r_full.value
-			self.w_ack.value[0] = not c_w_full.value
-			self.rd_rdy.value[0] = c_has_resp.value
-			if update_resp and self.rd_rdy.value[0]:
-				self.rd.value = self.q.popleft()
-				self.rd.Write()
-			self.ra_ack.Write()
-			self.w_ack.Write()
-			self.rd_rdy.Write()
+			if self.dram_counter >= 1.:
+				self.dram_counter -= 1.
+				yield self.ck_ev
+				self.rd_ack.Read()
+				self.ra_rdy.Read()
+				self.w_rdy.Read()
+				c_has_r.value = not self.ra_rdy.x[0] and self.ra_rdy.value[0] and self.ra_ack.value[0]
+				c_has_w.value = not self.w_rdy.x[0] and self.w_rdy.value[0] and self.w_ack.value[0]
+				c_resp_got.value = self.rd_rdy.value[0] and self.rd_ack.value[0]
+				if c_has_r.value:
+					c_r.value = self.ra.value[0]
+					self.ra.Read()
+					self.q.append(self.mspace.Read(self.ra.value))
+				if c_has_w.value:
+					c_w.value = self.w.value[0]
+					self.w.Read()
+					self.mspace.WriteScalarMask(*self.w.values)
+				c_RamuTick(
+					c_has_r, c_has_w, c_resp_got, c_r, c_w,
+					c_r_full_ptr, c_w_full_ptr, c_has_resp_ptr
+				)
+				update_resp = not self.rd_rdy.value[0] or self.rd_ack.value[0]
+				self.ra_ack.value[0] = not c_r_full.value
+				self.w_ack.value[0] = not c_w_full.value
+				self.rd_rdy.value[0] = c_has_resp.value
+				if update_resp and self.rd_rdy.value[0]:
+					self.rd.value = self.q.popleft()
+					self.rd.Write()
+				self.ra_ack.Write()
+				self.w_ack.Write()
+				self.rd_rdy.Write()
+			else:
+				c_has_r.value = 0
+				c_has_w.value = 0
+				c_resp_got.value = 0
+				c_r.value = 0
+				c_w.value = 0
+				c_RamuTick(
+					c_has_r, c_has_w, c_resp_got, c_r, c_w,
+					c_r_full_ptr, c_w_full_ptr, c_has_resp_ptr
+				)
+			self.dram_counter += self.dram_speed_inc
 
 def main():
 	# init
@@ -105,7 +123,9 @@ def main():
 		ra_rdy_bus, ra_ack_bus, ra_bus,
 		rd_rdy_bus, rd_ack_bus, rd_bus,
 		w_rdy_bus, w_ack_bus, w_bus,
-		ck_ev, ms
+		ck_ev, ms,
+		# Simulation configuration: 1600MHz/200MHz
+		8.0,
 	)
 
 	i_data = cfg_master.values
@@ -196,6 +216,7 @@ def main():
 		next(verf_func_gen)
 	except StopIteration:
 		pass
+	resp_chan.c_RamuReport()
 	FinishSim()
 
 cfg = default_sample_conf
