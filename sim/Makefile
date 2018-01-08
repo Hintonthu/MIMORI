@@ -3,49 +3,48 @@ IRUN=irun
 SYN=syn
 
 top:
-	make Top
+	make COVERAGE=$(COV) Top
 
 tops:
 	make ARGS="+define+SDF=\\\"../$(SYN)/Top.sdf\\\" +define+GATE_LEVEL +define+SRAM_GEN_MODE=SYNOPSYS32 +incdir+../$(SYN)/SAED32_EDK/lib/sram/verilog/ +incdir+../$(SYN)/SAED32_EDK/lib/stdcell_rvt/verilog/ +incdir+../$(SYN)/ +nowarn+SDFNCAP:SDFNDP:MACRDF:CUVWSP" Top
 
 all_sub:
-	-make pbl
-	-make abl
-	-make simd_drv
-	-make awl
-	-make wc
-	-make cal
-	-make alloc
-	-make chal
+	-make COVERAGE=$(COV) pbl
+	-make COVERAGE=$(COV) abl
+	-make COVERAGE=$(COV) simd_drv
+	-make COVERAGE=$(COV) awl
+	-make COVERAGE=$(COV) wc
+	-make COVERAGE=$(COV) cal
+	-make COVERAGE=$(COV) alloc
+	-make COVERAGE=$(COV) chal
 
 wc:
-	make WriteCollector
+	make COVERAGE=$(COV) WriteCollector
 
 chal:
-	make ChunkAddrLooper
+	make COVERAGE=$(COV) ChunkAddrLooper
 
 abl:
-	make AccumBlockLooper
+	make COVERAGE=$(COV) AccumBlockLooper
 
 rmc:
-	-RMC_CONF=0 make RemapCache
-	-RMC_CONF=1 make RemapCache
-	-RMC_CONF=2 make RemapCache
-	-RMC_CONF=3 make RemapCache
-	# XOR scheme doesn't work, check?
-	#-RMC_CONF=4 make RemapCache
+	-RMC_CONF=0 make COVERAGE=$(COV) RemapCache
+	-RMC_CONF=1 make COVERAGE=$(COV) RemapCache
+	-RMC_CONF=2 make COVERAGE=$(COV) RemapCache
+	-RMC_CONF=3 make COVERAGE=$(COV) RemapCache
+	-RMC_CONF=4 make COVERAGE=$(COV) RemapCache
 
 pbl:
-	make ParallelBlockLooper
+	make COVERAGE=$(COV) ParallelBlockLooper
 
 alloc:
-	make Allocator
+	make COVERAGE=$(COV) Allocator
 
 simd_drv:
-	make SimdDriver
+	make COVERAGE=$(COV) SimdDriver
 
 awl:
-	make AccumWarpLooper
+	make COVERAGE=$(COV) AccumWarpLooper
 
 dump_scoreboard:
 	@echo -e \
@@ -64,14 +63,16 @@ dump_scoreboard:
 	 | sqlite3
 
 %: %_test.sv $(NICOTB)/cpp/nicotb.so
+	$(eval TOP=$(if $(TOPMODULE),$(TOPMODULE),$@)_test)
 	GLOG_logtostderr=1 \
 	GLOG_minloglevel=1 \
 	TEST=$(if $(TEST),$(TEST),$@)_test \
-	TOPMODULE=$(if $(TOPMODULE),$(TOPMODULE),$@)_test \
+	TOPMODULE=$(TOP) \
 	PYTHONPATH=$(NICOTB)/python:. \
 	$(IRUN) +access+rw -loadvpi $(NICOTB)/cpp/nicotb.so:VpiBoot \
 	+incdir+../src/ \
 	+incdir+../include/ \
+	$(if $(COVERAGE),-covoverwrite -coverage block -covtest $(TOP) -covdut $(TOP),) \
 	$(ARGS) $(NICOTB)/verilog/Utils.sv $<
 
 $(NICOTB)/cpp/nicotb.so:
