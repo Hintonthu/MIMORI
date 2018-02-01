@@ -5,6 +5,8 @@
 !*.py
 !*.v
 !*.sv
+!*.tcl
+!*.sdc
 !Makefile
 !nicotb
 !ramulator
