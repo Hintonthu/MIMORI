@@ -1,6 +1,6 @@
 // Copyright 2016 Yu Sheng Lin
 
-// This file is part of Ocean.
+// This file is part of MIMORI.
 
 // MIMORI is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -13,7 +13,7 @@
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Ocean.  If not, see <http://www.gnu.org/licenses/>.
+// along with MIMORI.  If not, see <http://www.gnu.org/licenses/>.
 
 import SramCfg::*;
 
@@ -39,6 +39,13 @@ input        [BW-1:0]          i_wdata;
 input        [CLOG2_NDATA-1:0] i_raddr;
 output logic [BW-1:0]          o_rdata;
 
+task ErrorSram;
+begin
+	$display("SRAM configuration (%d, %dx%db) wrong!", SramCfg::GEN_MODE, NDATA, BW);
+	$finish();
+end
+endtask
+
 generate if (SramCfg::GEN_MODE == SramCfg::BEHAVIOUR) begin: sim_mode
 	logic [BW-1:0] data_r [NDATA];
 	always @(posedge i_clk) begin
@@ -57,11 +64,42 @@ generate if (SramCfg::GEN_MODE == SramCfg::BEHAVIOUR) begin: sim_mode
 			end
 		end
 	end
-end else begin: fail
-	initial begin
-		$display("SRAM configuration (%d) wrong!", SramCfg::GEN_MODE);
-		$abort();
+end else if (SramCfg::GEN_MODE == SramCfg::SYNOPSYS32) begin: synopsys32
+	// A1,A2,CE1,CE2,WEB1,WEB2,OEB1,OEB2,CSB1,CSB2,I1,I2,O1,O2
+	// 1 for R, 2 for W
+	logic i_we_inv, i_re_inv;
+	assign i_we_inv = ~i_we;
+	assign i_re_inv = ~i_re;
+	if (BW == 16 && NDATA == 32) begin: syn_16x32
+		SRAM2RW32x16 s00(.A1(i_raddr),.A2(i_waddr),.CE1(i_clk),.CE2(i_clk),.WEB1(1'b1),.WEB2(1'b0),.OEB1(1'b0),.OEB2(1'b1),.CSB1(i_re_inv),.CSB2(i_we_inv),.I1(),.I2(i_wdata),.O1(o_rdata),.O2());
+	end else if (BW == 16 && NDATA == 64) begin: syn_16x64
+		SRAM2RW64x16 s00(.A1(i_raddr),.A2(i_waddr),.CE1(i_clk),.CE2(i_clk),.WEB1(1'b1),.WEB2(1'b0),.OEB1(1'b0),.OEB2(1'b1),.CSB1(i_re_inv),.CSB2(i_we_inv),.I1(),.I2(i_wdata),.O1(o_rdata),.O2());
+	end else if (BW == 640 && NDATA == 64) begin: syn_512x64
+		SRAM2RW64x32 s00(.A1(i_raddr),.A2(i_waddr),.CE1(i_clk),.CE2(i_clk),.WEB1(1'b1),.WEB2(1'b0),.OEB1(1'b0),.OEB2(1'b1),.CSB1(i_re_inv),.CSB2(i_we_inv),.I1(),.I2(i_wdata[ 31:  0]),.O1(o_rdata[ 31:  0]),.O2());
+		SRAM2RW64x32 s01(.A1(i_raddr),.A2(i_waddr),.CE1(i_clk),.CE2(i_clk),.WEB1(1'b1),.WEB2(1'b0),.OEB1(1'b0),.OEB2(1'b1),.CSB1(i_re_inv),.CSB2(i_we_inv),.I1(),.I2(i_wdata[ 63: 32]),.O1(o_rdata[ 63: 32]),.O2());
+		SRAM2RW64x32 s02(.A1(i_raddr),.A2(i_waddr),.CE1(i_clk),.CE2(i_clk),.WEB1(1'b1),.WEB2(1'b0),.OEB1(1'b0),.OEB2(1'b1),.CSB1(i_re_inv),.CSB2(i_we_inv),.I1(),.I2(i_wdata[ 95: 64]),.O1(o_rdata[ 95: 64]),.O2());
+		SRAM2RW64x32 s03(.A1(i_raddr),.A2(i_waddr),.CE1(i_clk),.CE2(i_clk),.WEB1(1'b1),.WEB2(1'b0),.OEB1(1'b0),.OEB2(1'b1),.CSB1(i_re_inv),.CSB2(i_we_inv),.I1(),.I2(i_wdata[127: 96]),.O1(o_rdata[127: 96]),.O2());
+		SRAM2RW64x32 s04(.A1(i_raddr),.A2(i_waddr),.CE1(i_clk),.CE2(i_clk),.WEB1(1'b1),.WEB2(1'b0),.OEB1(1'b0),.OEB2(1'b1),.CSB1(i_re_inv),.CSB2(i_we_inv),.I1(),.I2(i_wdata[159:128]),.O1(o_rdata[159:128]),.O2());
+		SRAM2RW64x32 s05(.A1(i_raddr),.A2(i_waddr),.CE1(i_clk),.CE2(i_clk),.WEB1(1'b1),.WEB2(1'b0),.OEB1(1'b0),.OEB2(1'b1),.CSB1(i_re_inv),.CSB2(i_we_inv),.I1(),.I2(i_wdata[191:160]),.O1(o_rdata[191:160]),.O2());
+		SRAM2RW64x32 s06(.A1(i_raddr),.A2(i_waddr),.CE1(i_clk),.CE2(i_clk),.WEB1(1'b1),.WEB2(1'b0),.OEB1(1'b0),.OEB2(1'b1),.CSB1(i_re_inv),.CSB2(i_we_inv),.I1(),.I2(i_wdata[223:192]),.O1(o_rdata[223:192]),.O2());
+		SRAM2RW64x32 s07(.A1(i_raddr),.A2(i_waddr),.CE1(i_clk),.CE2(i_clk),.WEB1(1'b1),.WEB2(1'b0),.OEB1(1'b0),.OEB2(1'b1),.CSB1(i_re_inv),.CSB2(i_we_inv),.I1(),.I2(i_wdata[255:224]),.O1(o_rdata[255:224]),.O2());
+		SRAM2RW64x32 s08(.A1(i_raddr),.A2(i_waddr),.CE1(i_clk),.CE2(i_clk),.WEB1(1'b1),.WEB2(1'b0),.OEB1(1'b0),.OEB2(1'b1),.CSB1(i_re_inv),.CSB2(i_we_inv),.I1(),.I2(i_wdata[287:256]),.O1(o_rdata[287:256]),.O2());
+		SRAM2RW64x32 s09(.A1(i_raddr),.A2(i_waddr),.CE1(i_clk),.CE2(i_clk),.WEB1(1'b1),.WEB2(1'b0),.OEB1(1'b0),.OEB2(1'b1),.CSB1(i_re_inv),.CSB2(i_we_inv),.I1(),.I2(i_wdata[319:288]),.O1(o_rdata[319:288]),.O2());
+		SRAM2RW64x32 s10(.A1(i_raddr),.A2(i_waddr),.CE1(i_clk),.CE2(i_clk),.WEB1(1'b1),.WEB2(1'b0),.OEB1(1'b0),.OEB2(1'b1),.CSB1(i_re_inv),.CSB2(i_we_inv),.I1(),.I2(i_wdata[351:320]),.O1(o_rdata[351:320]),.O2());
+		SRAM2RW64x32 s11(.A1(i_raddr),.A2(i_waddr),.CE1(i_clk),.CE2(i_clk),.WEB1(1'b1),.WEB2(1'b0),.OEB1(1'b0),.OEB2(1'b1),.CSB1(i_re_inv),.CSB2(i_we_inv),.I1(),.I2(i_wdata[383:352]),.O1(o_rdata[383:352]),.O2());
+		SRAM2RW64x32 s12(.A1(i_raddr),.A2(i_waddr),.CE1(i_clk),.CE2(i_clk),.WEB1(1'b1),.WEB2(1'b0),.OEB1(1'b0),.OEB2(1'b1),.CSB1(i_re_inv),.CSB2(i_we_inv),.I1(),.I2(i_wdata[415:384]),.O1(o_rdata[415:384]),.O2());
+		SRAM2RW64x32 s13(.A1(i_raddr),.A2(i_waddr),.CE1(i_clk),.CE2(i_clk),.WEB1(1'b1),.WEB2(1'b0),.OEB1(1'b0),.OEB2(1'b1),.CSB1(i_re_inv),.CSB2(i_we_inv),.I1(),.I2(i_wdata[447:416]),.O1(o_rdata[447:416]),.O2());
+		SRAM2RW64x32 s14(.A1(i_raddr),.A2(i_waddr),.CE1(i_clk),.CE2(i_clk),.WEB1(1'b1),.WEB2(1'b0),.OEB1(1'b0),.OEB2(1'b1),.CSB1(i_re_inv),.CSB2(i_we_inv),.I1(),.I2(i_wdata[479:448]),.O1(o_rdata[479:448]),.O2());
+		SRAM2RW64x32 s15(.A1(i_raddr),.A2(i_waddr),.CE1(i_clk),.CE2(i_clk),.WEB1(1'b1),.WEB2(1'b0),.OEB1(1'b0),.OEB2(1'b1),.CSB1(i_re_inv),.CSB2(i_we_inv),.I1(),.I2(i_wdata[511:480]),.O1(o_rdata[511:480]),.O2());
+		SRAM2RW64x32 s16(.A1(i_raddr),.A2(i_waddr),.CE1(i_clk),.CE2(i_clk),.WEB1(1'b1),.WEB2(1'b0),.OEB1(1'b0),.OEB2(1'b1),.CSB1(i_re_inv),.CSB2(i_we_inv),.I1(),.I2(i_wdata[543:512]),.O1(o_rdata[543:512]),.O2());
+		SRAM2RW64x32 s17(.A1(i_raddr),.A2(i_waddr),.CE1(i_clk),.CE2(i_clk),.WEB1(1'b1),.WEB2(1'b0),.OEB1(1'b0),.OEB2(1'b1),.CSB1(i_re_inv),.CSB2(i_we_inv),.I1(),.I2(i_wdata[575:544]),.O1(o_rdata[575:544]),.O2());
+		SRAM2RW64x32 s18(.A1(i_raddr),.A2(i_waddr),.CE1(i_clk),.CE2(i_clk),.WEB1(1'b1),.WEB2(1'b0),.OEB1(1'b0),.OEB2(1'b1),.CSB1(i_re_inv),.CSB2(i_we_inv),.I1(),.I2(i_wdata[607:576]),.O1(o_rdata[607:576]),.O2());
+		SRAM2RW64x32 s19(.A1(i_raddr),.A2(i_waddr),.CE1(i_clk),.CE2(i_clk),.WEB1(1'b1),.WEB2(1'b0),.OEB1(1'b0),.OEB2(1'b1),.CSB1(i_re_inv),.CSB2(i_we_inv),.I1(),.I2(i_wdata[639:608]),.O1(o_rdata[639:608]),.O2());
+	end else begin: syn_fail
+		initial ErrorSram;
 	end
+end else begin: fail
+	initial ErrorSram;
 end endgenerate
 
 endmodule
