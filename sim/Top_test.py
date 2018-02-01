@@ -221,6 +221,7 @@ def main():
 
 cfg = default_sample_conf
 CSIZE = cfg.DRAM_ALIGN
+CSIZE_MASK = ~(CSIZE-1)
 verf_func_gen = default_verf_func(CSIZE)
 VSIZE = cfg.VSIZE
 CV_BW = cfg.LG_VSIZE
@@ -329,6 +330,7 @@ w_bus, ra_bus, rd_bus, cfg_bus = CreateBuses([
 	),
 ])
 rst_out_ev, ck_ev = CreateEvents(["rst_out", "ck_ev"])
+npd.random.seed(12345)
 RegisterCoroutines([
 	main(),
 ])

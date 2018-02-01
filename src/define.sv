@@ -25,11 +25,17 @@
 `define deffsm6(N,n,f1,f2,f3,f4,f5,f6) typedef enum {f1,f2,f3,f4,f5,f6,N``_N}N;logic[N``_N-1:0]n``_r,n``_w;always_ff@(posedge i_clk or negedge i_rst)if(!i_rst)n``_r<='b1<<f1;else n``_r<=n``_w;
 `define fsm_to(n,f) n``_w[f] = 1'b1
 
+`ifndef SRAM_GEN_MODE
+`define SRAM_GEN_MODE BEHAVIOUR
+`endif
+`ifndef SRAM_CON_RW
+`define SRAM_CON_RW UNDEF
+`endif
 package SramCfg;
-	typedef enum {BEHAVIOUR} GenerateMode;
-	typedef enum {UNDEF, OLD, NEW} ConcurrentRW;
-	parameter GenerateMode GEN_MODE = BEHAVIOUR;
-	parameter ConcurrentRW CON_RW = UNDEF;
+	typedef enum int {BEHAVIOUR, SYNOPSYS32} GenerateMode;
+	typedef enum int {UNDEF, OLD, NEW} ConcurrentRW;
+	parameter GenerateMode GEN_MODE = `SRAM_GEN_MODE;
+	parameter ConcurrentRW CON_RW = `SRAM_CON_RW;
 endpackage
 
 `ifndef DEFAULT_VSIZE
