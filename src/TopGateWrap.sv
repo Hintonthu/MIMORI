@@ -1,4 +1,4 @@
-// Copyright 2016 Yu Sheng Lin
+// Copyright 2018 Yu Sheng Lin
 
 // This file is part of MIMORI.
 

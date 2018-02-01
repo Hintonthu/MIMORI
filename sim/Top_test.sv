@@ -1,4 +1,4 @@
-// Copyright (C) 2017, Yu Sheng Lin, johnjohnlys@media.ee.ntu.edu.tw
+// Copyright (C) 2017-2018, Yu Sheng Lin, johnjohnlys@media.ee.ntu.edu.tw
 
 // This file is part of MIMORI.
 
@@ -13,7 +13,7 @@
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Ocean.  If not, see <http://www.gnu.org/licenses/>.
+// along with MIMORI.  If not, see <http://www.gnu.org/licenses/>.
 `ifdef GATE_LEVEL
 `include "Top_syn_include.sv"
 `timescale 1ns/1ps

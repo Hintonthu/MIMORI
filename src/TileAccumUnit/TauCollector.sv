@@ -1,6 +1,6 @@
-// Copyright 2016 Yu Sheng Lin
+// Copyright 2016,2018 Yu Sheng Lin
 
-// This file is part of Ocean.
+// This file is part of MIMORI.
 
 // MIMORI is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -13,7 +13,7 @@
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Ocean.  If not, see <http://www.gnu.org/licenses/>.
+// along with MIMORI.  If not, see <http://www.gnu.org/licenses/>.
 
 import TauCfg::*;
 
