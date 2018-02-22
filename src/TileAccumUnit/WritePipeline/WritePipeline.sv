@@ -63,7 +63,6 @@ localparam SF_BW = TauCfg::STRIDE_FRAC_BW;
 // derived
 localparam OCFG_BW = $clog2(N_OCFG+1);
 localparam DIM_BW = $clog2(DIM);
-localparam VDIM_BW = $clog2(VDIM);
 localparam CV_BW = $clog2(VSIZE);
 localparam CCV_BW = $clog2(CV_BW+1);
 
@@ -80,14 +79,14 @@ input [CV_BW-1:0]   i_bsubofs [VSIZE][VDIM];
 input [CCV_BW-1:0]  i_bsub_up_order  [VDIM];
 input [CCV_BW-1:0]  i_bsub_lo_order  [VDIM];
 input [WBW-1:0]     i_aboundary      [VDIM];
-input [GBW-1:0]     i_mboundaries    [DIM];
+input [GBW-1:0]     i_mboundaries    [N_OCFG][DIM];
 input [GBW-1:0]     i_mofs_bsubsteps [N_OCFG][CV_BW];
 input [GBW-1:0]     i_global_linears [N_OCFG];
 input [WBW-1:0]     i_bgrid_step     [VDIM];
-input [VDIM_BW-1:0] i_global_bshufs  [N_OCFG][VDIM];
+input [DIM_BW-1:0]  i_global_bshufs  [N_OCFG][VDIM];
 input [SF_BW-1:0]   i_bstrides_frac  [N_OCFG][VDIM];
 input [SS_BW-1:0]   i_bstrides_shamt [N_OCFG][VDIM];
-input [VDIM_BW-1:0] i_global_ashufs  [N_OCFG][VDIM];
+input [DIM_BW-1:0]  i_global_ashufs  [N_OCFG][VDIM];
 input [SF_BW-1:0]   i_astrides_frac  [N_OCFG][VDIM];
 input [SS_BW-1:0]   i_astrides_shamt [N_OCFG][VDIM];
 input [OCFG_BW-1:0] i_id_begs [VDIM+1];

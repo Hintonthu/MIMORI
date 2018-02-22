@@ -73,8 +73,9 @@ localparam GBW = TauCfg::GLOBAL_ADDR_BW;
 localparam DBW = TauCfg::DATA_BW;
 localparam N_ICFG = TauCfg::N_ICFG;
 localparam DIM = TauCfg::DIM;
-localparam SF_BW = TauCfg::STRIDE_BW;
-localparam SS_BW = TauCfg::STRIDE_FRAC_BW;
+localparam VDIM = TauCfg::VDIM;
+localparam SS_BW = TauCfg::STRIDE_BW;
+localparam SF_BW = TauCfg::STRIDE_FRAC_BW;
 localparam VSIZE = TauCfg::VSIZE;
 localparam CSIZE = TauCfg::CACHE_SIZE;
 localparam XOR_BW = TauCfg::XOR_BW;
@@ -104,12 +105,12 @@ input [ICFG_BW-1:0] i_beg;
 input [ICFG_BW-1:0] i_end;
 input [WBW-1:0]     i_bboundary      [VDIM];
 input [CV_BW-1:0]   i_bsubofs [VSIZE][VDIM];
-input [CCV_BW  :0]  i_bsub_up_order  [VDIM];
+input [CCV_BW-1:0]  i_bsub_up_order  [VDIM];
 input [CCV_BW-1:0]  i_bsub_lo_order  [VDIM];
 input [WBW-1:0]     i_aboundary      [VDIM];
 input [WBW-1:0]     i_bgrid_step     [VDIM];
 input [GBW-1:0]     i_global_linears     [N_ICFG];
-input [GBW-1:0]     i_global_mofs        [N_ICFG][DIM];
+input [WBW-1:0]     i_global_mofs        [N_ICFG][DIM];
 input [GBW-1:0]     i_global_mboundaries [N_ICFG][DIM];
 input [GBW-1:0]     i_global_cboundaries [N_ICFG][DIM];
 input [DIM_BW-1:0]  i_global_bshufs      [N_ICFG][VDIM];
@@ -122,10 +123,10 @@ input [CV_BW-1:0]   i_local_xor_masks    [N_ICFG];
 input [CX_BW-1:0]   i_local_xor_schemes  [N_ICFG][CV_BW];
 input [CCV_BW-1:0]  i_local_bit_swaps    [N_ICFG];
 input [CV_BW-1:0]   i_local_pads         [N_ICFG][DIM];
-input [LBW-1:0]     i_local_bsubsteps    [N_ICFG][VSIZE];
+input [LBW-1:0]     i_local_bsubsteps    [N_ICFG][CV_BW];
 input [LBW-1:0]     i_local_mboundaries  [N_ICFG][DIM];
-input [ICFG_BW-1:0] i_id_begs [DIM+1];
-input [ICFG_BW-1:0] i_id_ends [DIM+1];
+input [ICFG_BW-1:0] i_id_begs [VDIM+1];
+input [ICFG_BW-1:0] i_id_ends [VDIM+1];
 input               i_stencil;
 input [ST_BW-1:0]   i_stencil_begs [N_ICFG];
 input [ST_BW-1:0]   i_stencil_ends [N_ICFG];
@@ -141,14 +142,14 @@ output [DBW-1:0] o_sramrd [VSIZE];
 //======================================
 // Internal
 //======================================
-logic [LBW-1:0] i_local_sizes [N_ICFG];
+logic [LBW:0] i_local_sizes [N_ICFG];
 `rdyack_logic(brd0_lc);
 `rdyack_logic(brd0_ch);
 `rdyack_logic(ch_mofs);
 `rdyack_logic(ch_mofs_masked);    // -> cmd, addr, alloc
 `rdyack_logic(cal_writer_cmd);
 `dval_logic(rmc_alloc_free_id);
-logic [GBW-1:0]     ch_mofs [DIM];
+logic [WBW-1:0]     ch_mofs [DIM];
 logic [ICFG_BW-1:0] ch_mid;
 `rdyack_logic(ch_alloc_mofs_src); // broadcast
 `rdyack_logic(ch_cmd_mofs_src);   // broadcast
@@ -188,11 +189,13 @@ logic               warp_rmc_retire;
 logic [ICFG_BW-1:0]   writer_rmc_wid;
 logic [LBW-CV_BW-1:0] writer_rmc_whiaddr;
 logic [DBW-1:0]       writer_rmc_wdata [VSIZE];
-`rdyack_logic(cmdaddr);
+`rdyack_logic(cal_writer);
 logic [1:0]        cal_writer_type;
 logic              cal_writer_islast;
 logic [CC_BW-1:0]  cal_writer_addrofs;
 logic [CV_BW1-1:0] cal_writer_len;
+`rdyack_logic(lc_warp);
+logic [LBW-1:0] lc_warp_linears [N_ICFG];
 
 //======================================
 // Submodule
@@ -431,7 +434,10 @@ end
 	end
 	ch_cmd_mid <= '0;
 `ff_cg(ch_cmd_mofs_src_ack)
-	ch_cmd_mofs <= ch_mofs;
+	for (int i = 0; i < DIM-1; i++) begin
+		ch_cmd_mofs[i] <= ch_mofs[i] * i_global_mboundaries[ch_mid][i+1];
+	end
+	ch_cmd_mofs[DIM-1] <= ch_mofs[DIM-1];
 	ch_cmd_mid <= ch_mid;
 `ff_end
 
@@ -441,8 +447,11 @@ end
 	end
 	ch_addr_mid <= '0;
 `ff_cg(ch_addr_mofs_src_ack)
-	ch_addr_mofs <= ch_mofs;
-	ch_addr_mid <= '0;
+	for (int i = 0; i < DIM-1; i++) begin
+		ch_addr_mofs[i] <= ch_mofs[i] * i_global_mboundaries[ch_mid][i+1];
+	end
+	ch_addr_mofs[DIM-1] <= ch_mofs[DIM-1];
+	ch_addr_mid <= ch_mid;
 `ff_end
 
 always_ff @(posedge i_clk or negedge i_rst) for (int i = 0; i < LBUF_SIZE-1; i++) begin

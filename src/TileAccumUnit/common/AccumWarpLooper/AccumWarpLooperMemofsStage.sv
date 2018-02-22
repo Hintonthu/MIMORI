@@ -107,6 +107,7 @@ always_comb for (int i = 0; i < VDIM; i++) begin
 end
 
 always_comb for (int i = 0; i < DIM; i++) begin
+	// lint error for bit width mismatch
 	s0_mofs_nd_rz[i] = s0_mofs_nd_r[i];
 end
 

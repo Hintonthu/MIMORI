@@ -71,7 +71,6 @@ localparam NCFG_BW = $clog2(N_CFG+1);
 localparam CV_BW = $clog2(VSIZE);
 localparam CCV_BW = $clog2(CV_BW+1);
 localparam ST_BW = $clog2(STSIZE+1);
-localparam VDIM_BW = $clog2(VDIM);
 
 //======================================
 // I/O
@@ -88,10 +87,10 @@ input [CCV_BW-1:0]  i_bsub_up_order  [VDIM];
 input [CCV_BW-1:0]  i_bsub_lo_order  [VDIM];
 input [WBW-1:0]     i_aboundary      [VDIM];
 input [WBW-1:0]     i_bgrid_step     [VDIM];
-input [VDIM_BW-1:0] i_global_bshufs  [N_CFG][VDIM];
+input [DIM_BW-1:0]  i_global_bshufs  [N_CFG][VDIM];
 input [SF_BW-1:0]   i_bstrides_frac  [N_CFG][VDIM];
 input [SS_BW-1:0]   i_bstrides_shamt [N_CFG][VDIM];
-input [VDIM_BW-1:0] i_global_ashufs  [N_CFG][VDIM];
+input [DIM_BW-1:0]  i_global_ashufs  [N_CFG][VDIM];
 input [SF_BW-1:0]   i_astrides_frac  [N_CFG][VDIM];
 input [SS_BW-1:0]   i_astrides_shamt [N_CFG][VDIM];
 input [ABW-1:0]     i_mofs_bsubsteps [N_CFG][CV_BW];

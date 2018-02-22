@@ -38,7 +38,6 @@ module ChunkHead(
 //======================================
 // Parameter
 //======================================
-localparam GBW = TauCfg::GLOBAL_ADDR_BW;
 localparam WBW = TauCfg::WORK_BW;
 localparam N_ICFG = TauCfg::N_ICFG;
 localparam VDIM = TauCfg::VDIM;
@@ -48,7 +47,6 @@ localparam SF_BW = TauCfg::STRIDE_FRAC_BW;
 // derived
 localparam ICFG_BW = $clog2(N_ICFG+1);
 localparam DIM_BW = $clog2(DIM);
-localparam VDIM_BW = $clog2(VDIM);
 
 `clk_input;
 `rdyack_input(i_abofs);
@@ -56,15 +54,15 @@ input [WBW-1:0]     i_bofs [VDIM];
 input [WBW-1:0]     i_aofs [VDIM];
 input [ICFG_BW-1:0] i_beg;
 input [ICFG_BW-1:0] i_end;
-input [GBW-1:0]     i_global_mofs    [N_ICFG][DIM];
-input [VDIM_BW-1:0] i_global_bshufs  [N_ICFG][VDIM];
+input [WBW-1:0]     i_global_mofs    [N_ICFG][DIM];
+input [DIM_BW-1:0]  i_global_bshufs  [N_ICFG][VDIM];
 input [SF_BW-1:0]   i_bstrides_frac  [N_ICFG][VDIM];
 input [SS_BW-1:0]   i_bstrides_shamt [N_ICFG][VDIM];
-input [VDIM_BW-1:0] i_global_ashufs  [N_ICFG][VDIM];
+input [DIM_BW-1:0]  i_global_ashufs  [N_ICFG][VDIM];
 input [SF_BW-1:0]   i_astrides_frac  [N_ICFG][VDIM];
 input [SS_BW-1:0]   i_astrides_shamt [N_ICFG][VDIM];
 `rdyack_output(o_mofs);
-output logic [GBW-1:0]     o_mofs   [DIM];
+output logic [WBW-1:0]     o_mofs   [DIM];
 output logic [ICFG_BW-1:0] o_id;
 
 //======================================
@@ -78,7 +76,7 @@ logic [ICFG_BW-1:0] i_cur_id1;
 logic [ICFG_BW-1:0] i_cur_id_w;
 logic i_islast_id;
 `rdyack_logic(o_mofs_raw);
-logic [GBW-1:0]     o_mofs_w [DIM];
+logic [WBW-1:0]     o_mofs_w [DIM];
 
 //======================================
 // Combinational
@@ -111,7 +109,7 @@ AcceptIf#(1) u_oacc(
 	`rdyack_connect(dst, o_mofs)
 );
 NDShufAccum#(.BW(WBW), .DIM_IN(VDIM), .DIM_OUT(DIM), .ZERO_AUG(1)) u_saccum(
-	.i_augend(i_global_mofs),
+	.i_augend(i_global_mofs[i_cur_id_r]),
 	.o_sum(o_mofs_w),
 	.i_addend1(i_bofs_stride),
 	.i_addend2(i_aofs_stride),
