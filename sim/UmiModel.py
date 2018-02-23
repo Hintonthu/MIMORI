@@ -104,21 +104,23 @@ class UmiModel(object):
 		'end'
 	], [VDIM,VDIM,VDIM])
 	UMCFG_DTYPE = ToIntTypes.__func__([
-		'mwidth', 'mwrap', 'mlinear', 'ustart', 'ustride', 'udim', 'lmwidth', 'lmalign', 'xor_scheme', # user filled
+		'mwidth', 'mlinear', 'ustart', 'ustride', 'udim', 'lmwidth', 'lmalign', 'xor_scheme', # user filled
+		'mwrap', 'pad_value', # user filled NOTE: padding not implemented
 		'ustride_frac', 'ustride_shamt', # derived from ustride
 		'mboundary', # derived from mwitdth
 		'mboundary_lmwidth', # derived from mboundary and lmdiwth
 		'mstart', # precomuted offsets
-		'lmpad', 'lmsize', 'pad', # derived from lmwidth, lmalign
+		'lmpad', 'lmsize', # derived from lmwidth, lmalign
 		'vlinear', # precomputed vector addresses local/global for I/O
 		'xor_src', 'xor_dst', 'xor_swap', # XOR scheme: TODO document
 	], [
-		DIM,DIM,1,2*VDIM,2*VDIM,2*VDIM,DIM,DIM,LG_VSIZE,
+		DIM,1,2*VDIM,2*VDIM,2*VDIM,DIM,DIM,LG_VSIZE,
+		DIM,1,
 		2*VDIM,2*VDIM,
 		DIM,
 		DIM,
 		DIM,
-		DIM,1,1,
+		DIM,1,
 		VSIZE,
 		LG_VSIZE,LG_VSIZE,1,
 	])
@@ -280,6 +282,12 @@ class UmiModel(object):
 				assert s < (1<<UmiModel.STRIDE_EXP_BW), "Stride too large"
 				umcfg['ustride_frac'][i,j] = f
 				umcfg['ustride_shamt'][i,j] = s
+		ums = umcfg['mstart']
+		ums.fill(0)
+		idx = npi.arange(n_total)
+		for i in range(UmiModel.VDIM):
+			ums[idx,umcfg['udim'][:,              i]] += umcfg['ustart'][:,              i]
+			ums[idx,umcfg['udim'][:,UmiModel.VDIM+i]] += umcfg['ustart'][:,UmiModel.VDIM+i]
 		return umcfg
 
 	def _InitApcfg(self, pcfg, acfg):
