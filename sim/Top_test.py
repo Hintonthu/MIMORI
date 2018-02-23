@@ -130,83 +130,82 @@ def main():
 
 	i_data = cfg_master.values
 	VL_IDX = slice(None), 1 << npi.arange(CV_BW)
-	npd.copyto(i_data[0], cfg.pcfg["local_sig"][0])
-	npd.copyto(i_data[1], cfg.pcfg["local_exp"][0])
-	npd.copyto(i_data[2], cfg.pcfg["last"][0])
-	npd.copyto(i_data[3], cfg.pcfg["boundary"][0])
-	npd.copyto(i_data[4], cfg.pcfg["local"][0]-(1<<(cfg.pcfg["lg_vshuf"][0]+cfg.pcfg["lg_vsize"][0])))
-	npd.copyto(i_data[5], cfg.v_nd >> cfg.pcfg["lg_vshuf"][0])
-	npd.copyto(i_data[6], cfg.pcfg["lg_vshuf"][0]+cfg.pcfg["lg_vsize"][0])
-	npd.copyto(i_data[7], cfg.pcfg["lg_vshuf"][0])
-	npd.copyto(i_data[8], cfg.acfg["local_sig"][0])
-	npd.copyto(i_data[9], cfg.acfg["local_exp"][0])
-	npd.copyto(i_data[10], cfg.acfg["last"][0])
-	npd.copyto(i_data[11], cfg.acfg["boundary"][0]-1)
-	npd.copyto(i_data[12], cfg.acfg["local"][0]-1)
-	npd.copyto(i_data[13], npd.bitwise_or.reduce(cfg.umcfg_i0["xor_dst"], axis=1))
-	npd.copyto(i_data[14], cfg.umcfg_i0["xor_scheme"])
-	npd.copyto(i_data[15], cfg.umcfg_i0["xor_swap"])
-	npd.copyto(i_data[16], cfg.umcfg_i0["lustride"][:,DIM:])
-	npd.copyto(i_data[17], cfg.umcfg_i0["vlinear"][VL_IDX])
-	npd.copyto(i_data[18], cfg.umcfg_i0["lustride"][:,:DIM])
-	npd.copyto(i_data[19], cfg.umcfg_i0["lmsize"])
-	npd.copyto(i_data[20], cfg.umcfg_i0["lmpad"])
-	npd.copyto(i_data[21], cfg.umcfg_i0["ustride"][:,DIM:])
-	npd.copyto(i_data[22], cfg.umcfg_i0["ustride"][:,:DIM])
-	npd.copyto(i_data[23], cfg.umcfg_i0["mstart"])
-	npd.copyto(i_data[24], cfg.umcfg_i0["mlinear"])
-	npd.copyto(i_data[25], (cfg.umcfg_i0["lmwidth"]-1)*cfg.umcfg_i0["mmultiplier"])
-	npd.copyto(i_data[26], cfg.umcfg_i0["mboundary"]-cfg.umcfg_i0["mmultiplier"])
-	npd.copyto(i_data[27], cfg.umcfg_i0["udim"][:,DIM:])
-	npd.copyto(i_data[28], cfg.umcfg_i0["udim"][:,:DIM])
-	npd.copyto(i_data[29], cfg.n_i0[0])
-	npd.copyto(i_data[30], cfg.n_i0[1])
+	npd.copyto(i_data.i_bgrid_step,    cfg.pcfg['local'][0])
+	npd.copyto(i_data.i_bgrid_end,     cfg.pcfg['end'][0])
+	npd.copyto(i_data.i_bboundary,     cfg.pcfg['total'][0])
+	npd.copyto(i_data.i_bsubofs,       cfg.v_nd >> cfg.pcfg['lg_vshuf'][0])
+	npd.copyto(i_data.i_bsub_up_order, cfg.pcfg['lg_vsize'][0])
+	npd.copyto(i_data.i_bsub_lo_order, cfg.pcfg['lg_vshuf'][0])
+	npd.copyto(i_data.i_agrid_step,    cfg.acfg['local'][0])
+	npd.copyto(i_data.i_agrid_end,     cfg.acfg['end'][0])
+	npd.copyto(i_data.i_aboundary,     cfg.acfg['total'][0])
+	npd.copyto(i_data.i_i0_local_xor_masks,    npd.bitwise_or.reduce(cfg.umcfg_i0['xor_dst'], axis=1))
+	npd.copyto(i_data.i_i0_local_xor_schemes,  cfg.umcfg_i0['xor_scheme'])
+	npd.copyto(i_data.i_i0_local_bit_swaps,    cfg.umcfg_i0['xor_swap'])
+	npd.copyto(i_data.i_i0_local_boundaries,   cfg.umcfg_i0['lmalign'])
+	npd.copyto(i_data.i_i0_local_bsubsteps,    cfg.umcfg_i0['vlinear'][VL_IDX])
+	npd.copyto(i_data.i_i0_local_pads,         cfg.umcfg_i0['lmpad'])
+	npd.copyto(i_data.i_i0_global_starts,      cfg.umcfg_i0['mstart'])
+	npd.copyto(i_data.i_i0_global_linears,     cfg.umcfg_i0['mlinear'])
+	npd.copyto(i_data.i_i0_global_cboundaries, cfg.umcfg_i0['mboundary_lmwidth'])
+	npd.copyto(i_data.i_i0_global_boundaries,  cfg.umcfg_i0['mboundary'])
+	npd.copyto(i_data.i_i0_global_bshufs,      cfg.umcfg_i0['udim'][:,VDIM:])
+	npd.copyto(i_data.i_i0_global_ashufs,      cfg.umcfg_i0['udim'][:,:VDIM])
+	npd.copyto(i_data.i_i0_bstrides_frac,      cfg.umcfg_i0['ustride_frac' ][:,VDIM:])
+	npd.copyto(i_data.i_i0_bstrides_shamt,     cfg.umcfg_i0['ustride_shamt'][:,VDIM:])
+	npd.copyto(i_data.i_i0_astrides_frac,      cfg.umcfg_i0['ustride_frac' ][:,:VDIM])
+	npd.copyto(i_data.i_i0_astrides_shamt,     cfg.umcfg_i0['ustride_shamt'][:,:VDIM])
+	npd.copyto(i_data.i_i0_id_begs,            cfg.n_i0[0])
+	npd.copyto(i_data.i_i0_id_ends,            cfg.n_i0[1])
 	# TODO (begin)
-	npd.copyto(i_data[31], 1 if N_SLUT0 != 0 else 0)
-	npd.copyto(i_data[32], 0)
-	npd.copyto(i_data[33], 0)
-	if N_I0CFG != 0:
-		i_data[33][0] = N_SLUT0
-	npd.copyto(i_data[34], slut0)
+	i_data.i_i0_stencil[0] = int(N_SLUT0 != 0)
+	npd.copyto(i_data.i_i0_stencil_begs, 0)
+	npd.copyto(i_data.i_i0_stencil_ends, 0)
+	i_data.i_i0_stencil_ends[0] = N_SLUT0 if N_I0CFG != 0 else 0
+	npd.copyto(i_data.i_i0_stencil_lut, slut0)
 	# TODO (end)
-	npd.copyto(i_data[35], npd.bitwise_or.reduce(cfg.umcfg_i1["xor_dst"], axis=1))
-	npd.copyto(i_data[36], cfg.umcfg_i1["xor_scheme"])
-	npd.copyto(i_data[37], cfg.umcfg_i1["xor_swap"])
-	npd.copyto(i_data[38], cfg.umcfg_i1["lustride"][:,DIM:])
-	npd.copyto(i_data[39], cfg.umcfg_i1["vlinear"][VL_IDX])
-	npd.copyto(i_data[40], cfg.umcfg_i1["lustride"][:,:DIM])
-	npd.copyto(i_data[41], cfg.umcfg_i1["lmsize"])
-	npd.copyto(i_data[42], cfg.umcfg_i1["lmpad"])
-	npd.copyto(i_data[43], cfg.umcfg_i1["ustride"][:,DIM:])
-	npd.copyto(i_data[44], cfg.umcfg_i1["ustride"][:,:DIM])
-	npd.copyto(i_data[45], cfg.umcfg_i1["mstart"])
-	npd.copyto(i_data[46], cfg.umcfg_i1["mlinear"])
-	npd.copyto(i_data[47], (cfg.umcfg_i1["lmwidth"]-1)*cfg.umcfg_i1["mmultiplier"])
-	npd.copyto(i_data[48], cfg.umcfg_i1["mboundary"]-cfg.umcfg_i1["mmultiplier"])
-	npd.copyto(i_data[49], cfg.umcfg_i1["udim"][:,DIM:])
-	npd.copyto(i_data[50], cfg.umcfg_i1["udim"][:,:DIM])
-	npd.copyto(i_data[51], cfg.n_i1[0])
-	npd.copyto(i_data[52], cfg.n_i1[1])
+	npd.copyto(i_data.i_i1_local_xor_masks,    npd.bitwise_or.reduce(cfg.umcfg_i1['xor_dst'], axis=1))
+	npd.copyto(i_data.i_i1_local_xor_schemes,  cfg.umcfg_i1['xor_scheme'])
+	npd.copyto(i_data.i_i1_local_bit_swaps,    cfg.umcfg_i1['xor_swap'])
+	npd.copyto(i_data.i_i1_local_boundaries,   cfg.umcfg_i1['lmalign'])
+	npd.copyto(i_data.i_i1_local_bsubsteps,    cfg.umcfg_i1['vlinear'][VL_IDX])
+	npd.copyto(i_data.i_i1_local_pads,         cfg.umcfg_i1['lmpad'])
+	npd.copyto(i_data.i_i1_global_starts,      cfg.umcfg_i1['mstart'])
+	npd.copyto(i_data.i_i1_global_linears,     cfg.umcfg_i1['mlinear'])
+	npd.copyto(i_data.i_i1_global_cboundaries, cfg.umcfg_i1['mboundary_lmwidth'])
+	npd.copyto(i_data.i_i1_global_boundaries,  cfg.umcfg_i1['mboundary'])
+	npd.copyto(i_data.i_i1_global_bshufs,      cfg.umcfg_i1['udim'][:,VDIM:])
+	npd.copyto(i_data.i_i1_global_ashufs,      cfg.umcfg_i1['udim'][:,:VDIM])
+	npd.copyto(i_data.i_i1_bstrides_frac,      cfg.umcfg_i1['ustride_frac' ][:,VDIM:])
+	npd.copyto(i_data.i_i1_bstrides_shamt,     cfg.umcfg_i1['ustride_shamt'][:,VDIM:])
+	npd.copyto(i_data.i_i1_astrides_frac,      cfg.umcfg_i1['ustride_frac' ][:,:VDIM])
+	npd.copyto(i_data.i_i1_astrides_shamt,     cfg.umcfg_i1['ustride_shamt'][:,:VDIM])
+	npd.copyto(i_data.i_i1_id_begs,            cfg.n_i1[0])
+	npd.copyto(i_data.i_i1_id_ends,            cfg.n_i1[1])
 	# TODO (begin)
-	npd.copyto(i_data[53], 1 if N_SLUT1 != 0 else 0)
-	npd.copyto(i_data[54], 0)
-	npd.copyto(i_data[55], 0)
-	if N_I1CFG != 0:
-		i_data[55][0] = N_SLUT1
-	npd.copyto(i_data[56], slut1)
+	i_data.i_i1_stencil[0] = int(N_SLUT1 != 0)
+	npd.copyto(i_data.i_i1_stencil_begs, 0)
+	npd.copyto(i_data.i_i1_stencil_ends, 0)
+	i_data.i_i1_stencil_ends[0] = N_SLUT1 if N_I1CFG != 0 else 0
+	npd.copyto(i_data.i_i1_stencil_lut, slut1)
 	# TODO (end)
-	npd.copyto(i_data[57], cfg.umcfg_o["ustride"][:,DIM:])
-	npd.copyto(i_data[58], cfg.umcfg_o["vlinear"][VL_IDX])
-	npd.copyto(i_data[59], cfg.umcfg_o["ustride"][:,:DIM])
-	npd.copyto(i_data[60], cfg.umcfg_o["mlinear"][:,newaxis])
-	npd.copyto(i_data[61], cfg.n_o[0])
-	npd.copyto(i_data[62], cfg.n_o[1])
-	npd.copyto(i_data[63], cfg.n_inst[0])
-	npd.copyto(i_data[64], cfg.n_inst[1])
-	npd.copyto(i_data[65], cfg.insts)
-	npd.copyto(i_data[66], clut)
-	npd.copyto(i_data[67], tlut)
-	npd.copyto(i_data[68], cfg.n_reg)
+	npd.copyto(i_data.i_o_global_boundaries, cfg.umcfg_o['mboundary'])
+	npd.copyto(i_data.i_o_global_bsubsteps,  cfg.umcfg_o['vlinear'][VL_IDX])
+	npd.copyto(i_data.i_o_global_linears,    cfg.umcfg_o['mlinear'])
+	npd.copyto(i_data.i_o_global_bshufs,     cfg.umcfg_o['udim'][:,VDIM:])
+	npd.copyto(i_data.i_o_bstrides_frac,     cfg.umcfg_o['ustride_frac' ][:,VDIM:])
+	npd.copyto(i_data.i_o_bstrides_shamt,    cfg.umcfg_o['ustride_shamt'][:,VDIM:])
+	npd.copyto(i_data.i_o_global_ashufs,     cfg.umcfg_o['udim'][:,:VDIM])
+	npd.copyto(i_data.i_o_astrides_frac,     cfg.umcfg_o['ustride_frac' ][:,:VDIM])
+	npd.copyto(i_data.i_o_astrides_shamt,    cfg.umcfg_o['ustride_shamt'][:,:VDIM])
+	npd.copyto(i_data.i_o_id_begs,           cfg.n_o[0])
+	npd.copyto(i_data.i_o_id_ends,           cfg.n_o[1])
+	npd.copyto(i_data.i_inst_id_begs, cfg.n_inst[0])
+	npd.copyto(i_data.i_inst_id_ends, cfg.n_inst[1])
+	npd.copyto(i_data.i_insts,        cfg.insts)
+	npd.copyto(i_data.i_consts,       clut)
+	npd.copyto(i_data.i_const_texs,   tlut)
+	npd.copyto(i_data.i_reg_per_warp, cfg.n_reg)
 	yield from cfg_master.Send(i_data)
 
 	for i in range(300):
@@ -226,6 +225,7 @@ verf_func_gen = default_verf_func(CSIZE)
 VSIZE = cfg.VSIZE
 CV_BW = cfg.LG_VSIZE
 DIM = cfg.DIM
+VDIM = cfg.VDIM
 N_I0CFG = cfg.n_i0[1][-1]
 N_I1CFG = cfg.n_i1[1][-1]
 N_OCFG = cfg.n_o[1][-1]
@@ -258,37 +258,33 @@ w_bus, ra_bus, rd_bus, cfg_bus = CreateBuses([
 	(("u_top", "o_dramra"),),
 	(("u_top", "i_dramrd", (CSIZE,)),),
 	(
-		("u_top", "i_bgrid_frac"             , (DIM,)),
-		(None   , "i_bgrid_shamt"            , (DIM,)),
-		(None   , "i_bgrid_last"             , (DIM,)),
-		(None   , "i_bboundary"              , (DIM,)),
-		(None   , "i_blocal_last"            , (DIM,)),
-		(None   , "i_bsubofs"                , (VSIZE,DIM,)),
-		(None   , "i_bsub_up_order"          , (DIM,)),
-		(None   , "i_bsub_lo_order"          , (DIM,)),
-		(None   , "i_agrid_frac"             , (DIM,)),
-		(None   , "i_agrid_shamt"            , (DIM,)),
-		(None   , "i_agrid_last"             , (DIM,)),
-		(None   , "i_aboundary"              , (DIM,)),
-		(None   , "i_alocal_last"            , (DIM,)),
+		("u_top", "i_bgrid_step"             , (VDIM,)),
+		(None   , "i_bgrid_end"              , (VDIM,)),
+		(None   , "i_bboundary"              , (VDIM,)),
+		(None   , "i_bsubofs"                , (VSIZE,VDIM,)),
+		(None   , "i_bsub_up_order"          , (VDIM,)),
+		(None   , "i_bsub_lo_order"          , (VDIM,)),
+		(None   , "i_agrid_step"             , (VDIM,)),
+		(None   , "i_agrid_end"              , (VDIM,)),
+		(None   , "i_aboundary"              , (VDIM,)),
 		(None   , "i_i0_local_xor_masks"     , (N_I0CFG,)),
 		(None   , "i_i0_local_xor_schemes"   , (N_I0CFG,CV_BW,)),
 		(None   , "i_i0_local_bit_swaps"     , (N_I0CFG,)),
-		(None   , "i_i0_local_mofs_bsteps"   , (N_I0CFG,DIM,)),
-		(None   , "i_i0_local_mofs_bsubsteps", (N_I0CFG,CV_BW,)),
-		(None   , "i_i0_local_mofs_asteps"   , (N_I0CFG,DIM,)),
-		(None   , "i_i0_local_sizes"         , (N_I0CFG,)),
-		(None   , "i_i0_local_pads"          , (N_I0CFG,DIM,)),
-		(None   , "i_i0_global_mofs_bsteps"  , (N_I0CFG,DIM,)),
-		(None   , "i_i0_global_mofs_asteps"  , (N_I0CFG,DIM,)),
-		(None   , "i_i0_global_mofs_starts"  , (N_I0CFG,DIM,)),
-		(None   , "i_i0_global_mofs_linears" , (N_I0CFG,)),
-		(None   , "i_i0_global_cboundaries"  , (N_I0CFG,DIM,)),
-		(None   , "i_i0_global_mboundaries"  , (N_I0CFG,DIM,)),
-		(None   , "i_i0_global_mofs_bshufs"  , (N_I0CFG,DIM,)),
-		(None   , "i_i0_global_mofs_ashufs"  , (N_I0CFG,DIM,)),
-		(None   , "i_i0_id_begs"             , (DIM+1,)),
-		(None   , "i_i0_id_ends"             , (DIM+1,)),
+		(None   , "i_i0_local_boundaries"    , (N_I0CFG, DIM,)),
+		(None   , "i_i0_local_bsubsteps"     , (N_I0CFG, CV_BW,)),
+		(None   , "i_i0_local_pads"          , (N_I0CFG, DIM,)),
+		(None   , "i_i0_global_starts"       , (N_I0CFG, DIM,)),
+		(None   , "i_i0_global_linears"      , (N_I0CFG,)),
+		(None   , "i_i0_global_cboundaries"  , (N_I0CFG, DIM,)),
+		(None   , "i_i0_global_boundaries"   , (N_I0CFG, DIM,)),
+		(None   , "i_i0_global_bshufs"       , (N_I0CFG, VDIM,)),
+		(None   , "i_i0_global_ashufs"       , (N_I0CFG, VDIM,)),
+		(None   , "i_i0_bstrides_frac"       , (N_I0CFG, VDIM,)),
+		(None   , "i_i0_bstrides_shamt"      , (N_I0CFG, VDIM,)),
+		(None   , "i_i0_astrides_frac"       , (N_I0CFG, VDIM,)),
+		(None   , "i_i0_astrides_shamt"      , (N_I0CFG, VDIM,)),
+		(None   , "i_i0_id_begs"             , (VDIM+1,)),
+		(None   , "i_i0_id_ends"             , (VDIM+1,)),
 		(None   , "i_i0_stencil"),
 		(None   , "i_i0_stencil_begs"        , (N_I0CFG,)),
 		(None   , "i_i0_stencil_ends"        , (N_I0CFG,)),
@@ -296,33 +292,38 @@ w_bus, ra_bus, rd_bus, cfg_bus = CreateBuses([
 		(None   , "i_i1_local_xor_masks"     , (N_I1CFG,)),
 		(None   , "i_i1_local_xor_schemes"   , (N_I1CFG,CV_BW,)),
 		(None   , "i_i1_local_bit_swaps"     , (N_I1CFG,)),
-		(None   , "i_i1_local_mofs_bsteps"   , (N_I1CFG,DIM,)),
-		(None   , "i_i1_local_mofs_bsubsteps", (N_I1CFG,CV_BW,)),
-		(None   , "i_i1_local_mofs_asteps"   , (N_I1CFG,DIM,)),
-		(None   , "i_i1_local_sizes"         , (N_I1CFG,)),
-		(None   , "i_i1_local_pads"          , (N_I1CFG,DIM,)),
-		(None   , "i_i1_global_mofs_bsteps"  , (N_I1CFG,DIM,)),
-		(None   , "i_i1_global_mofs_asteps"  , (N_I1CFG,DIM,)),
-		(None   , "i_i1_global_mofs_starts"  , (N_I1CFG,DIM,)),
-		(None   , "i_i1_global_mofs_linears" , (N_I1CFG,)),
-		(None   , "i_i1_global_cboundaries"  , (N_I1CFG,DIM,)),
-		(None   , "i_i1_global_mboundaries"  , (N_I1CFG,DIM,)),
-		(None   , "i_i1_global_mofs_bshufs"  , (N_I1CFG,DIM,)),
-		(None   , "i_i1_global_mofs_ashufs"  , (N_I1CFG,DIM,)),
-		(None   , "i_i1_id_begs"             , (DIM+1,)),
-		(None   , "i_i1_id_ends"             , (DIM+1,)),
+		(None   , "i_i1_local_boundaries"    , (N_I1CFG, DIM,)),
+		(None   , "i_i1_local_bsubsteps"     , (N_I1CFG, CV_BW,)),
+		(None   , "i_i1_local_pads"          , (N_I1CFG, DIM,)),
+		(None   , "i_i1_global_starts"       , (N_I1CFG, DIM,)),
+		(None   , "i_i1_global_linears"      , (N_I1CFG,)),
+		(None   , "i_i1_global_cboundaries"  , (N_I1CFG, DIM,)),
+		(None   , "i_i1_global_boundaries"   , (N_I1CFG, DIM,)),
+		(None   , "i_i1_global_bshufs"       , (N_I1CFG, VDIM,)),
+		(None   , "i_i1_global_ashufs"       , (N_I1CFG, VDIM,)),
+		(None   , "i_i1_bstrides_frac"       , (N_I1CFG, VDIM,)),
+		(None   , "i_i1_bstrides_shamt"      , (N_I1CFG, VDIM,)),
+		(None   , "i_i1_astrides_frac"       , (N_I1CFG, VDIM,)),
+		(None   , "i_i1_astrides_shamt"      , (N_I1CFG, VDIM,)),
+		(None   , "i_i1_id_begs"             , (VDIM+1,)),
+		(None   , "i_i1_id_ends"             , (VDIM+1,)),
 		(None   , "i_i1_stencil"),
 		(None   , "i_i1_stencil_begs"        , (N_I1CFG,)),
 		(None   , "i_i1_stencil_ends"        , (N_I1CFG,)),
 		(None   , "i_i1_stencil_lut"         , (N_SLUT1,)),
-		(None   , "i_o_global_mofs_bsteps"   , (N_OCFG,DIM,)),
-		(None   , "i_o_global_mofs_bsubsteps", (N_OCFG,CV_BW,)),
-		(None   , "i_o_global_mofs_asteps"   , (N_OCFG,DIM,)),
-		(None   , "i_o_global_mofs_linears"  , (N_OCFG,1,)),
-		(None   , "i_o_id_begs"              , (DIM+1,)),
-		(None   , "i_o_id_ends"              , (DIM+1,)),
-		(None   , "i_inst_id_begs"           , (DIM+1,)),
-		(None   , "i_inst_id_ends"           , (DIM+1,)),
+		(None   , "i_o_global_boundaries"    , (N_OCFG, DIM,)),
+		(None   , "i_o_global_bsubsteps"     , (N_OCFG, CV_BW,)),
+		(None   , "i_o_global_linears"       , (N_OCFG,)),
+		(None   , "i_o_global_bshufs"        , (N_OCFG, VDIM,)),
+		(None   , "i_o_bstrides_frac"        , (N_OCFG, VDIM,)),
+		(None   , "i_o_bstrides_shamt"       , (N_OCFG, VDIM,)),
+		(None   , "i_o_global_ashufs"        , (N_OCFG, VDIM,)),
+		(None   , "i_o_astrides_frac"        , (N_OCFG, VDIM,)),
+		(None   , "i_o_astrides_shamt"       , (N_OCFG, VDIM,)),
+		(None   , "i_o_id_begs"              , (VDIM+1,)),
+		(None   , "i_o_id_ends"              , (VDIM+1,)),
+		(None   , "i_inst_id_begs"           , (VDIM+1,)),
+		(None   , "i_inst_id_ends"           , (VDIM+1,)),
 		(None   , "i_insts"                  , (N_INST,)),
 		(None   , "i_consts"                 , (N_CLUT,)),
 		(None   , "i_const_texs"             , (N_TLUT,)),

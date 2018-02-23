@@ -75,7 +75,7 @@ module TileAccumUnit(
 	i_i1_stencil_lut,
 	i_o_global_boundaries,
 	i_o_global_bsubsteps,
-	i_o_global_linears,//forconvenience
+	i_o_global_linears,
 	i_o_global_bshufs,
 	i_o_bstrides_frac,
 	i_o_bstrides_shamt,

@@ -54,7 +54,7 @@ initial begin
 	#0.1 $NicotbInit();
 	#(`CLK*2) i_rst = 0;
 	#(`CLK*2) i_rst = 1;
-	#1000000 $display("Timeout");
+	#10000 $display("Timeout");
 	$NicotbFinal();
 	$finish;
 end

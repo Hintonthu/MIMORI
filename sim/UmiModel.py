@@ -105,11 +105,21 @@ class UmiModel(object):
 	], [VDIM,VDIM,VDIM])
 	UMCFG_DTYPE = ToIntTypes.__func__([
 		'mwidth', 'mwrap', 'mlinear', 'ustart', 'ustride', 'udim', 'lmwidth', 'lmalign', 'xor_scheme', # user filled
-		'ustride_frac', 'ustride_shamt', 'mboundary', 'mboundary_lmwidth', 'lmpad', 'lmsize', 'pad', 'vlinear',
-		'xor_src', 'xor_dst', 'xor_swap',
+		'ustride_frac', 'ustride_shamt', # derived from ustride
+		'mboundary', # derived from mwitdth
+		'mboundary_lmwidth', # derived from mboundary and lmdiwth
+		'mstart', # precomuted offsets
+		'lmpad', 'lmsize', 'pad', # derived from lmwidth, lmalign
+		'vlinear', # precomputed vector addresses local/global for I/O
+		'xor_src', 'xor_dst', 'xor_swap', # XOR scheme: TODO document
 	], [
 		DIM,DIM,1,2*VDIM,2*VDIM,2*VDIM,DIM,DIM,LG_VSIZE,
-		2*VDIM,2*VDIM,DIM,DIM,DIM,1,1,VSIZE,
+		2*VDIM,2*VDIM,
+		DIM,
+		DIM,
+		DIM,
+		DIM,1,1,
+		VSIZE,
 		LG_VSIZE,LG_VSIZE,1,
 	])
 	# cmd_type 0: fill addr[ofs:ofs+len] to SRAM
