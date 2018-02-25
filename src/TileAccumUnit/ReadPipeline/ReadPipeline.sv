@@ -149,7 +149,8 @@ logic [LBW:0] i_local_sizes [N_ICFG];
 `rdyack_logic(ch_mofs_masked);    // -> cmd, addr, alloc
 `rdyack_logic(cal_writer_cmd);
 `dval_logic(rmc_alloc_free_id);
-logic [WBW-1:0]     ch_mofs [DIM];
+logic [WBW-1:0]     ch_mofs      [DIM];
+logic [GBW-1:0]     ch_mofs_sext [DIM];
 logic [ICFG_BW-1:0] ch_mid;
 `rdyack_logic(ch_alloc_mofs_src); // broadcast
 `rdyack_logic(ch_cmd_mofs_src);   // broadcast
@@ -195,6 +196,9 @@ logic              cal_writer_islast;
 logic [CC_BW-1:0]  cal_writer_addrofs;
 logic [CV_BW1-1:0] cal_writer_len;
 `rdyack_logic(lc_warp);
+logic [WBW-1:0] lc_bofs         [VDIM];
+logic [WBW-1:0] lc_abeg         [VDIM];
+logic [WBW-1:0] lc_aend         [VDIM];
 logic [LBW-1:0] lc_warp_linears [N_ICFG];
 
 //======================================
@@ -250,19 +254,25 @@ ChunkHead u_chunk_head(
 LinearCollector#(.LBW(LBW)) u_linear_col(
 	`clk_connect,
 	`rdyack_connect(range, brd0_lc),
+	.i_bofs(i_bofs),
+	.i_abeg(i_abeg),
+	.i_aend(i_aend),
 	.i_beg(i_beg),
 	.i_end(i_end),
 	`rdyack_connect(src_linear, writer_warp_linear_fifo_out),
 	.i_linear(writer_warp_linear[0]),
 	`rdyack_connect(dst_linears, lc_warp),
+	.o_bofs(lc_bofs),
+	.o_abeg(lc_abeg),
+	.o_aend(lc_aend),
 	.o_linears(lc_warp_linears)
 );
-AccumWarpLooper #(.N_CFG(N_ICFG), .ABW(LBW), .STENCIL(1)) u_awl(
+AccumWarpLooper #(.N_CFG(N_ICFG), .ABW(LBW), .STENCIL(1), .USE_LOFS(1)) u_awl(
 	`clk_connect,
 	`rdyack_connect(abofs, lc_warp),
-	.i_bofs(i_bofs),
-	.i_abeg(i_abeg),
-	.i_aend(i_aend),
+	.i_bofs(lc_bofs),
+	.i_abeg(lc_abeg),
+	.i_aend(lc_aend),
 	.i_linears(lc_warp_linears),
 	.i_bboundary(),
 	.i_bsubofs(i_bsubofs),
@@ -416,7 +426,11 @@ ForwardIf#(0) u_fwd_if_allocated(
 // Combinational
 //======================================
 always_comb for (int i = 0; i < N_ICFG; i++) begin
-	i_local_sizes[i] = i_local_pads[i][0];
+	i_local_sizes[i] = i_local_mboundaries[i][0];
+end
+
+always_comb for (int i = 0; i < DIM; i++) begin
+	ch_mofs_sext[i] = $signed(ch_mofs[i]);
 end
 
 //======================================
@@ -435,9 +449,9 @@ end
 	ch_cmd_mid <= '0;
 `ff_cg(ch_cmd_mofs_src_ack)
 	for (int i = 0; i < DIM-1; i++) begin
-		ch_cmd_mofs[i] <= ch_mofs[i] * i_global_mboundaries[ch_mid][i+1];
+		ch_cmd_mofs[i] <= ch_mofs_sext[i] * i_global_mboundaries[ch_mid][i+1];
 	end
-	ch_cmd_mofs[DIM-1] <= ch_mofs[DIM-1];
+	ch_cmd_mofs[DIM-1] <= ch_mofs_sext[DIM-1];
 	ch_cmd_mid <= ch_mid;
 `ff_end
 
@@ -448,9 +462,9 @@ end
 	ch_addr_mid <= '0;
 `ff_cg(ch_addr_mofs_src_ack)
 	for (int i = 0; i < DIM-1; i++) begin
-		ch_addr_mofs[i] <= ch_mofs[i] * i_global_mboundaries[ch_mid][i+1];
+		ch_addr_mofs[i] <= ch_mofs_sext[i] * i_global_mboundaries[ch_mid][i+1];
 	end
-	ch_addr_mofs[DIM-1] <= ch_mofs[DIM-1];
+	ch_addr_mofs[DIM-1] <= ch_mofs_sext[DIM-1];
 	ch_addr_mid <= ch_mid;
 `ff_end
 

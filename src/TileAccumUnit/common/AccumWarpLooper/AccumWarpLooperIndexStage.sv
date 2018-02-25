@@ -84,6 +84,8 @@ output logic               o_islast;
 // Internal
 //======================================
 `rdyack_logic(s0_dst);
+`rdyack_logic(s0_dst_delay);
+`dval_logic(s0_init);
 logic               s0_islast_aofs_r;
 logic               s0_islast_id;
 logic               s0_islast_bofs;
@@ -137,14 +139,15 @@ always_comb begin
 end
 
 function [WBW-1:0] Vshuf;
+	// Ex: ABCDE
+	// u=2, l=3 --> AB00CDE
+	// u=1, l=0 --> ABCDE0
 	input [WBW-1:0]    bofs;
 	input [CCV_BW-1:0] up_order;
 	input [CCV_BW-1:0] lo_order;
 	logic [WBW-1:0] lm;
-	logic [WBW-1:0] hm;
-	lm = ~('1 << lo_order);
-	hm = '1 << up_order;
-	Vshuf = (bofs&lm) | (((bofs>>lo_order)&hm)<<lo_order);
+	lm = '1 << lo_order;
+	Vshuf = (bofs&~lm) | ((bofs&lm)<<up_order);
 endfunction
 
 always_comb for (int i = 0; i < VDIM; i++) begin
@@ -161,13 +164,19 @@ Forward u_s0(
 	`rdyack_connect(src, src),
 	`rdyack_connect(dst, s0_dst)
 );
+OneCycleInit u_s0d(
+	`clk_connect,
+	`rdyack_connect(src, s0_dst),
+	`rdyack_connect(dst, s0_dst_delay),
+	`dval_connect(init, s0_init)
+);
 AcceptIf u_ac(
 	.cond(s0_islast_bofs_id),
-	`rdyack_connect(src, s0_dst),
+	`rdyack_connect(src, s0_dst_delay),
 	`rdyack_connect(dst, dst)
 );
 NDAdder#(.BW(WBW), .DIM(VDIM), .FROM_ZERO(0), .UNIT_STRIDE(1)) u_adder(
-	.i_restart(src_ack),
+	.i_restart(s0_init_dval),
 	.i_cur(s0_bofs_r),
 	.i_cur_noofs(s0_blofs_r),
 	.i_beg(s0_bofs_beg_r),
@@ -226,7 +235,7 @@ NDAdder#(.BW(WBW), .DIM(VDIM), .FROM_ZERO(0), .UNIT_STRIDE(1)) u_adder(
 		s0_bofs_r[i] <= '0;
 		s0_blofs_r[i] <= '0;
 	end
-`ff_cg(src_ack || dst_ack && s0_islast_id)
+`ff_cg(s0_init_dval || dst_ack && s0_islast_id)
 	s0_bofs_r <= s0_bofs_nxt;
 	s0_blofs_r <= s0_blofs_nxt;
 `ff_end

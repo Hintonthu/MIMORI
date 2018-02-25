@@ -1,4 +1,4 @@
-// Copyright 2016 Yu Sheng Lin
+// Copyright 2016-2018 Yu Sheng Lin
 
 // This file is part of MIMORI.
 
@@ -20,28 +20,41 @@ import TauCfg::*;
 module LinearCollector(
 	`clk_port,
 	`rdyack_port(range),
+	i_bofs,
+	i_abeg,
+	i_aend,
 	i_beg,
 	i_end,
 	`rdyack_port(src_linear),
 	i_linear,
 	`rdyack_port(dst_linears),
+	o_bofs,
+	o_abeg,
+	o_aend,
 	o_linears
 );
 //======================================
 // Parameter
 //======================================
 parameter LBW = TauCfg::LOCAL_ADDR_BW0;
+localparam WBW = TauCfg::WORK_BW;
 localparam N_ICFG = TauCfg::N_ICFG;
 // derived
 localparam ICFG_BW = $clog2(N_ICFG+1);
 
 `clk_input;
 `rdyack_input(range);
+input [WBW-1:0]     i_bofs [VDIM];
+input [WBW-1:0]     i_abeg [VDIM];
+input [WBW-1:0]     i_aend [VDIM];
 input [ICFG_BW-1:0] i_beg;
 input [ICFG_BW-1:0] i_end;
 `rdyack_input(src_linear);
 input [LBW-1:0] i_linear;
 `rdyack_output(dst_linears);
+output logic [WBW-1:0] o_bofs    [VDIM];
+output logic [WBW-1:0] o_abeg    [VDIM];
+output logic [WBW-1:0] o_aend    [VDIM];
 output logic [LBW-1:0] o_linears [N_ICFG];
 
 //======================================
@@ -86,8 +99,16 @@ BroadcastInorder#(2) u_brd(
 //======================================
 `ff_rst
 	end_r <= '0;
+	for (int i = 0; i < VDIM; i++) begin
+		o_bofs[i] <= '0;
+		o_abeg[i] <= '0;
+		o_aend[i] <= '0;
+	end
 `ff_cg(range_ack)
 	end_r <= i_end;
+	o_bofs <= i_bofs;
+	o_abeg <= i_abeg;
+	o_aend <= i_aend;
 `ff_end
 
 `ff_rst
