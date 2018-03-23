@@ -81,12 +81,14 @@ class DramRespChan(object):
 				c_has_w.value = not self.w_rdy.x[0] and self.w_rdy.value[0] and self.w_ack.value[0]
 				c_resp_got.value = self.rd_rdy.value[0] and self.rd_ack.value[0]
 				if c_has_r.value:
-					c_r.value = self.ra.value[0]
 					self.ra.Read()
+					self.ra.value[0] &= CSIZE_MASK
+					c_r.value = self.ra.value[0]
 					self.q.append(self.mspace.Read(self.ra.value))
 				if c_has_w.value:
-					c_w.value = self.w.value[0]
 					self.w.Read()
+					self.w.value[0] &= CSIZE_MASK
+					c_w.value = self.w.value[0]
 					self.mspace.WriteScalarMask(*self.w.values)
 				c_RamuTick(
 					c_has_r, c_has_w, c_resp_got, c_r, c_w,
@@ -117,8 +119,11 @@ class DramRespChan(object):
 def main():
 	# init
 	ms = next(verf_func_gen)
-	cfg_master = TwoWire.Master(cfg_rdy_bus, cfg_ack_bus, cfg_bus, ck_ev)
+	cfg_master = TwoWire.Master(cfg_rdy_bus, cfg_ack_bus, cfg_bus, ck_ev, strict=strict)
 	yield rst_out_ev
+	yield ck_ev
+	yield ck_ev
+	yield ck_ev
 	resp_chan = DramRespChan(
 		ra_rdy_bus, ra_ack_bus, ra_bus,
 		rd_rdy_bus, rd_ack_bus, rd_bus,
@@ -234,6 +239,9 @@ N_CLUT, clut = cfg.luts["const"]
 N_TLUT, tlut = cfg.luts["texture"]
 N_SLUT0, slut0 = cfg.luts["stencil0"]
 N_SLUT1, slut1 = cfg.luts["stencil1"]
+sim_cfg = CreateBus(("GATE_LEVEL",))
+sim_cfg.Read()
+strict = False if sim_cfg.GATE_LEVEL.value[0] else True
 (
 	w_rdy_bus, w_ack_bus,
 	ra_rdy_bus, ra_ack_bus,

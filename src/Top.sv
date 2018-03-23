@@ -73,6 +73,7 @@ module Top(
 	i_i1_stencil_begs,
 	i_i1_stencil_ends,
 	i_i1_stencil_lut,
+	// TODO [0] is not used
 	i_o_global_boundaries,
 	i_o_global_bsubsteps,
 	i_o_global_linears,

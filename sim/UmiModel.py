@@ -557,7 +557,7 @@ insts = npd.array([
 	0b000000001110000000010000000000, # R0 = 1
 	0b000000000110000000000000000000, # nop
 	0b100000001111000110001000010001, # R0 = R0+I0*I1 (push)
-	0b000000000010000100100000000000, # DRAM = T0>>2
+	0b000000000000000100100000000000, # DRAM = T0
 ], dtype=npd.uint32)
 p = npd.empty(1, UmiModel.PCFG_DTYPE)
 a = npd.empty(1, UmiModel.ACFG_DTYPE)
@@ -607,6 +607,7 @@ def VerfFunc0(CSIZE):
 	img_2d = npd.reshape(img[:30100], (100,301))
 	conv_2d = npd.reshape(conv[:9], (3,3))
 	result_2d = npd.reshape(result, (1000,1000))
+	gold_2d = npd.zeros((20,10), dtype=i16)
 	yield MemorySpace([
 		(     0, img   ),
 		(100000, conv  ),
@@ -618,9 +619,14 @@ def VerfFunc0(CSIZE):
 			yy, xx = npd.ogrid[y-1:y+2, x-1:x+2]
 			yy = npd.fmax(yy, 0)
 			xx = npd.fmax(xx, 0)
-			got = result_2d[y,x]
 			wind = img_2d[yy,xx]
-			gold = (1 + npd.sum(wind * conv_2d, dtype=i16)) >> 2
+			gold_2d[y,x] = (1 + npd.sum(wind * conv_2d, dtype=i16))
+	npd.savetxt("ans.txt",   gold_2d[:20,:10], "%d")
+	npd.savetxt("res.txt", result_2d[:20,:10], "%d")
+	for y in range(20):
+		for x in range(10):
+			gold = gold_2d[y,x]
+			got = result_2d[y,x]
 			assert gold == got, f"Error at pixel {y} {x}, {got} != {gold}, {wind}/{conv_2d}/{img_2d}"
 	result_2d[:20,:10] = 0
 	assert npd.all(result_2d == 0)
