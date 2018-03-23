@@ -189,8 +189,9 @@ class UmiModel(object):
 		mul = npd.copy(um['lmalign'] if is_local else um['mboundary'])
 		mul = npd.roll(mul, -1, axis=1)
 		mul[:,-1] = 1
+		idx = npi.arange(um.shape[0])[:, newaxis]
 		return (
-			  mul[npi.arange(um.shape[0]), um['udim'][:,UmiModel.VDIM:]]
+			  mul[idx, um['udim'][:,UmiModel.VDIM:]]
 			* um['ustride'][:,UmiModel.VDIM:]
 		)
 
@@ -635,14 +636,13 @@ def VerfFunc0(CSIZE):
 sample_conf.append(cfg0)
 verf_func.append(VerfFunc0)
 
-'''
 ##########
 ## TEST 1
 ##########
-n_i0 = ([0,0,0,0,0], [1,1,1,1,1])
-n_i1 = ([0,0,0,0,0], [0,0,0,0,0])
-n_o = ([0,0,0,0,0], [1,1,1,1,1])
-n_inst = ([0,1,1,1,1], [2,2,2,2,2])
+n_i0 = ([0,0,0,0,0,0,0], [1,1,1,1,1,1,1])
+n_i1 = ([0,0,0,0,0,0,0], [0,0,0,0,0,0,0])
+n_o = ([0,0,0,0,0,0,0], [1,1,1,1,1,1,1])
+n_inst = ([0,1,1,1,1,1,1], [2,2,2,2,2,2,2])
 insts = npd.array([
 	# OOOSSSSSRDDTWWWAAAAABBBBBCCCCC
 	0b000000000111000000000000000000, # 0 (push)
@@ -654,26 +654,26 @@ um_i0 = npd.empty(1, UmiModel.UMCFG_DTYPE)
 um_i1 = npd.empty(0, UmiModel.UMCFG_DTYPE)
 um_o = npd.empty(1, UmiModel.UMCFG_DTYPE)
 
-p['total'] = [1,1,1,100]
-p['local'] = [1,1,1,32]
-p['vsize'] = [1,1,1,32]
-p['vshuf'] = [1,1,1,1]
-a['total'] = [1,1,1,100]
-a['local'] = [1,1,1,32]
+p['total'] = [1,1,1,1,1,100]
+p['local'] = [1,1,1,1,1,32]
+p['vsize'] = [1,1,1,1,1,32]
+p['vshuf'] = [1,1,1,1,1,1]
+a['total'] = [1,1,1,1,1,100]
+a['local'] = [1,1,1,1,1,32]
 um_i0['mwrap'].fill(UmiModel.MEM_WRAP)
 um_i0['mlinear'] = [0]
-um_i0['ustart'] = [[0,0,0,0,0,0,0,0],]
-um_i0['ustride'] = [[0,0,0,1,0,0,0,1],]
-um_i0['udim'] = [[0,0,0,3,0,0,0,2],]
+um_i0['ustart'] = [[0,0,0,0,0,0,0,0,0,0,0,0],]
+um_i0['ustride'] = [[0,0,0,0,0,1,0,0,0,0,0,1],]
+um_i0['udim'] = [[0,0,0,0,0,3,0,0,0,0,0,2],]
 um_i0['lmwidth'] = [[1,1,32,32],]
 um_i0['lmalign'] = [[1024,1024,1024,32],]
 um_i0['mwidth'] = [[1,1,100,100],]
 um_i0['xor_scheme'] = [[0,1,2,3,4],]
 um_o['mwrap'].fill(UmiModel.MEM_WRAP)
 um_o['mlinear'] = [300000]
-um_o['ustart'] = [[0,0,0,0,0,0,0,0],]
-um_o['ustride'] = [[0,0,0,1,0,0,0,1],]
-um_o['udim'] = [[0,0,0,2,0,0,0,3],]
+um_o['ustart'] = [[0,0,0,0,0,0,0,0,0,0,0,0],]
+um_o['ustride'] = [[0,0,0,0,0,1,0,0,0,0,0,1],]
+um_o['udim'] = [[0,0,0,0,0,2,0,0,0,0,0,3],]
 um_o['mwidth'] = [[1,1,100,100],]
 
 cfg1 = UmiModel(p, a, um_i0, um_i1, um_o, insts, n_i0, n_i1, n_o, n_inst)
@@ -699,10 +699,10 @@ verf_func.append(VerfFunc1)
 ##########
 ## TEST 2
 ##########
-n_i0 = ([0,0,0,0,0], [1,1,1,1,1])
-n_i1 = ([0,0,0,0,0], [1,1,1,1,1])
-n_o = ([0,0,0,0,0], [0,0,0,0,1])
-n_inst = ([0,2,2,2,2], [3,3,3,3,5])
+n_i0 = ([0,0,0,0,0,0,0], [1,1,1,1,1,1,1])
+n_i1 = ([0,0,0,0,0,0,0], [1,1,1,1,1,1,1])
+n_o = ([0,0,0,0,0,0,0], [0,0,0,0,0,0,1])
+n_inst = ([0,2,2,2,2,2,2], [3,3,3,3,3,3,5])
 insts = npd.array([
 	# OOOSSSSSRDDTWWWAAAAABBBBBCCCCC
 	0b000000001110000000000000000000, # R0 = 0
@@ -717,34 +717,34 @@ um_i0 = npd.empty(1, UmiModel.UMCFG_DTYPE)
 um_i1 = npd.empty(1, UmiModel.UMCFG_DTYPE)
 um_o = npd.empty(1, UmiModel.UMCFG_DTYPE)
 
-p['total'] = [1,1,128,64]
-p['local'] = [1,1,64,32]
-p['vsize'] = [1,1,1,32]
-p['vshuf'] = [1,1,1,1]
-a['total'] = [1,1,1,64]
-a['local'] = [1,1,1,16]
+p['total'] = [1,1,1,1,128,64]
+p['local'] = [1,1,1,1,64,32]
+p['vsize'] = [1,1,1,1,1,32]
+p['vshuf'] = [1,1,1,1,1,1]
+a['total'] = [1,1,1,1,1,64]
+a['local'] = [1,1,1,1,1,16]
 um_i0['mwrap'].fill(UmiModel.MEM_WRAP)
 um_i0['mlinear'] = [0]
-um_i0['ustart'] = [[0,0,0,0,0,0,0,0],]
-um_i0['ustride'] = [[0,0,0,1,0,0,1,0],]
-um_i0['udim'] = [[0,0,0,3,0,0,2,0],]
+um_i0['ustart'] = [[0,0,0,0,0,0,0,0,0,0,0,0],]
+um_i0['ustride'] = [[0,0,0,0,0,1,0,0,0,0,1,0],]
+um_i0['udim'] = [[0,0,0,0,0,3,0,0,0,0,2,0],]
 um_i0['lmwidth'] = [[1,1,64,16],]
 um_i0['lmalign'] = [[1024,1024,1024,16],]
 um_i0['mwidth'] = [[1,1,128,64],]
 um_i0['xor_scheme'] = -1
 um_i1['mlinear'] = [100000]
-um_i1['ustart'] = [[0,0,0,0,0,0,0,0],]
-um_i1['ustride'] = [[0,0,0,1,0,0,0,1],]
-um_i1['udim'] = [[0,0,0,2,0,0,0,3],]
+um_i1['ustart'] = [[0,0,0,0,0,0,0,0,0,0,0,0],]
+um_i1['ustride'] = [[0,0,0,0,0,1,0,0,0,0,0,1],]
+um_i1['udim'] = [[0,0,0,0,0,2,0,0,0,0,0,3],]
 um_i1['lmwidth'] = [[1,1,16,32],]
 um_i1['lmalign'] = [[512,512,512,32],]
 um_i1['mwidth'] = [[1,1,64,64],]
 um_i1['xor_scheme'] = -1
 um_o['mwrap'].fill(UmiModel.MEM_WRAP)
 um_o['mlinear'] = [300000]
-um_o['ustart'] = [[0,0,0,0,0,0,0,0],]
-um_o['ustride'] = [[0,0,0,0,0,0,1,1],]
-um_o['udim'] = [[0,0,0,0,0,0,2,3],]
+um_o['ustart'] = [[0,0,0,0,0,0,0,0,0,0,0,0],]
+um_o['ustride'] = [[0,0,0,0,0,0,0,0,0,0,1,1],]
+um_o['udim'] = [[0,0,0,0,0,0,0,0,0,0,2,3],]
 um_o['mwidth'] = [[1,1,128,64],]
 
 cfg2 = UmiModel(p, a, um_i0, um_i1, um_o, insts, n_i0, n_i1, n_o, n_inst)
@@ -772,10 +772,10 @@ verf_func.append(VerfFunc2)
 ##########
 ## TEST 3
 ##########
-n_i0 = ([0,0,0,0,0], [1,1,1,1,1])
-n_i1 = ([0,0,0,0,0], [1,1,1,1,1])
-n_o = ([0,0,0,0,0], [0,0,0,0,1])
-n_inst = ([0,2,2,2,2], [3,3,3,3,5])
+n_i0 = ([0,0,0,0,0,0,0], [1,1,1,1,1,1,1])
+n_i1 = ([0,0,0,0,0,0,0], [1,1,1,1,1,1,1])
+n_o = ([0,0,0,0,0,0,0], [0,0,0,0,0,0,1])
+n_inst = ([0,2,2,2,2,2,2], [3,3,3,3,3,3,5])
 insts = npd.array([
 	# OOOSSSSSRDDTWWWAAAAABBBBBCCCCC
 	0b000000001110000000000000000000, # R0 = 0
@@ -790,34 +790,34 @@ um_i0 = npd.empty(1, UmiModel.UMCFG_DTYPE)
 um_i1 = npd.empty(1, UmiModel.UMCFG_DTYPE)
 um_o = npd.empty(1, UmiModel.UMCFG_DTYPE)
 
-p['total'] = [4,4,8,8] ## 4x4 block & 8x8 search range
-p['local'] = [1,1,8,8]
-p['vsize'] = [1,1,4,8]
-p['vshuf'] = [1,1,2,1]
-a['total'] = [1,1,8,8]
-a['local'] = [1,1,8,8]
+p['total'] = [1,1,4,4,8,8] ## 4x4 block & 8x8 search range
+p['local'] = [1,1,1,1,8,8]
+p['vsize'] = [1,1,1,1,4,8]
+p['vshuf'] = [1,1,1,1,2,1]
+a['total'] = [1,1,1,1,8,8]
+a['local'] = [1,1,1,1,8,8]
 um_i0['mwrap'].fill(UmiModel.MEM_WRAP)
 um_i0['mlinear'] = [0]
-um_i0['ustart'] = [[0,0,0,0,4,4,-4,-4],]
-um_i0['ustride'] = [[0,0,1,1,8,8,1,1],]
-um_i0['udim'] = [[0,0,2,3,2,3,2,3],]
+um_i0['ustart'] = [[0,0,0,0,0,0,0,0,4,4,-4,-4],]
+um_i0['ustride'] = [[0,0,0,0,1,1,0,0,8,8,1,1],]
+um_i0['udim'] = [[0,0,0,0,2,3,0,0,2,3,2,3],]
 um_i0['lmwidth'] = [[1,1,15,15],]
 um_i0['lmalign'] = [[256,256,256,16],]
 um_i0['mwidth'] = [[1,1,50,50],]
 um_i0['xor_scheme'] = [[-1,-1,-1,0,1],]
 um_i1['mlinear'] = [100000]
-um_i1['ustart'] = [[0,0,0,0,0,0,0,0],]
-um_i1['ustride'] = [[0,0,1,1,8,8,0,0],]
-um_i1['udim'] = [[0,0,2,3,2,3,0,0],]
+um_i1['ustart'] = [[0,0,0,0,0,0,0,0,0,0,0,0],]
+um_i1['ustride'] = [[0,0,0,0,1,1,0,0,8,8,0,0],]
+um_i1['udim'] = [[0,0,0,0,2,3,0,0,2,3,0,0],]
 um_i1['lmwidth'] = [[1,1,8,8],]
 um_i1['lmalign'] = [[64,64,64,8],]
 um_i1['mwidth'] = [[1,1,32,32],]
 um_i1['xor_scheme'] = -1
 um_o['mwrap'].fill(UmiModel.MEM_WRAP)
 um_o['mlinear'] = [300000]
-um_o['ustart'] = [[0,0,0,0,0,0,0,0],]
-um_o['ustride'] = [[0,0,0,0,1,1,1,1],]
-um_o['udim'] = [[0,0,0,0,0,1,2,3],]
+um_o['ustart'] = [[0,0,0,0,0,0,0,0,0,0,0,0],]
+um_o['ustride'] = [[0,0,0,0,0,0,0,0,1,1,1,1],]
+um_o['udim'] = [[0,0,0,0,0,0,0,0,0,1,2,3],]
 um_o['mwidth'] = [[4,4,8,8],]
 
 cfg3 = UmiModel(p, a, um_i0, um_i1, um_o, insts, n_i0, n_i1, n_o, n_inst)
@@ -858,14 +858,14 @@ verf_func.append(VerfFunc3)
 ##########
 ## TEST 4
 ##########
-n_i0 = ([0,0,0,0,0], [0,0,0,0,0])
-n_i1 = ([0,0,0,0,0], [0,0,0,0,0])
-n_o = ([0,0,0,0,0], [0,0,0,0,1])
-n_inst = ([0,0,0,0,0], [3,3,3,3,3])
+n_i0 = ([0,0,0,0,0,0,0], [0,0,0,0,0,0,0])
+n_i1 = ([0,0,0,0,0,0,0], [0,0,0,0,0,0,0])
+n_o = ([0,0,0,0,0,0,0], [0,0,0,0,0,0,1])
+n_inst = ([0,0,0,0,0,0,0], [3,3,3,3,3,3,3])
 insts = npd.array([
 	# OOOSSSSSRDDTWWWAAAAABBBBBCCCCC
-	0b111001110111000000000000000000, # pid[3] (push)
-	0b111001100111000000000000000000, # pid[2] (push)
+	0b111011010111000000000000000000, # pid[5] (push)
+	0b111011000111000000000000000000, # pid[4] (push)
 	0b100000000000000100111001010100, # DRAM = T1+T0*100
 ], dtype=npd.uint32)
 p = npd.empty(1, UmiModel.PCFG_DTYPE)
@@ -874,17 +874,17 @@ um_i0 = npd.empty(0, UmiModel.UMCFG_DTYPE)
 um_i1 = npd.empty(0, UmiModel.UMCFG_DTYPE)
 um_o = npd.empty(1, UmiModel.UMCFG_DTYPE)
 
-p['total'] = [1,1,60,30]
-p['local'] = [1,1,8,16]
-p['vsize'] = [1,1,2,16]
-p['vshuf'] = [1,1,1,1]
-a['total'] = [1,1,1,1]
-a['local'] = [1,1,1,1]
+p['total'] = [1,1,1,1,60,30]
+p['local'] = [1,1,1,1,8,16]
+p['vsize'] = [1,1,1,1,2,16]
+p['vshuf'] = [1,1,1,1,1,1]
+a['total'] = [1,1,1,1,1,1]
+a['local'] = [1,1,1,1,1,1]
 um_o['mwrap'].fill(UmiModel.MEM_WRAP)
 um_o['mlinear'] = [300000]
-um_o['ustart'] = [[0,0,0,0,0,0,0,0],]
-um_o['ustride'] = [[0,0,0,0,0,0,1,1],]
-um_o['udim'] = [[0,0,0,0,0,0,2,3],]
+um_o['ustart'] = [[0,0,0,0,0,0,0,0,0,0,0,0],]
+um_o['ustride'] = [[0,0,0,0,0,0,0,0,0,0,1,1],]
+um_o['udim'] = [[0,0,0,0,0,0,0,0,0,0,2,3],]
 um_o['mwidth'] = [[1,1,60,30],]
 
 cfg4 = UmiModel(p, a, um_i0, um_i1, um_o, insts, n_i0, n_i1, n_o, n_inst)
@@ -900,6 +900,8 @@ def VerfFunc4(CSIZE):
 	], CSIZE)
 	# check
 	npd.savetxt("idx.txt", idx, fmt="%d")
+	print(idx)
+	print(idx_gold)
 	assert npd.all(idx == idx_gold)
 	print("Index generation test result successes")
 
@@ -909,10 +911,10 @@ verf_func.append(VerfFunc4)
 ##########
 ## TEST 5
 ##########
-n_i0 = ([0,0,0,0,0], [1,1,1,1,1])
-n_i1 = ([0,0,0,0,0], [0,0,0,0,0])
-n_o = ([0,0,0,0,0], [0,0,0,0,1])
-n_inst = ([0,0,0,0,0], [0,0,0,0,4])
+n_i0 = ([0,0,0,0,0,0,0], [1,1,1,1,1,1,1])
+n_i1 = ([0,0,0,0,0,0,0], [0,0,0,0,0,0,0])
+n_o = ([0,0,0,0,0,0,0], [0,0,0,0,0,0,1])
+n_inst = ([0,0,0,0,0,0,0], [0,0,0,0,0,0,4])
 insts = npd.array([
 	# OOOSSSSSRDDTWWWAAAAABBBBBCCCCC
 	0b000000000111000000001000000000, # y1 (push)
@@ -926,26 +928,26 @@ um_i0 = npd.empty(1, UmiModel.UMCFG_DTYPE)
 um_i1 = npd.empty(0, UmiModel.UMCFG_DTYPE)
 um_o = npd.empty(1, UmiModel.UMCFG_DTYPE)
 
-p['total'] = [1,1,126,126]
-p['local'] = [1,1,16,32]
-p['vsize'] = [1,1,1,32]
-p['vshuf'] = [1,1,1,1]
-a['total'] = [1,1,3,3]
-a['local'] = [1,1,3,3]
+p['total'] = [1,1,1,1,126,126]
+p['local'] = [1,1,1,1,16,32]
+p['vsize'] = [1,1,1,1,1,32]
+p['vshuf'] = [1,1,1,1,1,1]
+a['total'] = [1,1,1,1,3,3]
+a['local'] = [1,1,1,1,3,3]
 um_i0['mwrap'].fill(UmiModel.MEM_WRAP)
 um_i0['mlinear'] = [10000]
-um_i0['ustart'] = [[0,0,-1,-1,0,0,1,1],]
-um_i0['ustride'] = [[0,0,1,1,0,0,1,1],]
-um_i0['udim'] = [[0,0,2,3,0,0,2,3],]
+um_i0['ustart'] = [[0,0,0,0,-1,-1,0,0,0,0,1,1],]
+um_i0['ustride'] = [[0,0,0,0,1,1,0,0,0,0,1,1],]
+um_i0['udim'] = [[0,0,0,0,2,3,0,0,0,0,2,3],]
 um_i0['lmwidth'] = [[1,1,18,34],]
 um_i0['lmalign'] = [[640,640,640,34],]
 um_i0['mwidth'] = [[1,1,128,128],]
 um_i0['xor_scheme'] = -1
 um_o['mwrap'].fill(UmiModel.MEM_WRAP)
 um_o['mlinear'] = [300000]
-um_o['ustart'] = [[0,0,0,0,0,0,0,0],]
-um_o['ustride'] = [[0,0,0,0,0,0,1,1],]
-um_o['udim'] = [[0,0,0,0,0,0,2,3],]
+um_o['ustart'] = [[0,0,0,0,0,0,0,0,0,0,0,0],]
+um_o['ustride'] = [[0,0,0,0,0,0,0,0,0,0,1,1],]
+um_o['udim'] = [[0,0,0,0,0,0,0,0,0,0,2,3],]
 um_o['mwidth'] = [[1,1,128,128],]
 
 cfg5 = UmiModel(p, a, um_i0, um_i1, um_o, insts, n_i0, n_i1, n_o, n_inst)
@@ -972,7 +974,6 @@ def VerfFunc5(CSIZE):
 
 sample_conf.append(cfg5)
 verf_func.append(VerfFunc5)
-'''
 
 try:
 	from os import environ

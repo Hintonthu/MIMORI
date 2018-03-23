@@ -24,8 +24,8 @@
 `endif
 import TauCfg::*;
 
-`define CLK 3.1
-`define HCLK 1.55
+`define CLK 3
+`define HCLK 1.5
 
 module Top_test;
 
@@ -168,7 +168,7 @@ initial begin
 	#0.1 $NicotbInit();
 	#(`CLK*2) i_rst = 0;
 	#(`CLK*2) i_rst = 1;
-	#(`CLK*2000) $display("Timeout");
+	#(`CLK*100000) $display("Timeout");
 	$NicotbFinal();
 	$finish;
 end

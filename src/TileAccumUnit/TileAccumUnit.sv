@@ -252,8 +252,10 @@ logic [OCFG_BW-1:0] abl_o_end;
 logic [DBW-1:0] i0_alu_sramrd [VSIZE];
 `rdyack_logic(i1_alu_sramrd);
 logic [DBW-1:0] i1_alu_sramrd [VSIZE];
-`rdyack_logic(alu_write_dat);
-logic [DBW-1:0] alu_write_dat [VSIZE];
+`rdyack_logic(alu_write_dat_alu);
+logic [DBW-1:0] alu_write_dat_alu [VSIZE];
+`rdyack_logic(alu_write_dat_wp);
+logic [DBW-1:0] alu_write_dat_wp [VSIZE];
 `rdyack_logic(i0_dramra);
 logic [GBW-1:0] i0_dramra;
 `rdyack_logic(i0_dramrd);
@@ -270,6 +272,11 @@ Forward u_fwd(
 	`clk_connect,
 	`rdyack_connect(src, bofs),
 	`rdyack_connect(dst, bofs_in)
+);
+Forward u_alu_wp_data(
+	`clk_connect,
+	`rdyack_connect(src, alu_write_dat_alu),
+	`rdyack_connect(dst, alu_write_dat_wp)
 );
 AccumBlockLooper u_abl(
 	`clk_connect,
@@ -331,15 +338,15 @@ AluPipeline u_alu(
 	.i_sramrd0(i0_alu_sramrd),
 	`rdyack_connect(sramrd1, i1_alu_sramrd),
 	.i_sramrd1(i1_alu_sramrd),
-	`rdyack_connect(dramwd, alu_write_dat),
-	.o_dramwd(alu_write_dat)
+	`rdyack_connect(dramwd, alu_write_dat_alu),
+	.o_dramwd(alu_write_dat_alu)
 );
 WritePipeline u_w(
 	`clk_connect,
 	`rdyack_connect(bofs, abl_o_abofs),
-	.i_bofs(abl_i0_bofs),
-	.i_abeg(abl_i0_aofs),
-	.i_aend(abl_i0_aend),
+	.i_bofs(abl_o_bofs),
+	.i_abeg(abl_o_aofs),
+	.i_aend(abl_o_aend),
 	.i_bboundary(i_bboundary),
 	.i_bsubofs(i_bsubofs),
 	.i_bsub_up_order(i_bsub_up_order),
@@ -357,8 +364,8 @@ WritePipeline u_w(
 	.i_astrides_shamt(i_o_astrides_shamt),
 	.i_id_begs(i_o_id_begs),
 	.i_id_ends(i_o_id_ends),
-	`rdyack_connect(alu_dat, alu_write_dat),
-	.i_alu_dat(alu_write_dat),
+	`rdyack_connect(alu_dat, alu_write_dat_wp),
+	.i_alu_dat(alu_write_dat_wp),
 	`rdyack_connect(dramw, dramw),
 	.o_dramwa(o_dramwa),
 	.o_dramwd(o_dramwd),
@@ -473,6 +480,14 @@ DramArbiter u_arb(
 	end
 `ff_cg(bofs_in_ack)
 	bofs_in_r <= i_bofs;
+`ff_end
+
+`ff_rst
+	for (int i = 0; i < VSIZE; i++) begin
+		alu_write_dat_wp[i] <= '0;
+	end
+`ff_cg(alu_write_dat_alu_ack)
+	alu_write_dat_wp <= alu_write_dat_alu;
 `ff_end
 
 endmodule

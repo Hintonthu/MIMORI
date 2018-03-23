@@ -2,6 +2,7 @@ NICOTB=../nicotb/lib
 IRUN=irun
 SYN=syn
 
+# Usage: TEST_CFG=X make top (default X = 0)
 top:
 	make COVERAGE=$(COV) Top
 

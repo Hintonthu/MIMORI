@@ -166,7 +166,8 @@ def main():
 	i_data.i_i0_stencil[0] = int(N_SLUT0 != 0)
 	npd.copyto(i_data.i_i0_stencil_begs, 0)
 	npd.copyto(i_data.i_i0_stencil_ends, 0)
-	i_data.i_i0_stencil_ends[0] = N_SLUT0 if N_I0CFG != 0 else 0
+	if N_I0CFG != 0:
+		i_data.i_i0_stencil_ends[0] = N_SLUT0
 	npd.copyto(i_data.i_i0_stencil_lut, slut0)
 	# TODO (end)
 	npd.copyto(i_data.i_i1_local_xor_masks,    npd.bitwise_or.reduce(cfg.umcfg_i1['xor_dst'], axis=1))
@@ -191,7 +192,8 @@ def main():
 	i_data.i_i1_stencil[0] = int(N_SLUT1 != 0)
 	npd.copyto(i_data.i_i1_stencil_begs, 0)
 	npd.copyto(i_data.i_i1_stencil_ends, 0)
-	i_data.i_i1_stencil_ends[0] = N_SLUT1 if N_I1CFG != 0 else 0
+	if N_I1CFG != 0:
+		i_data.i_i1_stencil_ends[0] = N_SLUT1
 	npd.copyto(i_data.i_i1_stencil_lut, slut1)
 	# TODO (end)
 	npd.copyto(i_data.i_o_global_boundaries, cfg.umcfg_o['mboundary'])
