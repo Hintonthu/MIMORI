@@ -27,8 +27,6 @@ module ReadPipeline(
 	i_aend,
 	i_beg,
 	i_end,
-	i_bboundary,
-	i_bsubofs,
 	i_bsub_up_order,
 	i_bsub_lo_order,
 	i_aboundary,
@@ -103,8 +101,6 @@ input [WBW-1:0]     i_abeg           [VDIM];
 input [WBW-1:0]     i_aend           [VDIM];
 input [ICFG_BW-1:0] i_beg;
 input [ICFG_BW-1:0] i_end;
-input [WBW-1:0]     i_bboundary      [VDIM];
-input [CV_BW-1:0]   i_bsubofs [VSIZE][VDIM];
 input [CCV_BW-1:0]  i_bsub_up_order  [VDIM];
 input [CCV_BW-1:0]  i_bsub_lo_order  [VDIM];
 input [WBW-1:0]     i_aboundary      [VDIM];
@@ -275,7 +271,7 @@ AccumWarpLooper #(.N_CFG(N_ICFG), .ABW(LBW), .STENCIL(1), .USE_LOFS(1)) u_awl(
 	.i_aend(lc_aend),
 	.i_linears(lc_warp_linears),
 	.i_bboundary(),
-	.i_bsubofs(i_bsubofs),
+	.i_bsubofs(),
 	.i_bsub_up_order(i_bsub_up_order),
 	.i_bsub_lo_order(i_bsub_lo_order),
 	.i_aboundary(i_aboundary),
@@ -468,13 +464,16 @@ end
 	ch_addr_mid <= ch_mid;
 `ff_end
 
-always_ff @(posedge i_clk or negedge i_rst) for (int i = 0; i < LBUF_SIZE-1; i++) begin
+genvar gi;
+generate for (gi = 0; gi < LBUF_SIZE-1; gi++) begin: warp_linear_fifo
+always_ff @(posedge i_clk or negedge i_rst) begin
 	if (!i_rst) begin
-		writer_warp_linear[i] <= '0;
-	end else if (linear_load_nxt[i] || linear_load_new[i]) begin
-		writer_warp_linear[i] <= linear_load_new[i] ? writer_linear : writer_warp_linear[i+1];
+		writer_warp_linear[gi] <= '0;
+	end else if (linear_load_nxt[gi] || linear_load_new[gi]) begin
+		writer_warp_linear[gi] <= linear_load_new[gi] ? writer_linear : writer_warp_linear[gi+1];
 	end
 end
+end endgenerate
 
 `ff_rst
 	writer_warp_linear[LBUF_SIZE-1] <= '0;

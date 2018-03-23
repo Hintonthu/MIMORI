@@ -43,7 +43,8 @@ module Alu(
 	o_reg_waddr,
 	o_wdata,
 	`dval_port(tbuf_we),
-	o_tbuf_wdata,
+	// shared with o_wdata (this makes DC happier)
+	// o_tbuf_wdata,
 	`rdyack_port(sramrd0),
 	i_sramrd0,
 	`rdyack_port(sramrd1),
@@ -104,13 +105,14 @@ input [TDBW-1:0]     i_tbuf_rdatas [TBUF_SIZE][VSIZE];
 output logic [SRAM_ABW-1:0] o_reg_waddr;
 output logic [TDBW-1:0]     o_wdata [VSIZE];
 `dval_output(tbuf_we);
-output logic [TDBW-1:0]     o_tbuf_wdata [VSIZE];
+// shared with o_wdata (this makes DC happier)
+// output logic [TDBW-1:0]     o_tbuf_wdata [VSIZE];
 `rdyack_input(sramrd0);
 input [DBW-1:0] i_sramrd0 [VSIZE];
 `rdyack_input(sramrd1);
 input [DBW-1:0] i_sramrd1 [VSIZE];
 `rdyack_output(dramwd);
-output [DBW-1:0] o_dramwd [VSIZE];
+output logic [DBW-1:0] o_dramwd [VSIZE];
 `dval_output(inst_commit);
 
 //======================================
@@ -269,7 +271,8 @@ always_comb begin
 	for (int i = 0; i < VSIZE; i++) begin
 		o_dramwd[i]  = result[i] >> (2*i_to_dram); // fuck off the nLint bit width check
 		o_wdata[i] = result[i];
-		o_tbuf_wdata[i] = result[i];
+		// shared with o_wdata (this makes DC happier)
+		// o_tbuf_wdata[i] = result[i];
 	end
 end
 

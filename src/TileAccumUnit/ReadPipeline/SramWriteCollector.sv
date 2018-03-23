@@ -240,15 +240,16 @@ end
 	o_hiaddr <= cur_r[LBW-1:CV_BW];
 `ff_end
 
+genvar gi;
+generate for (gi = 0; gi < VSIZE; gi++) begin: linear_collect
 always_ff @(posedge i_clk or negedge i_rst) begin
-	for (int i = 0; i < VSIZE; i++) begin
-		if (!i_rst) begin
-			o_data[i] <= '0;
-		end else if (enable_buf_write && wmask[i]) begin
-			o_data[i] <= data_w[i];
-		end
+	if (!i_rst) begin
+		o_data[gi] <= '0;
+	end else if (enable_buf_write && wmask[gi]) begin
+		o_data[gi] <= data_w[gi];
 	end
 end
+end endgenerate
 
 `ff_rst
 	fsm_r <= 'b1 << FREE;

@@ -69,6 +69,7 @@ output logic [ICFG_BW-1:0] o_id;
 // Internal
 //======================================
 `dval_logic(i_init);
+`rdyack_logic(i_abofs_delay);
 logic [WBW-1:0]     i_bofs_stride [VDIM];
 logic [WBW-1:0]     i_aofs_stride [VDIM];
 logic [ICFG_BW-1:0] o_id1;

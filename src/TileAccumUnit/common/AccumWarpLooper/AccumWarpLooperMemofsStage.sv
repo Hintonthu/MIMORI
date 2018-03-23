@@ -87,6 +87,7 @@ output logic               o_islast;
 //======================================
 logic [WBW-1:0] bofs_stride [VDIM];
 logic [WBW-1:0] aofs_stride [VDIM];
+`rdyack_logic(s0);
 logic [WBW-1:0]     s0_mofs_nd_r  [DIM];
 logic [ABW-1:0]     s0_mofs_nd_rz [DIM];
 logic [WBW-1:0]     s0_mofs_nd_w  [DIM];

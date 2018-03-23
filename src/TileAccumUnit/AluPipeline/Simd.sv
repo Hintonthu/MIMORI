@@ -100,7 +100,8 @@ logic [TDBW-1:0]     alu_reg_wdata [VSIZE];
 logic [FLAT_BW-1:0]  alu_reg_wdata_flat;
 // alu <-> tbuf
 `dval_logic(alu_tbuf_we);
-logic [TDBW-1:0] alu_tbuf_wdata [VSIZE];
+// shared with alu_reg_wdata (this makes DC happier)
+// logic [TDBW-1:0] alu_tbuf_wdata [VSIZE];
 logic [TDBW-1:0] tbuf_alu_rdatas [TBUF_SIZE][VSIZE];
 // op -> alu
 logic [2:0]          op_alu_opcode;
@@ -178,7 +179,8 @@ Alu u_alu(
 	.o_reg_waddr(alu_reg_waddr),
 	.o_wdata(alu_reg_wdata),
 	`dval_connect(tbuf_we, alu_tbuf_we),
-	.o_tbuf_wdata(alu_tbuf_wdata),
+	// shared with alu_reg_wdata (this makes DC happier)
+	// .o_tbuf_wdata(alu_tbuf_wdata),
 	`rdyack_connect(sramrd0, sramrd0),
 	.i_sramrd0(i_sramrd0),
 	`rdyack_connect(sramrd1, sramrd1),
@@ -201,7 +203,9 @@ SRAMDualPort#(.BW(FLAT_BW), .NDATA(NWORD)) u_register(
 SimdTmpBuffer u_tbuf(
 	`clk_connect,
 	.i_we(alu_tbuf_we_dval),
-	.i_wdata(alu_tbuf_wdata),
+	// shared with alu_reg_wdata (this makes DC happier)
+	// .i_wdata(alu_tbuf_wdata),
+	.i_wdata(alu_reg_wdata),
 	.o_rdatas(tbuf_alu_rdatas)
 );
 

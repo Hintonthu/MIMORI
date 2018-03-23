@@ -117,12 +117,15 @@ BroadcastInorder#(2) u_brd(
 	cur_idx_r <= cur_idx_w;
 `ff_end
 
-always_ff @(posedge i_clk or negedge i_rst) for (int i = 0; i < N_ICFG; i++) begin
+genvar gi;
+generate for (gi = 0; gi < N_ICFG; gi++) begin: collect_linear
+always_ff @(posedge i_clk or negedge i_rst) begin
 	if (!i_rst) begin
-		o_linears[i] <= '0;
-	end else if (src_linear_ack && (i == cur_idx_r)) begin
-		o_linears[i] <= i_linear;
+		o_linears[gi] <= '0;
+	end else if (src_linear_ack && (gi == cur_idx_r)) begin
+		o_linears[gi] <= i_linear;
 	end
 end
+end endgenerate
 
 endmodule
