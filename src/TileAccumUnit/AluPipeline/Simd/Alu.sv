@@ -247,7 +247,7 @@ function ResultType AluIdx;
 	input [WBW-1:0] i_bofs [VSIZE][VDIM];
 	input [4:0] i_shamt;
 	for (int i = 0; i < VSIZE; i++) begin
-		AluIdx[i] = i_shamt[2] ? i_bofs[i][i_shamt[2:0]] : i_aofs[i_shamt[2:0]];
+		AluIdx[i] = i_shamt[3] ? i_bofs[i][i_shamt[2:0]] : i_aofs[i_shamt[2:0]];
 	end
 endfunction
 
@@ -255,7 +255,7 @@ always_comb sel_a = SelectOp(i_a, i_const_a, i_rdata, i_sramrd0, i_sramrd1, i_tb
 always_comb sel_b = SelectOp(i_b, i_const_b, i_rdata, i_sramrd0, i_sramrd1, i_tbuf_rdatas);
 always_comb sel_c = SelectOp(i_c, i_const_c, i_rdata, i_sramrd0, i_sramrd1, i_tbuf_rdatas);
 always_comb for (int i = 0; i < VDIM; i++) begin
-	bofsz[i] = (i_opcode == 3'b111 && i_shamt[4:2] == 3'b001)  ? i_bofs[i] : '0;
+	bofsz[i] = (i_opcode == 3'b111 && i_shamt[4:3] == 2'b01)  ? i_bofs[i] : '0;
 end
 always_comb begin
 	priority case (i_opcode)
