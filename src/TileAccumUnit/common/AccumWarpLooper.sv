@@ -161,8 +161,8 @@ assign stencil_en = STENCIL != 0 && i_stencil;
 assign s12_bofs = USE_LOFS ? s12_blofs : s12_bgofs;
 assign s12_aofs = USE_LOFS ? s12_alofs : s12_agofs;
 always_comb for (int i = 0; i < VDIM; i++) begin
-	abeg[i] = stencil_en ? 'b1 : i_abeg[i];
-	aend[i] = stencil_en ? 'b0 : i_aend[i];
+	abeg[i] = stencil_en ? 'b0 : i_abeg[i];
+	aend[i] = stencil_en ? 'b1 : i_aend[i];
 end
 
 //======================================

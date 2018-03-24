@@ -99,7 +99,7 @@ logic inst_empty;
 // Combinational
 //======================================
 assign s01_bypass = s01_id_beg == s01_id_end;
-assign wait_last_ack = wait_last_rdy && (s01_skipped || s1_islast && s1_dst_ack);
+assign wait_last_ack = wait_last_rdy && (s01_islast && s01_skipped || s1_islast && s1_dst_ack);
 assign wait_fin_ack = wait_fin_rdy && inst_empty;
 
 //======================================

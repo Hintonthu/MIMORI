@@ -149,8 +149,8 @@ logic s1_alu_last_block_r;
 // Combinational
 //======================================
 assign blkdone_dval = s0_skip_alu || alu_abofs_ack && s1_alu_last_block_r;
-assign s0_i0_eq = s0_i0_beg == s0_i1_end;
-assign s0_i1_eq = s0_i0_beg == s0_i1_end;
+assign s0_i0_eq = s0_i0_beg == s0_i0_end;
+assign s0_i1_eq = s0_i1_beg == s0_i1_end;
 assign s0_o_eq = s0_o_beg == s0_o_end;
 assign s0_alu_eq = s0_alu_beg == s0_alu_end;
 always_comb begin

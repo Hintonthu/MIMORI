@@ -928,7 +928,8 @@ um_i0 = npd.empty(1, UmiModel.UMCFG_DTYPE)
 um_i1 = npd.empty(0, UmiModel.UMCFG_DTYPE)
 um_o = npd.empty(1, UmiModel.UMCFG_DTYPE)
 
-p['total'] = [1,1,1,1,126,126]
+H, W = 32, 64
+p['total'] = [1,1,1,1,H-2,W-2]
 p['local'] = [1,1,1,1,16,32]
 p['vsize'] = [1,1,1,1,1,32]
 p['vshuf'] = [1,1,1,1,1,1]
@@ -941,34 +942,34 @@ um_i0['ustride'] = [[0,0,0,0,1,1,0,0,0,0,1,1],]
 um_i0['udim'] = [[0,0,0,0,2,3,0,0,0,0,2,3],]
 um_i0['lmwidth'] = [[1,1,18,34],]
 um_i0['lmalign'] = [[640,640,640,34],]
-um_i0['mwidth'] = [[1,1,128,128],]
+um_i0['mwidth'] = [[1,1,H,W],]
 um_i0['xor_scheme'] = -1
 um_o['mwrap'].fill(UmiModel.MEM_WRAP)
 um_o['mlinear'] = [300000]
 um_o['ustart'] = [[0,0,0,0,0,0,0,0,0,0,0,0],]
 um_o['ustride'] = [[0,0,0,0,0,0,0,0,0,0,1,1],]
 um_o['udim'] = [[0,0,0,0,0,0,0,0,0,0,2,3],]
-um_o['mwidth'] = [[1,1,128,128],]
+um_o['mwidth'] = [[1,1,H,W],]
 
 cfg5 = UmiModel(p, a, um_i0, um_i1, um_o, insts, n_i0, n_i1, n_o, n_inst)
 cfg5.add_lut("stencil0", [1,69,34,36])
 def VerfFunc5(CSIZE):
 	# init
-	img_flat = npd.random.randint(10, size=128*128, dtype=i16)
-	gradm_flat = npd.zeros(128*128, i16)
-	img = npd.reshape(img_flat, (128,128))
-	gradm = npd.reshape(gradm_flat, (128,128))
+	img_flat = npd.random.randint(10, size=W*H, dtype=i16)
+	gradm_flat = npd.zeros(W*H, i16)
+	img = npd.reshape(img_flat, (H,W))
+	gradm = npd.reshape(gradm_flat, (H,W))
 	gradm_gold = npd.square(img[1:-1,2:]-img[1:-1,:-2]) + npd.square(img[2:,1:-1]-img[:-2,1:-1])
 	yield MemorySpace([
 		(10000, img_flat),
 		(300000, gradm_flat),
 	], CSIZE)
 	# check
-	npd.savetxt("grad_img.txt", img, fmt="%d")
-	npd.savetxt("grad_result.txt", gradm, fmt="%d")
-	npd.savetxt("grad_gold.txt", gradm_gold, fmt="%d")
-	assert npd.all(gradm_gold == gradm[:126,:126])
-	gradm[:126,:126] = 0
+	npd.savetxt("grad_img.txt", img, fmt="%4d")
+	npd.savetxt("grad_result.txt", gradm[:H-2,:W-2], fmt="%4d")
+	npd.savetxt("grad_gold.txt", gradm_gold, fmt="%4d")
+	assert npd.all(gradm_gold == gradm[:H-2,:W-2])
+	gradm[:H-2,:W-2] = 0
 	assert not npd.any(gradm)
 	print("Gradient test result successes")
 
