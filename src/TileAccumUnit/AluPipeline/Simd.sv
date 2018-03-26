@@ -43,11 +43,11 @@ module Simd(
 // Parameter
 //======================================
 localparam WBW = TauCfg::WORK_BW;
-localparam DIM = TauCfg::DIM;
+localparam VDIM = TauCfg::VDIM;
 localparam ISA_BW = TauCfg::ISA_BW;
 localparam DBW = TauCfg::DATA_BW;
 localparam TDBW = TauCfg::TMP_DATA_BW;
-localparam VSIZE = TauCfg::VECTOR_SIZE;
+localparam VSIZE = TauCfg::VSIZE;
 localparam NWORD = TauCfg::SRAM_NWORD;
 localparam MAX_WARP = TauCfg::MAX_WARP;
 localparam REG_ADDR = TauCfg::WARP_REG_ADDR_SPACE;
@@ -71,10 +71,10 @@ localparam FLAT_BW = TDBW*VSIZE;
 input [ISA_BW-1:0]  i_insts [N_INST];
 input [TDBW-1:0]    i_consts [CONST_LUT];
 input [TDBW-1:0]    i_const_texs [CONST_TEX_LUT];
-input [WBW-1:0]     i_bofs [DIM];
-input [CV_BW-1:0]   i_bsubofs [VSIZE][DIM];
-input [CCV_BW-1:0]  i_bsub_lo_order  [DIM];
-input [WBW-1:0]     i_aofs [DIM];
+input [WBW-1:0]     i_bofs [VDIM];
+input [CV_BW-1:0]   i_bsubofs [VSIZE][VDIM];
+input [CCV_BW-1:0]  i_bsub_lo_order  [VDIM];
+input [WBW-1:0]     i_aofs [VDIM];
 input [INST_BW-1:0] i_pc;
 input [WID_BW-1:0]  i_wid;
 input [REG_ABW-1:0] i_reg_per_warp;
@@ -100,13 +100,14 @@ logic [TDBW-1:0]     alu_reg_wdata [VSIZE];
 logic [FLAT_BW-1:0]  alu_reg_wdata_flat;
 // alu <-> tbuf
 `dval_logic(alu_tbuf_we);
-logic [TDBW-1:0] alu_tbuf_wdata [VSIZE];
+// shared with alu_reg_wdata (this makes DC happier)
+// logic [TDBW-1:0] alu_tbuf_wdata [VSIZE];
 logic [TDBW-1:0] tbuf_alu_rdatas [TBUF_SIZE][VSIZE];
 // op -> alu
 logic [2:0]          op_alu_opcode;
 logic [4:0]          op_alu_shamt;
-logic [WBW-1:0]      op_alu_bofs [DIM];
-logic [WBW-1:0]      op_alu_aofs [DIM];
+logic [WBW-1:0]      op_alu_bofs [VDIM];
+logic [WBW-1:0]      op_alu_aofs [VDIM];
 logic [TDBW-1:0]     op_alu_const_a;
 logic [TDBW-1:0]     op_alu_const_b;
 logic [TDBW-1:0]     op_alu_const_c;
@@ -178,7 +179,8 @@ Alu u_alu(
 	.o_reg_waddr(alu_reg_waddr),
 	.o_wdata(alu_reg_wdata),
 	`dval_connect(tbuf_we, alu_tbuf_we),
-	.o_tbuf_wdata(alu_tbuf_wdata),
+	// shared with alu_reg_wdata (this makes DC happier)
+	// .o_tbuf_wdata(alu_tbuf_wdata),
 	`rdyack_connect(sramrd0, sramrd0),
 	.i_sramrd0(i_sramrd0),
 	`rdyack_connect(sramrd1, sramrd1),
@@ -201,7 +203,9 @@ SRAMDualPort#(.BW(FLAT_BW), .NDATA(NWORD)) u_register(
 SimdTmpBuffer u_tbuf(
 	`clk_connect,
 	.i_we(alu_tbuf_we_dval),
-	.i_wdata(alu_tbuf_wdata),
+	// shared with alu_reg_wdata (this makes DC happier)
+	// .i_wdata(alu_tbuf_wdata),
+	.i_wdata(alu_reg_wdata),
 	.o_rdatas(tbuf_alu_rdatas)
 );
 

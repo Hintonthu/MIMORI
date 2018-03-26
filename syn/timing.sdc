@@ -1,4 +1,4 @@
-set CLK_PERIOD 3.0
+set CLK_PERIOD 3
 set CLK_PIN [get_ports i_clk]
 set RESET_PIN [get_ports i_rst]
 create_clock -name clk -period $CLK_PERIOD \

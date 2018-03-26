@@ -20,7 +20,6 @@ module Forward(
 	`rdyack_port(src),
 	`rdyack_port(dst)
 );
-
 //======================================
 // I/O
 //======================================
@@ -47,6 +46,47 @@ assign src_ack = src_rdy && (!dst_rdy || dst_ack);
 `ff_nocg
 	dst_rdy <= dst_rdy_w;
 `ff_end
+
+endmodule
+
+module ForwardMulti(
+	`clk_port,
+	`rdyack_port(src),
+	`rdyack_port(dst),
+	acks
+);
+
+parameter NDATA = 2;
+
+`clk_input;
+`rdyack_input(src);
+`rdyack_output(dst);
+output logic [NDATA-1:0] acks;
+
+logic can_ack;
+logic [NDATA-1:0] rdy_r;
+logic [NDATA-1:0] rdy_w;
+
+always_comb begin
+	dst_rdy = rdy_r[0];
+	can_ack = !dst_rdy || dst_ack;
+	src_ack = src_rdy && can_ack;
+	if (can_ack) begin
+		acks = {src_rdy, rdy_r[NDATA-1:1]};
+		rdy_w = acks;
+	end else begin
+		acks = '0;
+		rdy_w = rdy_r;
+	end
+end
+
+always_ff @(posedge i_clk or negedge i_rst) begin
+	if (!i_rst) begin
+		rdy_r <= '0;
+	end else if (can_ack) begin
+		rdy_r <= rdy_w;
+	end
+end
 
 endmodule
 
@@ -90,11 +130,11 @@ module ForwardIf(
 	`rdyack_port(src),
 	`rdyack_port(dst)
 );
-parameter COND = 1;
+parameter COND_ = 1;
 input cond;
 `rdyack_input(src);
 `rdyack_output(dst);
-assign dst_rdy = src_rdy && (cond == (COND&1));
+assign dst_rdy = src_rdy && (cond == (COND_&1));
 assign src_ack = dst_ack;
 endmodule
 
@@ -103,27 +143,30 @@ module AcceptIf(
 	`rdyack_port(src),
 	`rdyack_port(dst)
 );
-parameter COND = 1;
+parameter COND_ = 1;
 input cond;
 `rdyack_input(src);
 `rdyack_output(dst);
 assign dst_rdy = src_rdy;
-assign src_ack = dst_ack && (cond == (COND&1));
+assign src_ack = dst_ack && (cond == (COND_&1));
 endmodule
 
 module IgnoreIf(
 	cond,
 	`rdyack_port(src),
-	`rdyack_port(dst)
+	`rdyack_port(dst),
+	skipped
 );
-parameter COND = 1;
+parameter COND_ = 1;
 input cond;
 `rdyack_input(src);
 `rdyack_output(dst);
+output skipped;
 logic cond2;
-assign cond2 = cond == (COND&1);
+assign cond2 = cond == (COND_&1);
 assign dst_rdy = src_rdy && !cond2;
-assign src_ack = dst_ack || (src_rdy && cond2);
+assign skipped = src_rdy && cond2;
+assign src_ack = dst_ack || skipped;
 endmodule
 
 module OneCycleInit(
@@ -211,6 +254,56 @@ assign acked_w = src_ack ? '0 : acked_nxt;
 
 endmodule
 
+module BroadcastInorder(
+	`clk_port,
+	`rdyack_port(src),
+	dst_rdys,
+	dst_acks
+);
+
+//======================================
+// Parameter
+//======================================
+parameter N = 2;
+
+//======================================
+// I/O
+//======================================
+`clk_input;
+`rdyack_input(src);
+output logic [N-1:0] dst_rdys;
+input        [N-1:0] dst_acks;
+
+//======================================
+// Internal
+//======================================
+logic [N-1:0] dst_rdys_r;
+logic [N-1:0] dst_rdys_w;
+
+//======================================
+// Combinational
+//======================================
+assign dst_rdys = src_rdy ? dst_rdys_r : '0;
+always_comb begin
+	src_ack = dst_acks[N-1];
+	priority case ({src_ack, dst_acks[N-2:0]})
+		2'b00: dst_rdys_w = dst_rdys_r;
+		2'b10: dst_rdys_w = 'b1;
+		2'b01: dst_rdys_w = dst_rdys_r<<1;
+	endcase
+end
+
+//======================================
+// Sequential
+//======================================
+`ff_rst
+	dst_rdys_r <= 'b1;
+`ff_nocg
+	dst_rdys_r <= dst_rdys_w;
+`ff_end
+
+endmodule
+
 module SFifoCtrl(
 	`clk_port,
 	`rdyack_port(src),
@@ -230,6 +323,10 @@ output logic [NDATA-1:0] o_load_new;
 logic [NDATA-1:0] rdy_r;
 logic [NDATA-1:0] rdy_w;
 logic [NDATA  :0] is_last;
+
+//======================================
+// Combinational
+//======================================
 assign dst_rdy = rdy_r[0];
 assign is_last = {rdy_r, 1'b1} & {1'b1, ~rdy_r};
 assign src_ack = src_rdy & !is_last[NDATA];
@@ -256,6 +353,9 @@ always_comb begin
 	endcase
 end
 
+//======================================
+// Sequential
+//======================================
 always_ff @(posedge i_clk or negedge i_rst) begin
 	if (!i_rst) begin
 		rdy_r <= '0;

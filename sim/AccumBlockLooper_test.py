@@ -21,115 +21,122 @@ from itertools import repeat
 from UmiModel import UmiModel, default_sample_conf, npi, npd, newaxis
 
 def main():
-	scb = Scoreboard()
-	testa = scb.GetTest("testa")
-	testm = scb.GetTest("testm")
-	sta = Stacker(0, [testa.Get])
-	stm = Stacker(0, [testm.Get])
+	scb = Scoreboard("AccumBlockLooper")
+	test_i0 = scb.GetTest("test_i0")
+	test_i1 = scb.GetTest("test_i1")
+	test_o = scb.GetTest("test_o")
+	test_alu = scb.GetTest("test_alu")
+	st_i0 = Stacker(0, [test_i0.Get])
+	st_i1 = Stacker(0, [test_i1.Get])
+	st_o = Stacker(0, [test_o.Get])
+	st_alu = Stacker(0, [test_alu.Get])
 	master = TwoWire.Master(s_rdy_bus, s_ack_bus, s_bus, ck_ev)
 	i_data = master.values
-	slavea = TwoWire.Slave(a_rdy_bus, a_ack_bus, a_bus, ck_ev, callbacks=[sta.Get])
-	slavem = TwoWire.Slave(m_rdy_bus, m_ack_bus, m_bus, ck_ev, callbacks=[stm.Get])
+	slave_i0 = TwoWire.Slave(i0_rdy_bus, i0_ack_bus, i0_bus, ck_ev, callbacks=[st_i0.Get])
+	slave_i1 = TwoWire.Slave(i1_rdy_bus, i1_ack_bus, i1_bus, ck_ev, callbacks=[st_i1.Get])
+	slave_o = TwoWire.Slave(o_rdy_bus, o_ack_bus, o_bus, ck_ev, callbacks=[st_o.Get])
+	slave_alu = TwoWire.Slave(alu_rdy_bus, alu_ack_bus, alu_bus, ck_ev, callbacks=[st_alu.Get])
 	yield rst_out_ev
+	yield ck_ev
 
 	(
 		n_bofs, bofs,
-		mofs_i0, mofs_i1, mofs_o
 	) = cfg.CreateBlockTransaction()
 	(
-		n_abofs, abofs, alast,
-		a_range_i0, a_range_i1, a_range_o,
-		abmofs_i0, abmofs_i1, abmofs_o
-	) = cfg.CreateAccumBlockTransaction(mofs_i0[0], mofs_i1[0], mofs_o[0])
-	if SUM_ALL:
-		# we are testing output pipeline
-		diff_id = a_range_o[:,0] != a_range_o[:,1]
-		n_trim = npd.count_nonzero(diff_id)
-		beg_trim = a_range_o[diff_id,0]
-		end_trim = a_range_o[diff_id,1]
-		fid = UmiModel._FlatRangeNorep(a_range_o)
-	else:
-		# we are testing input pipeline
-		diff_id = a_range_i0[:,0] != a_range_i0[:,1]
-		n_trim = npd.count_nonzero(diff_id)
-		beg_trim = a_range_i0[diff_id,0]
-		end_trim = a_range_i0[diff_id,1]
-		fid = UmiModel._FlatRangeNorep(a_range_i0)
-	aofs_trim = abofs[diff_id]
-	bofs_trim = npd.broadcast_to(bofs[0], (n_trim, DIM))
+		n_i0, bofs_i0, abeg_i0, aend_i0, abeg_id_i0, aend_id_i0,
+		n_i1, bofs_i1, abeg_i1, aend_i1, abeg_id_i1, aend_id_i1,
+		n_o, bofs_o, abeg_o, aend_o, abeg_id_o, aend_id_o,
+		n_alu, bofs_alu, abeg_alu, aend_alu, abeg_id_alu, aend_id_alu,
+	) = cfg.CreateAccumBlockTransaction(bofs[0])
 
 	# start simulation
-	npd.copyto(i_data[0], bofs[0]                  )
-	npd.copyto(i_data[1], cfg.acfg["local_sig"][0] )
-	npd.copyto(i_data[2], cfg.acfg["local_exp"][0] )
-	npd.copyto(i_data[3], cfg.acfg["last"][0]      )
-	npd.copyto(i_data[4], cfg.acfg["local"][0]-1   )
-	npd.copyto(i_data[5], cfg.acfg["boundary"][0]-1)
-	if SUM_ALL:
-		# we are testing output pipeline
-		npd.copyto(i_data[6], cfg.n_o[0])
-		npd.copyto(i_data[7], cfg.n_o[1])
-	else:
-		# we are testing input pipeline
-		npd.copyto(i_data[6], cfg.n_i0[0])
-		npd.copyto(i_data[7], cfg.n_i0[1])
-
-	testa.Expect((aofs_trim, bofs_trim))
-	testm.Expect((fid[:, newaxis],))
-	sta.Resize(aofs_trim.shape[0])
-	stm.Resize(fid.shape[0])
+	npd.copyto(i_data[ 0], bofs[0])
+	npd.copyto(i_data[ 1], cfg.acfg['local'][0])
+	npd.copyto(i_data[ 2], cfg.acfg['end'][0])
+	npd.copyto(i_data[ 3], cfg.acfg['total'][0])
+	npd.copyto(i_data[ 4], cfg.n_i0[0])
+	npd.copyto(i_data[ 5], cfg.n_i0[1])
+	npd.copyto(i_data[ 6], cfg.n_i1[0])
+	npd.copyto(i_data[ 7], cfg.n_i1[1])
+	npd.copyto(i_data[ 8], cfg.n_o[0])
+	npd.copyto(i_data[ 9], cfg.n_o[1])
+	npd.copyto(i_data[10], cfg.n_inst[0])
+	npd.copyto(i_data[11], cfg.n_inst[1])
+	test_i0.Expect((bofs_i0, abeg_i0, aend_i0))
+	test_i1.Expect((bofs_i1, abeg_i1, aend_i1))
+	test_o.Expect((bofs_o, abeg_o, aend_o))
+	test_alu.Expect((bofs_alu, abeg_alu, aend_alu))
+	st_i0.Resize(n_i0)
+	st_i1.Resize(n_i1)
+	st_o.Resize(n_o)
+	st_alu.Resize(n_alu)
 	yield from master.Send(i_data)
 
 	for i in range(300):
 		yield ck_ev
-	assert sta.is_clean
-	assert stm.is_clean
+	assert st_i0.is_clean
+	assert st_i1.is_clean
+	assert st_o.is_clean
+	assert st_alu.is_clean
 	FinishSim()
 
 cfg = default_sample_conf
-params = CreateBus((
-	("dut", "SUM_ALL"),
-	(None , "DIM",),
-	(None , "ODIM",),
-))
-params.Read()
-SUM_ALL = params.values[0][0]
-DIM     = params.values[1][0]
-ODIM    = params.values[2][0]
-N_CFG   = cfg.n_o[1][-1] if SUM_ALL else cfg.n_i0[1][-1]
+VDIM = cfg.VDIM
 (
 	s_rdy_bus, s_ack_bus,
-	a_rdy_bus, a_ack_bus,
-	m_rdy_bus, m_ack_bus,
-	s_bus, a_bus, m_bus
+	i0_rdy_bus, i0_ack_bus,
+	i1_rdy_bus, i1_ack_bus,
+	o_rdy_bus, o_ack_bus,
+	alu_rdy_bus, alu_ack_bus,
+	s_bus,
+	i0_bus,
+	i1_bus,
+	o_bus,
+	alu_bus,
 ) = CreateBuses([
-	(("", "s_rdy"),),
-	(("", "s_ack"),),
-	(("", "da_rdy"),),
-	(("", "da_canack"),),
-	(("", "dm_rdy"),),
-	(("", "dm_canack"),),
+	(("", "src_rdy"),),
+	(("", "src_ack"),),
+	(("", "dst_i0_rdy"),),
+	(("", "dst_i0_canack"),),
+	(("", "dst_i1_rdy"),),
+	(("", "dst_i1_canack"),),
+	(("", "dst_o_rdy"),),
+	(("", "dst_o_canack"),),
+	(("", "dst_alu_rdy"),),
+	(("", "dst_alu_canack"),),
 	(
-		("dut","i_bofs"       , (DIM,)),
-		(None ,"i_agrid_frac" , (DIM,)),
-		(None ,"i_agrid_shamt", (DIM,)),
-		(None ,"i_agrid_last" , (DIM,)),
-		(None ,"i_alocal_last", (DIM,)),
-		(None ,"i_aboundary"  , (DIM,)),
-		#(None ,"i_mofs_starts", (N_CFG,DIM,)),
-		#(None ,"i_mofs_asteps", (N_CFG,DIM,)),
-		#(None ,"i_mofs_ashufs", (N_CFG,DIM,)),
-		(None ,"i_id_begs"    , (DIM+1,)),
-		(None ,"i_id_ends"    , (DIM+1,)),
+		("dut","i_bofs"       , (VDIM,)),
+		(None ,"i_agrid_step" , (VDIM,)),
+		(None ,"i_agrid_end"  , (VDIM,)),
+		(None ,"i_aboundary"  , (VDIM,)),
+		(None ,"i_i0_id_begs" , (VDIM+1,)),
+		(None ,"i_i0_id_ends" , (VDIM+1,)),
+		(None ,"i_i1_id_begs" , (VDIM+1,)),
+		(None ,"i_i1_id_ends" , (VDIM+1,)),
+		(None ,"i_o_id_begs"  , (VDIM+1,)),
+		(None ,"i_o_id_ends"  , (VDIM+1,)),
+		(None ,"i_inst_id_begs", (VDIM+1,)),
+		(None ,"i_inst_id_ends", (VDIM+1,)),
 	),
 	(
-		("dut", "o_aofs", (DIM,)),
-		#(None , "o_alast", (DIM,)),
-		(None , "o_bofs", (DIM,)),
+		("dut", "o_i0_bofs", (VDIM,)),
+		(None , "o_i0_aofs_beg", (VDIM,)),
+		(None , "o_i0_aofs_end", (VDIM,)),
 	),
 	(
-		#("dut", "o_mofs", (ODIM,)),
-		("dut", "o_id"),
+		("dut", "o_i1_bofs", (VDIM,)),
+		(None , "o_i1_aofs_beg", (VDIM,)),
+		(None , "o_i1_aofs_end", (VDIM,)),
+	),
+	(
+		("dut", "o_o_bofs", (VDIM,)),
+		(None , "o_o_aofs_beg", (VDIM,)),
+		(None , "o_o_aofs_end", (VDIM,)),
+	),
+	(
+		("dut", "o_alu_bofs", (VDIM,)),
+		(None , "o_alu_aofs_beg", (VDIM,)),
+		(None , "o_alu_aofs_end", (VDIM,)),
 	),
 ])
 rst_out_ev, ck_ev = CreateEvents(["rst_out", "ck_ev"])

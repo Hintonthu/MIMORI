@@ -43,7 +43,8 @@ module Alu(
 	o_reg_waddr,
 	o_wdata,
 	`dval_port(tbuf_we),
-	o_tbuf_wdata,
+	// shared with o_wdata (this makes DC happier)
+	// o_tbuf_wdata,
 	`rdyack_port(sramrd0),
 	i_sramrd0,
 	`rdyack_port(sramrd1),
@@ -57,11 +58,11 @@ module Alu(
 // Parameter
 //======================================
 localparam WBW = TauCfg::WORK_BW;
-localparam DIM = TauCfg::DIM;
+localparam VDIM = TauCfg::VDIM;
 localparam ISA_BW = TauCfg::ISA_BW;
 localparam DBW = TauCfg::DATA_BW;
 localparam TDBW = TauCfg::TMP_DATA_BW;
-localparam VSIZE = TauCfg::VECTOR_SIZE;
+localparam VSIZE = TauCfg::VSIZE;
 localparam NWORD = TauCfg::SRAM_NWORD;
 localparam MAX_WARP = TauCfg::MAX_WARP;
 localparam REG_ADDR = TauCfg::WARP_REG_ADDR_SPACE;
@@ -81,13 +82,13 @@ typedef logic signed [TDBW-1:0] ResultType [VSIZE];
 //======================================
 `clk_input;
 `rdyack_input(op);
-input [CV_BW-1:0]    i_bsubofs [VSIZE][DIM];
-input [CCV_BW-1:0]   i_bsub_lo_order  [DIM];
+input [CV_BW-1:0]    i_bsubofs [VSIZE][VDIM];
+input [CCV_BW-1:0]   i_bsub_lo_order  [VDIM];
 input [TDBW-1:0]     i_const_texs [CONST_TEX_LUT];
 input [2:0]          i_opcode;
 input [4:0]          i_shamt;
-input [WBW-1:0]      i_bofs [DIM];
-input [WBW-1:0]      i_aofs [DIM];
+input [WBW-1:0]      i_bofs [VDIM];
+input [WBW-1:0]      i_aofs [VDIM];
 input [TDBW-1:0]     i_const_a;
 input [TDBW-1:0]     i_const_b;
 input [TDBW-1:0]     i_const_c;
@@ -104,13 +105,14 @@ input [TDBW-1:0]     i_tbuf_rdatas [TBUF_SIZE][VSIZE];
 output logic [SRAM_ABW-1:0] o_reg_waddr;
 output logic [TDBW-1:0]     o_wdata [VSIZE];
 `dval_output(tbuf_we);
-output logic [TDBW-1:0]     o_tbuf_wdata [VSIZE];
+// shared with o_wdata (this makes DC happier)
+// output logic [TDBW-1:0]     o_tbuf_wdata [VSIZE];
 `rdyack_input(sramrd0);
 input [DBW-1:0] i_sramrd0 [VSIZE];
 `rdyack_input(sramrd1);
 input [DBW-1:0] i_sramrd1 [VSIZE];
 `rdyack_output(dramwd);
-output [DBW-1:0] o_dramwd [VSIZE];
+output logic [DBW-1:0] o_dramwd [VSIZE];
 `dval_output(inst_commit);
 
 //======================================
@@ -130,8 +132,8 @@ logic signed [TDBW-1:0] sel_a [VSIZE];
 logic signed [TDBW-1:0] sel_b [VSIZE];
 logic signed [TDBW-1:0] sel_c [VSIZE];
 logic signed [TDBW-1:0] result [VSIZE];
-logic [WBW-1:0] bofsz [DIM];
-logic [WBW-1:0] vector_blockofs [VSIZE][DIM];
+logic [WBW-1:0] bofsz [VDIM];
+logic [WBW-1:0] vector_blockofs [VSIZE][VDIM];
 
 //======================================
 // Combinational
@@ -241,19 +243,19 @@ endfunction
 `DefineAluComputeBodyEnd(AluOpMac)
 
 function ResultType AluIdx;
-	input [WBW-1:0] i_aofs [DIM];
-	input [WBW-1:0] i_bofs [VSIZE][DIM];
+	input [WBW-1:0] i_aofs [VDIM];
+	input [WBW-1:0] i_bofs [VSIZE][VDIM];
 	input [4:0] i_shamt;
 	for (int i = 0; i < VSIZE; i++) begin
-		AluIdx[i] = i_shamt[2] ? i_bofs[i][i_shamt[1:0]] : i_aofs[i_shamt[1:0]];
+		AluIdx[i] = i_shamt[3] ? i_bofs[i][i_shamt[2:0]] : i_aofs[i_shamt[2:0]];
 	end
 endfunction
 
 always_comb sel_a = SelectOp(i_a, i_const_a, i_rdata, i_sramrd0, i_sramrd1, i_tbuf_rdatas);
 always_comb sel_b = SelectOp(i_b, i_const_b, i_rdata, i_sramrd0, i_sramrd1, i_tbuf_rdatas);
 always_comb sel_c = SelectOp(i_c, i_const_c, i_rdata, i_sramrd0, i_sramrd1, i_tbuf_rdatas);
-always_comb for (int i = 0; i < DIM; i++) begin
-	bofsz[i] = (i_opcode == 3'b111 && i_shamt[4:2] == 3'b001)  ? i_bofs[i] : '0;
+always_comb for (int i = 0; i < VDIM; i++) begin
+	bofsz[i] = (i_opcode == 3'b111 && i_shamt[4:3] == 2'b01)  ? i_bofs[i] : '0;
 end
 always_comb begin
 	priority case (i_opcode)
@@ -269,7 +271,8 @@ always_comb begin
 	for (int i = 0; i < VSIZE; i++) begin
 		o_dramwd[i]  = result[i] >> (2*i_to_dram); // fuck off the nLint bit width check
 		o_wdata[i] = result[i];
-		o_tbuf_wdata[i] = result[i];
+		// shared with o_wdata (this makes DC happier)
+		// o_tbuf_wdata[i] = result[i];
 	end
 end
 

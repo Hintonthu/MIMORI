@@ -23,40 +23,36 @@ module ReadPipeline(
 	`clk_port,
 	`rdyack_port(bofs),
 	i_bofs,
-	i_bboundary,
-	i_blocal_last,
-	i_bsubofs,
+	i_abeg,
+	i_aend,
+	i_beg,
+	i_end,
 	i_bsub_up_order,
 	i_bsub_lo_order,
-	i_agrid_frac,
-	i_agrid_shamt,
-	i_agrid_last,
 	i_aboundary,
+	i_bgrid_step,
+	i_global_linears,
+	i_global_mofs,
+	i_global_mboundaries,
+	i_global_cboundaries,
+	i_global_bshufs,
+	i_bstrides_frac,
+	i_bstrides_shamt,
+	i_global_ashufs,
+	i_astrides_frac,
+	i_astrides_shamt,
 	i_local_xor_masks,
 	i_local_xor_schemes,
 	i_local_bit_swaps,
-	i_local_mofs_bsteps,
-	i_local_mofs_bsubsteps,
-	i_local_mofs_asteps,
-	i_local_sizes,
 	i_local_pads,
-	i_global_mofss,
-	i_global_mofs_bsteps,
-	i_global_mofs_asteps,
-	i_global_mofs_linears,
-	i_global_cboundaries,
-	i_global_mboundaries,
-	i_global_mofs_ashufs,
+	i_local_bsubsteps,
+	i_local_mboundaries,
 	i_id_begs,
 	i_id_ends,
 	i_stencil,
 	i_stencil_begs,
 	i_stencil_ends,
 	i_stencil_lut,
-	`rdyack_port(warp_abofs),
-	i_warp_bofs,
-	i_warp_aofs,
-	i_warp_alast,
 	`dval_port(blkdone),
 	`rdyack_port(dramra),
 	o_dramra,
@@ -75,9 +71,10 @@ localparam GBW = TauCfg::GLOBAL_ADDR_BW;
 localparam DBW = TauCfg::DATA_BW;
 localparam N_ICFG = TauCfg::N_ICFG;
 localparam DIM = TauCfg::DIM;
-localparam AF_BW = TauCfg::AOFS_FRAC_BW;
-localparam AS_BW = TauCfg::AOFS_SHAMT_BW;
-localparam VSIZE = TauCfg::VECTOR_SIZE;
+localparam VDIM = TauCfg::VDIM;
+localparam SS_BW = TauCfg::STRIDE_BW;
+localparam SF_BW = TauCfg::STRIDE_FRAC_BW;
+localparam VSIZE = TauCfg::VSIZE;
 localparam CSIZE = TauCfg::CACHE_SIZE;
 localparam XOR_BW = TauCfg::XOR_BW;
 localparam LBUF_SIZE = 3;
@@ -99,41 +96,37 @@ localparam ST_BW = $clog2(STSIZE+1);
 //======================================
 `clk_input;
 `rdyack_input(bofs);
-input [WBW-1:0]     i_bofs [DIM];
-input [WBW-1:0]     i_bboundary      [DIM];
-input [WBW-1:0]     i_blocal_last    [DIM];
-input [CV_BW-1:0]   i_bsubofs [VSIZE][DIM];
-input [CCV_BW  :0]  i_bsub_up_order  [DIM];
-input [CCV_BW-1:0]  i_bsub_lo_order  [DIM];
-input [AF_BW-1:0]   i_agrid_frac     [DIM];
-input [AS_BW-1:0]   i_agrid_shamt    [DIM];
-input [WBW-1:0]     i_agrid_last     [DIM];
-input [WBW-1:0]     i_aboundary      [DIM];
-input [CV_BW-1:0]   i_local_xor_masks      [N_ICFG];
-input [CX_BW-1:0]   i_local_xor_schemes    [N_ICFG][CV_BW];
-input [CCV_BW-1:0]  i_local_bit_swaps      [N_ICFG];
-input [LBW-1:0]     i_local_mofs_bsteps    [N_ICFG][DIM];
-input [LBW-1:0]     i_local_mofs_bsubsteps [N_ICFG][CV_BW];
-input [LBW-1:0]     i_local_mofs_asteps    [N_ICFG][DIM];
-input [LBW  :0]     i_local_sizes          [N_ICFG];
-input [CV_BW-1:0]   i_local_pads           [N_ICFG][DIM];
-input [GBW-1:0]     i_global_mofss         [N_ICFG][DIM];
-input [GBW-1:0]     i_global_mofs_bsteps   [N_ICFG][DIM];
-input [GBW-1:0]     i_global_mofs_asteps   [N_ICFG][DIM];
-input [GBW-1:0]     i_global_mofs_linears  [N_ICFG];
-input [GBW-1:0]     i_global_cboundaries   [N_ICFG][DIM];
-input [GBW-1:0]     i_global_mboundaries   [N_ICFG][DIM];
-input [DIM_BW-1:0]  i_global_mofs_ashufs   [N_ICFG][DIM];
-input [ICFG_BW-1:0] i_id_begs [DIM+1];
-input [ICFG_BW-1:0] i_id_ends [DIM+1];
+input [WBW-1:0]     i_bofs           [VDIM];
+input [WBW-1:0]     i_abeg           [VDIM];
+input [WBW-1:0]     i_aend           [VDIM];
+input [ICFG_BW-1:0] i_beg;
+input [ICFG_BW-1:0] i_end;
+input [CCV_BW-1:0]  i_bsub_up_order  [VDIM];
+input [CCV_BW-1:0]  i_bsub_lo_order  [VDIM];
+input [WBW-1:0]     i_aboundary      [VDIM];
+input [WBW-1:0]     i_bgrid_step     [VDIM];
+input [GBW-1:0]     i_global_linears     [N_ICFG];
+input [WBW-1:0]     i_global_mofs        [N_ICFG][DIM];
+input [GBW-1:0]     i_global_mboundaries [N_ICFG][DIM];
+input [GBW-1:0]     i_global_cboundaries [N_ICFG][DIM];
+input [DIM_BW-1:0]  i_global_bshufs      [N_ICFG][VDIM];
+input [SF_BW-1:0]   i_bstrides_frac      [N_ICFG][VDIM];
+input [SS_BW-1:0]   i_bstrides_shamt     [N_ICFG][VDIM];
+input [DIM_BW-1:0]  i_global_ashufs      [N_ICFG][VDIM];
+input [SF_BW-1:0]   i_astrides_frac      [N_ICFG][VDIM];
+input [SS_BW-1:0]   i_astrides_shamt     [N_ICFG][VDIM];
+input [CV_BW-1:0]   i_local_xor_masks    [N_ICFG];
+input [CX_BW-1:0]   i_local_xor_schemes  [N_ICFG][CV_BW];
+input [CCV_BW-1:0]  i_local_bit_swaps    [N_ICFG];
+input [CV_BW-1:0]   i_local_pads         [N_ICFG][DIM];
+input [LBW-1:0]     i_local_bsubsteps    [N_ICFG][CV_BW];
+input [LBW-1:0]     i_local_mboundaries  [N_ICFG][DIM];
+input [ICFG_BW-1:0] i_id_begs [VDIM+1];
+input [ICFG_BW-1:0] i_id_ends [VDIM+1];
 input               i_stencil;
 input [ST_BW-1:0]   i_stencil_begs [N_ICFG];
 input [ST_BW-1:0]   i_stencil_ends [N_ICFG];
 input [LBW-1:0]     i_stencil_lut [STSIZE];
-`rdyack_input(warp_abofs);
-input [WBW-1:0] i_warp_bofs  [DIM];
-input [WBW-1:0] i_warp_aofs  [DIM];
-input [WBW-1:0] i_warp_alast [DIM];
 `dval_input(blkdone);
 `rdyack_output(dramra);
 output [GBW-1:0] o_dramra;
@@ -145,28 +138,29 @@ output [DBW-1:0] o_sramrd [VSIZE];
 //======================================
 // Internal
 //======================================
-`rdyack_logic(al_src);
-`rdyack_logic(wait_fin);
-`rdyack_logic(acc_abofs);
-`rdyack_logic(acc_mofs);
-`rdyack_logic(acc_mofs_masked);    // -> cmd, addr, alloc
+logic [LBW:0] i_local_sizes [N_ICFG];
+`rdyack_logic(brd0_lc);
+`rdyack_logic(brd0_ch);
+`rdyack_logic(ch_mofs);
+`rdyack_logic(ch_mofs_masked);    // -> cmd, addr, alloc
 `rdyack_logic(cal_writer_cmd);
 `dval_logic(rmc_alloc_free_id);
-logic [GBW-1:0]     acc_mofs [DIM];
-logic [ICFG_BW-1:0] acc_mid;
-`rdyack_logic(acc_alloc_mofs_src); // broadcast
-`rdyack_logic(acc_cmd_mofs_src);   // broadcast
-`rdyack_logic(acc_addr_mofs_src);  // broadcast
-`rdyack_logic(acc_alloc_mofs_dst); // pipeline
-`rdyack_logic(acc_alloc_mofs_dst2);// if alloc counter < MAX
-logic [ICFG_BW-1:0] acc_alloc_mid;
-`rdyack_logic(acc_cmd_mofs_dst);   // pipeline
-logic [GBW-1:0]     acc_cmd_mofs [DIM];
-logic [ICFG_BW-1:0] acc_cmd_mid;
-`rdyack_logic(acc_addr_mofs_dst);  // pipeline
-`rdyack_logic(acc_addr_mofs_dst2); // if alloc counter > 0
-logic [GBW-1:0]     acc_addr_mofs [DIM];
-logic [ICFG_BW-1:0] acc_addr_mid;
+logic [WBW-1:0]     ch_mofs      [DIM];
+logic [GBW-1:0]     ch_mofs_sext [DIM];
+logic [ICFG_BW-1:0] ch_mid;
+`rdyack_logic(ch_alloc_mofs_src); // broadcast
+`rdyack_logic(ch_cmd_mofs_src);   // broadcast
+`rdyack_logic(ch_addr_mofs_src);  // broadcast
+`rdyack_logic(ch_alloc_mofs_dst); // pipeline
+`rdyack_logic(ch_alloc_mofs_dst2);// if alloc counter < MAX
+logic [ICFG_BW-1:0] ch_alloc_mid;
+`rdyack_logic(ch_cmd_mofs_dst);   // pipeline
+logic [GBW-1:0]     ch_cmd_mofs [DIM];
+logic [ICFG_BW-1:0] ch_cmd_mid;
+`rdyack_logic(ch_addr_mofs_dst);  // pipeline
+`rdyack_logic(ch_addr_mofs_dst2); // if alloc counter > 0
+logic [GBW-1:0]     ch_addr_mofs [DIM];
+logic [ICFG_BW-1:0] ch_addr_mid;
 `rdyack_logic(cal_cmd);
 `rdyack_logic(cal_addr);
 logic cal_addr_islast;
@@ -178,9 +172,7 @@ logic [ICFG_BW-1:0] rmc_alloc_free_id;
 `rdyack_logic(writer_warp_linear_fifo_in);
 `rdyack_logic(writer_warp_linear_fifo_out);
 logic [LBW-1:0]     writer_linear;
-logic [ICFG_BW-1:0] writer_id;
 logic [LBW-1:0]     writer_warp_linear [LBUF_SIZE];
-logic [ICFG_BW-1:0] writer_warp_id [LBUF_SIZE];
 logic [LBUF_SIZE-2:0] linear_load_nxt;
 logic [LBUF_SIZE-1:0] linear_load_new;
 logic alloc_empty;
@@ -194,90 +186,110 @@ logic               warp_rmc_retire;
 logic [ICFG_BW-1:0]   writer_rmc_wid;
 logic [LBW-CV_BW-1:0] writer_rmc_whiaddr;
 logic [DBW-1:0]       writer_rmc_wdata [VSIZE];
-`rdyack_logic(cmdaddr);
+`rdyack_logic(cal_writer);
 logic [1:0]        cal_writer_type;
 logic              cal_writer_islast;
 logic [CC_BW-1:0]  cal_writer_addrofs;
 logic [CV_BW1-1:0] cal_writer_len;
+`rdyack_logic(lc_warp);
+logic [WBW-1:0] lc_bofs         [VDIM];
+logic [WBW-1:0] lc_abeg         [VDIM];
+logic [WBW-1:0] lc_aend         [VDIM];
+logic [LBW-1:0] lc_warp_linears [N_ICFG];
 
 //======================================
 // Submodule
 //======================================
-Broadcast#(2) u_broadcast_accum(
+Broadcast#(2) u_broadcast_input(
 	`clk_connect,
 	`rdyack_connect(src, bofs),
 	.acked(),
-	.dst_rdys({wait_fin_rdy,al_src_rdy}),
-	.dst_acks({wait_fin_ack,al_src_ack})
+	.dst_rdys({brd0_lc_rdy,brd0_ch_rdy}),
+	.dst_acks({brd0_lc_ack,brd0_ch_ack})
 );
 Broadcast#(3) u_broadcast_mofs(
 	`clk_connect,
-	`rdyack_connect(src, acc_mofs_masked),
+	`rdyack_connect(src, ch_mofs_masked),
 	.acked(),
-	.dst_rdys({acc_alloc_mofs_src_rdy,acc_cmd_mofs_src_rdy,acc_addr_mofs_src_rdy}),
-	.dst_acks({acc_alloc_mofs_src_ack,acc_cmd_mofs_src_ack,acc_addr_mofs_src_ack})
+	.dst_rdys({ch_alloc_mofs_src_rdy,ch_cmd_mofs_src_rdy,ch_addr_mofs_src_rdy}),
+	.dst_acks({ch_alloc_mofs_src_ack,ch_cmd_mofs_src_ack,ch_addr_mofs_src_ack})
 );
 Forward u_fwd_alloc(
 	`clk_connect,
-	`rdyack_connect(src, acc_alloc_mofs_src),
-	`rdyack_connect(dst, acc_alloc_mofs_dst)
+	`rdyack_connect(src, ch_alloc_mofs_src),
+	`rdyack_connect(dst, ch_alloc_mofs_dst)
 );
 Forward u_fwd_cmd(
 	`clk_connect,
-	`rdyack_connect(src, acc_cmd_mofs_src),
-	`rdyack_connect(dst, acc_cmd_mofs_dst)
+	`rdyack_connect(src, ch_cmd_mofs_src),
+	`rdyack_connect(dst, ch_cmd_mofs_dst)
 );
 Forward u_fwd_addr(
 	`clk_connect,
-	`rdyack_connect(src, acc_addr_mofs_src),
-	`rdyack_connect(dst, acc_addr_mofs_dst)
+	`rdyack_connect(src, ch_addr_mofs_src),
+	`rdyack_connect(dst, ch_addr_mofs_dst)
 );
-AccumBlockLooper #(.SUM_ALL(0), .N_CFG(N_ICFG)) u_al(
+ChunkHead u_chunk_head(
 	`clk_connect,
-	`rdyack_connect(src_bofs, al_src),
+	`rdyack_connect(i_abofs, brd0_ch),
 	.i_bofs(i_bofs),
-	.i_agrid_frac(i_agrid_frac),
-	.i_agrid_shamt(i_agrid_shamt),
-	.i_agrid_last(i_agrid_last),
-	.i_alocal_last(),
-	.i_aboundary(i_aboundary),
-	.i_mofs_starts(i_global_mofss),
-	.i_mofs_asteps(i_global_mofs_asteps),
-	.i_mofs_ashufs(i_global_mofs_ashufs),
-	.i_id_begs(i_id_begs),
-	.i_id_ends(i_id_ends),
-	`rdyack_connect(dst_abofs, acc_abofs),
-	.o_bofs(),
-	.o_aofs(),
-	.o_alast(),
-	`rdyack_connect(dst_mofs, acc_mofs),
-	.o_mofs(acc_mofs),
-	.o_id(acc_mid)
+	.i_aofs(i_abeg),
+	.i_beg(i_beg),
+	.i_end(i_end),
+	.i_global_mofs(i_global_mofs),
+	.i_global_bshufs(i_global_bshufs),
+	.i_bstrides_frac(i_bstrides_frac),
+	.i_bstrides_shamt(i_bstrides_shamt),
+	.i_global_ashufs(i_global_ashufs),
+	.i_astrides_frac(i_astrides_frac),
+	.i_astrides_shamt(i_astrides_shamt),
+	`rdyack_connect(o_mofs, ch_mofs),
+	.o_mofs(ch_mofs),
+	.o_id(ch_mid)
 );
-AccumWarpLooper #(.N_CFG(N_ICFG), .ABW(LBW), .STENCIL(1)) u_awl(
+LinearCollector#(.LBW(LBW)) u_linear_col(
 	`clk_connect,
-	`rdyack_connect(abofs, warp_abofs),
-	.i_bofs(i_warp_bofs),
-	.i_aofs(i_warp_aofs),
-	.i_alast(i_warp_alast),
+	`rdyack_connect(range, brd0_lc),
+	.i_bofs(i_bofs),
+	.i_abeg(i_abeg),
+	.i_aend(i_aend),
+	.i_beg(i_beg),
+	.i_end(i_end),
+	`rdyack_connect(src_linear, writer_warp_linear_fifo_out),
+	.i_linear(writer_warp_linear[0]),
+	`rdyack_connect(dst_linears, lc_warp),
+	.o_bofs(lc_bofs),
+	.o_abeg(lc_abeg),
+	.o_aend(lc_aend),
+	.o_linears(lc_warp_linears)
+);
+AccumWarpLooper #(.N_CFG(N_ICFG), .ABW(LBW), .STENCIL(1), .USE_LOFS(1)) u_awl(
+	`clk_connect,
+	`rdyack_connect(abofs, lc_warp),
+	.i_bofs(lc_bofs),
+	.i_abeg(lc_abeg),
+	.i_aend(lc_aend),
+	.i_linears(lc_warp_linears),
 	.i_bboundary(),
-	.i_blocal_last(i_blocal_last),
-	.i_bsubofs(i_bsubofs),
+	.i_bsubofs(),
 	.i_bsub_up_order(i_bsub_up_order),
 	.i_bsub_lo_order(i_bsub_lo_order),
 	.i_aboundary(i_aboundary),
-	.i_mofs_bsteps(i_local_mofs_bsteps),
-	.i_mofs_bsubsteps(i_local_mofs_bsubsteps),
-	.i_mofs_asteps(i_local_mofs_asteps),
+	.i_bgrid_step(i_bgrid_step),
+	.i_global_bshufs(i_global_bshufs),
+	.i_bstrides_frac(i_bstrides_frac),
+	.i_bstrides_shamt(i_bstrides_shamt),
+	.i_global_ashufs(i_global_ashufs),
+	.i_astrides_frac(i_astrides_frac),
+	.i_astrides_shamt(i_astrides_shamt),
+	.i_mofs_bsubsteps(i_local_bsubsteps),
+	.i_mboundaries(i_local_mboundaries),
 	.i_id_begs(i_id_begs),
 	.i_id_ends(i_id_ends),
 	.i_stencil(i_stencil),
 	.i_stencil_begs(i_stencil_begs),
 	.i_stencil_ends(i_stencil_ends),
 	.i_stencil_lut(i_stencil_lut),
-	`rdyack_connect(mofs, writer_warp_linear_fifo_out),
-	.i_mofs(writer_warp_linear[0]),
-	.i_id(writer_warp_id[0]),
 	`rdyack_connect(addrval, warp_rmc_addrval),
 	.o_id(warp_rmc_id),
 	.o_address(warp_rmc_addr),
@@ -287,8 +299,8 @@ AccumWarpLooper #(.N_CFG(N_ICFG), .ABW(LBW), .STENCIL(1)) u_awl(
 Allocator#(.LBW(LBW)) u_alloc(
 	`clk_connect,
 	.i_sizes(i_local_sizes),
-	`rdyack_connect(alloc, acc_alloc_mofs_dst2),
-	.i_alloc_id(acc_alloc_mid),
+	`rdyack_connect(alloc, ch_alloc_mofs_dst2),
+	.i_alloc_id(ch_alloc_mid),
 	`rdyack_connect(linear, alloc_writer_linear),
 	.o_linear(alloc_writer_linear),
 	.o_linear_id(alloc_writer_linear_id),
@@ -311,7 +323,7 @@ SramWriteCollector#(.LBW(LBW)) u_swc(
 	.i_dramrd(i_dramrd),
 	`rdyack_connect(done_linear, writer_warp_linear_fifo_in),
 	.o_linear(writer_linear),
-	.o_linear_id(writer_id),
+	.o_linear_id(),
 	`dval_connect(w, writer_rmc),
 	.o_id(writer_rmc_wid),
 	.o_hiaddr(writer_rmc_whiaddr),
@@ -337,12 +349,12 @@ RemapCache#(.LBW(LBW)) u_rmc(
 );
 ChunkAddrLooper#(.LBW(LBW)) u_cal_addr(
 	`clk_connect,
-	`rdyack_connect(mofs, acc_addr_mofs_dst2),
-	.i_mofs(acc_addr_mofs),
-	.i_mpad(i_local_pads[acc_cmd_mid]),
-	.i_mbound(i_global_mboundaries[acc_cmd_mid]),
-	.i_mlast(i_global_cboundaries[acc_cmd_mid]),
-	.i_maddr(i_global_mofs_linears[acc_cmd_mid]),
+	`rdyack_connect(mofs, ch_addr_mofs_dst2),
+	.i_mofs(ch_addr_mofs),
+	.i_mpad(i_local_pads[ch_cmd_mid]),
+	.i_mbound(i_global_mboundaries[ch_cmd_mid]),
+	.i_mlast(i_global_cboundaries[ch_cmd_mid]),
+	.i_maddr(i_global_linears[ch_cmd_mid]),
 	`rdyack_connect(cmd, cal_addr),
 	.o_cmd_type(),
 	.o_cmd_islast(cal_addr_islast),
@@ -352,12 +364,12 @@ ChunkAddrLooper#(.LBW(LBW)) u_cal_addr(
 );
 ChunkAddrLooper#(.LBW(LBW)) u_cal_cmd(
 	`clk_connect,
-	`rdyack_connect(mofs, acc_cmd_mofs_dst),
-	.i_mofs(acc_cmd_mofs),
-	.i_mpad(i_local_pads[acc_addr_mid]),
-	.i_mbound(i_global_mboundaries[acc_addr_mid]),
-	.i_mlast(i_global_cboundaries[acc_addr_mid]),
-	.i_maddr(i_global_mofs_linears[acc_addr_mid]),
+	`rdyack_connect(mofs, ch_cmd_mofs_dst),
+	.i_mofs(ch_cmd_mofs),
+	.i_mpad(i_local_pads[ch_addr_mid]),
+	.i_mbound(i_global_mboundaries[ch_addr_mid]),
+	.i_mlast(i_global_cboundaries[ch_addr_mid]),
+	.i_maddr(i_global_linears[ch_addr_mid]),
 	`rdyack_connect(cmd, cal_writer_cmd),
 	.o_cmd_type(cal_writer_type),
 	.o_cmd_islast(cal_writer_islast),
@@ -374,15 +386,15 @@ SFifoCtrl#(LBUF_SIZE) u_sfifo_ctrl_linear(
 );
 Semaphore#(LBUF_SIZE) u_sem_linear(
 	`clk_connect,
-	.i_inc(acc_mofs_ack),
+	.i_inc(ch_mofs_ack),
 	.i_dec(writer_warp_linear_fifo_out_ack),
 	.o_full(linear_full),
 	.o_empty()
 );
 Semaphore#(ALLOC_CNT) u_sem_alloc(
 	`clk_connect,
-	.i_inc(acc_alloc_mofs_dst_ack),
-	.i_dec(acc_addr_mofs_dst_ack),
+	.i_inc(ch_alloc_mofs_dst_ack),
+	.i_dec(ch_addr_mofs_dst_ack),
 	.o_full(alloc_full),
 	.o_empty(alloc_empty)
 );
@@ -393,71 +405,80 @@ IgnoreIf#(0) u_ign_if_not_last_addr(
 );
 ForwardIf#(0) u_fwd_if_linear_not_full(
 	.cond(linear_full),
-	`rdyack_connect(src, acc_mofs),
-	`rdyack_connect(dst, acc_mofs_masked)
+	`rdyack_connect(src, ch_mofs),
+	`rdyack_connect(dst, ch_mofs_masked)
 );
 ForwardIf#(0) u_fwd_if_can_allocate(
 	.cond(alloc_full),
-	`rdyack_connect(src, acc_alloc_mofs_dst),
-	`rdyack_connect(dst, acc_alloc_mofs_dst2)
+	`rdyack_connect(src, ch_alloc_mofs_dst),
+	`rdyack_connect(dst, ch_alloc_mofs_dst2)
 );
 ForwardIf#(0) u_fwd_if_allocated(
 	.cond(alloc_empty),
-	`rdyack_connect(src, acc_addr_mofs_dst),
-	`rdyack_connect(dst, acc_addr_mofs_dst2)
+	`rdyack_connect(src, ch_addr_mofs_dst),
+	`rdyack_connect(dst, ch_addr_mofs_dst2)
 );
-
 //======================================
 // Combinational
 //======================================
-assign acc_abofs_ack = acc_abofs_rdy;
-assign wait_fin_ack = blkdone_dval;
+always_comb for (int i = 0; i < N_ICFG; i++) begin
+	i_local_sizes[i] = i_local_mboundaries[i][0];
+end
+
+always_comb for (int i = 0; i < DIM; i++) begin
+	ch_mofs_sext[i] = $signed(ch_mofs[i]);
+end
 
 //======================================
 // Sequential
 //======================================
 `ff_rst
-	acc_alloc_mid <= '0;
-`ff_cg(acc_alloc_mofs_src_ack)
-	acc_alloc_mid <= acc_mid;
+	ch_alloc_mid <= '0;
+`ff_cg(ch_alloc_mofs_src_ack)
+	ch_alloc_mid <= ch_mid;
 `ff_end
 
 `ff_rst
 	for (int i = 0; i < DIM; i++) begin
-		acc_cmd_mofs[i] <= '0;
+		ch_cmd_mofs[i] <= '0;
 	end
-	acc_cmd_mid <= '0;
-`ff_cg(acc_cmd_mofs_src_ack)
-	acc_cmd_mofs <= acc_mofs;
-	acc_cmd_mid <= acc_mid;
+	ch_cmd_mid <= '0;
+`ff_cg(ch_cmd_mofs_src_ack)
+	for (int i = 0; i < DIM-1; i++) begin
+		ch_cmd_mofs[i] <= ch_mofs_sext[i] * i_global_mboundaries[ch_mid][i+1];
+	end
+	ch_cmd_mofs[DIM-1] <= ch_mofs_sext[DIM-1];
+	ch_cmd_mid <= ch_mid;
 `ff_end
 
 `ff_rst
 	for (int i = 0; i < DIM; i++) begin
-		acc_addr_mofs[i] <= '0;
+		ch_addr_mofs[i] <= '0;
 	end
-	acc_addr_mid <= '0;
-`ff_cg(acc_addr_mofs_src_ack)
-	acc_addr_mofs <= acc_mofs;
-	acc_addr_mid <= '0;
+	ch_addr_mid <= '0;
+`ff_cg(ch_addr_mofs_src_ack)
+	for (int i = 0; i < DIM-1; i++) begin
+		ch_addr_mofs[i] <= ch_mofs_sext[i] * i_global_mboundaries[ch_mid][i+1];
+	end
+	ch_addr_mofs[DIM-1] <= ch_mofs_sext[DIM-1];
+	ch_addr_mid <= ch_mid;
 `ff_end
 
-always_ff @(posedge i_clk or negedge i_rst) for (int i = 0; i < LBUF_SIZE-1; i++) begin
+genvar gi;
+generate for (gi = 0; gi < LBUF_SIZE-1; gi++) begin: warp_linear_fifo
+always_ff @(posedge i_clk or negedge i_rst) begin
 	if (!i_rst) begin
-		writer_warp_linear[i] <= '0;
-		writer_warp_id[i] <= '0;
-	end else if (linear_load_nxt[i] || linear_load_new[i]) begin
-		writer_warp_linear[i] <= linear_load_new[i] ? writer_linear : writer_warp_linear[i+1];
-		writer_warp_id[i] <= linear_load_new[i] ? writer_id : writer_warp_id[i+1];
+		writer_warp_linear[gi] <= '0;
+	end else if (linear_load_nxt[gi] || linear_load_new[gi]) begin
+		writer_warp_linear[gi] <= linear_load_new[gi] ? writer_linear : writer_warp_linear[gi+1];
 	end
 end
+end endgenerate
 
 `ff_rst
 	writer_warp_linear[LBUF_SIZE-1] <= '0;
-	writer_warp_id[LBUF_SIZE-1] <= '0;
 `ff_cg(linear_load_new[LBUF_SIZE-1])
 	writer_warp_linear[LBUF_SIZE-1] <= writer_linear;
-	writer_warp_id[LBUF_SIZE-1] <= writer_id;
 `ff_end
 
 endmodule

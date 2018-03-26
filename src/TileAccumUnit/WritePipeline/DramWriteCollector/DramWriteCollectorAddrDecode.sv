@@ -32,7 +32,7 @@ module DramWriteCollectorAddrDecode(
 // Parameter
 //======================================
 localparam GBW = TauCfg::GLOBAL_ADDR_BW;
-localparam VSIZE = TauCfg::VECTOR_SIZE;
+localparam VSIZE = TauCfg::VSIZE;
 localparam CSIZE = TauCfg::CACHE_SIZE;
 // derived
 localparam C_BW = $clog2(CSIZE);

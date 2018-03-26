@@ -42,7 +42,7 @@ module RemapCache(
 parameter LBW = TauCfg::LOCAL_ADDR_BW0;
 localparam DBW = TauCfg::DATA_BW;
 localparam N_ICFG = TauCfg::N_ICFG;
-localparam VSIZE = TauCfg::VECTOR_SIZE;
+localparam VSIZE = TauCfg::VSIZE;
 localparam XOR_BW = TauCfg::XOR_BW;
 // derived
 localparam ICFG_BW = $clog2(N_ICFG+1);

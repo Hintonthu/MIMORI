@@ -22,7 +22,7 @@ from itertools import repeat
 from UmiModel import UmiModel, default_sample_conf, npi, npd, newaxis
 
 def main():
-	scb = Scoreboard()
+	scb = Scoreboard("WriteCollector")
 	test = scb.GetTest("test")
 	st = Stacker(0, [test.Get])
 	master_a = TwoWire.Master(a_rdy_bus, a_ack_bus, a_bus, ck_ev)
@@ -35,58 +35,39 @@ def main():
 	master_dd = master_d.values
 
 	# simulation
-	(
-		n_bofs, bofs,
-		mofs_i0, mofs_i1, mofs_o
-	) = conf.CreateBlockTransaction()
+	n_bofs, bofs = conf.CreateBlockTransaction()
 	for i in range(n_bofs):
 		(
-			n_abofs, abofs, alast,
-			a_range_i0, a_range_i1, a_range_o,
-			abmofs_i0, abmofs_i1, abmofs_o
-		) = conf.CreateAccumBlockTransaction(mofs_i0[i], mofs_i1[i], mofs_o[i])
-		sram_a0 = 0
-		sram_a1 = 0
-		for j in range(n_abofs):
-			# SRAM address
-			sl_i0 = slice(a_range_i0[j,0], a_range_i0[j,1])
-			sl_i1 = slice(a_range_i1[j,0], a_range_i1[j,1])
-			sl_o = slice(a_range_o[j,0], a_range_o[j,1])
-			sram_a0, lmofs_i0 = conf.AllocSram(sram_a0, conf.umcfg_i0["lmsize"][sl_i0])
-			sram_a1, lmofs_i1 = conf.AllocSram(sram_a1, conf.umcfg_i1["lmsize"][sl_i1])
-
+			n_o, bofs_o, abeg_o, aend_o, abeg_id_o, aend_id_o,
+		) = conf.CreateAccumBlockTransaction(bofs[i])[12:18]
+		for j in range(n_o):
 			# Expect?
 			(
-				n_aofs, agofs,
-				accum_i0, accum_i1, accum_o, accum_inst,
-				warp_i0, warp_i1, warp_o, warp_inst,
-				rg_flat_i0, rg_flat_i1, rg_flat_o, rg_flat_inst,
-				rt_flat_i0, rt_flat_i1, rt_flat_o,
-				amofs_i0, amofs_i1, amofs_o
-			) = conf.CreateAccumTransaction(
-				abofs[j], alast[j],
-				abmofs_i0[j,sl_i0], abmofs_i1[j,sl_i1], abmofs_o[j,sl_o],
-				a_range_i0[j], a_range_i1[j], a_range_o[j],
-				lmofs_i0, lmofs_i1
+				n_aofs_o, agofs_o, alofs_o,
+				rt_i_o, rg_li_o, rg_ri_o
+			) = conf.CreateAccumTransaction(abeg_o[j], aend_o[j])
+			accum_idx_o, warpid_o, rg_flat_o, rt_flat_o = conf.CreateAccumWarpTransaction(
+				abeg_o[j], aend_o[j],
+				rt_i_o, rg_li_o, rg_ri_o,
+				conf.n_o
 			)
-			bofs_o, valid_o = conf.CreateBofsValidTransaction(bofs[i], warp_o)
-			a_i0, a_i1, a_o = conf.CreateVectorAddressTransaction(
-				bofs[i],
-				rg_flat_i0, rg_flat_i1, rg_flat_o,
-				amofs_i0, amofs_i1, amofs_o
+			bgofs_o, blofs_o, valid_o = conf.CreateBofsValidTransaction(bofs[i], warpid_o)
+			addr_o = conf.CreateVectorAddressTransaction(
+				bgofs_o[:,0,:], agofs_o[accum_idx_o],
+				rg_flat_o, conf.umcfg_o['mlinear'], conf.umcfg_o, False
 			)
-			valid_o_packed = npd.bitwise_or.reduce(valid_o << npi.arange(conf.VSIZE)[newaxis,:], axis=1).astype("u4")
+			valid_o_packed = npd.bitwise_or.reduce(valid_o << npi.arange(VSIZE)[newaxis,:], axis=1).astype('u4')
 
 			# output part
-			if a_o.size:
-				da, dm = conf.CreateDramWriteTransaction(valid_o, a_o)
+			if addr_o.size:
+				da, dm = conf.CreateDramWriteTransaction(valid_o, addr_o)
 				dm_packed = npd.bitwise_or.reduce(dm << npi.arange(conf.DRAM_ALIGN)[newaxis,:], axis=1)
 				st.Resize(da.shape[0])
 				test.Expect((da[:,newaxis], dm_packed[:,newaxis]))
 				# Send
 				def iter_a():
-					for k in range(a_o.shape[0]):
-						npd.copyto(master_ad[0], a_o[k])
+					for k in range(addr_o.shape[0]):
+						npd.copyto(master_ad[0], addr_o[k])
 						master_ad[1][0] = valid_o_packed[k]
 						yield master_ad
 				Fork(master_d.SendIter(repeat(tuple(), da.shape[0])))
@@ -101,6 +82,7 @@ def main():
 	FinishSim()
 
 conf = default_sample_conf
+VSIZE = conf.VSIZE
 (
 	d_rdy_bus, d_ack_bus,
 	a_rdy_bus, a_ack_bus,
@@ -115,7 +97,7 @@ conf = default_sample_conf
 	((""    , "w_canack"),),
 	tuple(),
 	(
-		("dut", "i_address", (conf.VSIZE,)),
+		("dut", "i_address", (VSIZE,)),
 		(None , "i_valid"),
 	),
 	(

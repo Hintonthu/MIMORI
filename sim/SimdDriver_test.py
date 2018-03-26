@@ -23,15 +23,10 @@ from Response import Response
 
 def main():
 	yield rst_out_ev
+	n_bofs, bofs = cfg.CreateBlockTransaction()
 	(
-		n_bofs, bofs,
-		mofs_i0, mofs_i1, mofs_o
-	) = cfg.CreateBlockTransaction()
-	(
-		n_abofs, abofs, alast,
-		a_range_i0, a_range_i1, a_range_o,
-		abmofs_i0, abmofs_i1, abmofs_o
-	) = cfg.CreateAccumBlockTransaction(mofs_i0[0], mofs_i1[0], mofs_o[0])
+		n_alu, bofs_alu, abeg_alu, aend_alu, abeg_id_alu, aend_id_alu,
+	) = cfg.CreateAccumBlockTransaction(bofs[0])[-6:]
 	master = TwoWire.Master(src_rdy, src_ack, src_bus, ck_ev)
 	inst_commit = OneWire.Master(inst_commit_dval, tuple(), ck_ev)
 	resp = Response(inst_commit.SendIter, ck_ev)
@@ -39,40 +34,29 @@ def main():
 	data_bus = master.values
 
 	# start simulation
-	sram_a0 = 0
-	sram_a1 = 0
-	for i in range(n_abofs):
+	for i in range(n_alu):
 		# Expect?
-		sl_i0 = slice(a_range_i0[i,0], a_range_i0[i,1])
-		sl_i1 = slice(a_range_i1[i,0], a_range_i1[i,1])
-		sl_o = slice(a_range_o[i,0], a_range_o[i,1])
-		sram_a0, lmofs_i0 = cfg.AllocSram(sram_a0, cfg.umcfg_i0["lmsize"][sl_i0])
-		sram_a1, lmofs_i1 = cfg.AllocSram(sram_a1, cfg.umcfg_i1["lmsize"][sl_i1])
 		(
-			n_aofs, agofs,
-			accum_i0, accum_i1, accum_o, accum_inst,
-			warp_i0, warp_i1, warp_o, warp_inst,
-			rg_flat_i0, rg_flat_i1, rg_flat_o, rg_flat_inst,
-			rt_flat_i0, rt_flat_i1, rt_flat_o,
-			amofs_i0, amofs_i1, amofs_o
-		) = cfg.CreateAccumTransaction(
-			abofs[i], alast[i],
-			abmofs_i0[i,sl_i0], abmofs_i1[i,sl_i1], abmofs_o[i,sl_o],
-			a_range_i0[i], a_range_i1[i], a_range_o[i],
-			lmofs_i0, lmofs_i1
+			n_aofs_alu, agofs_alu, alofs_alu,
+			rt_i_alu, rg_li_alu, rg_ri_alu
+		) = cfg.CreateAccumTransaction(abeg_alu[i], aend_alu[i])
+		accum_alu, warpid_alu, rg_flat_alu = cfg.CreateAccumWarpTransaction(
+			abeg_alu[i], aend_alu[i],
+			None, rg_li_alu, rg_ri_alu,
+			cfg.n_inst
 		)
-		bofs_inst, valid_inst = cfg.CreateBofsValidTransaction(bofs[0], warp_inst)
+		bofs_alu, blofs_alu, valid_alu = cfg.CreateBofsValidTransaction(bofs[0], warpid_alu)
 		npd.copyto(data_bus[0], bofs[0])
-		npd.copyto(data_bus[1], abofs[i])
-		npd.copyto(data_bus[2], alast[i])
-		npd.copyto(data_bus[3], cfg.pcfg["local"][0]-(1<<(cfg.pcfg["lg_vshuf"][0]+cfg.pcfg["lg_vsize"][0])))
-		npd.copyto(data_bus[4], cfg.pcfg["lg_vshuf"][0]+cfg.pcfg["lg_vsize"][0])
+		npd.copyto(data_bus[1], abeg_alu[i])
+		npd.copyto(data_bus[2], aend_alu[i])
+		npd.copyto(data_bus[3], cfg.pcfg["local"][0])
+		npd.copyto(data_bus[4], cfg.pcfg["lg_vsize"][0])
 		npd.copyto(data_bus[5], cfg.pcfg["lg_vshuf"][0])
-		npd.copyto(data_bus[6], cfg.acfg["boundary"][0]-1)
+		npd.copyto(data_bus[6], cfg.acfg["total"][0])
 		npd.copyto(data_bus[7], cfg.n_inst[0])
 		npd.copyto(data_bus[8], cfg.n_inst[1])
-		col.Resize(rg_flat_inst.size)
-		tst.Expect((bofs_inst[:,0,:],agofs[accum_inst],rg_flat_inst[:,newaxis],warp_inst[:,newaxis]))
+		col.Resize(rg_flat_alu.size)
+		tst.Expect((bofs_alu[:,0,:],agofs_alu[accum_alu],rg_flat_alu[:,newaxis],warpid_alu[:,newaxis]))
 		yield from master.Send(data_bus)
 		yield ck_ev
 
@@ -82,7 +66,7 @@ def main():
 	FinishSim()
 
 cfg = default_sample_conf
-DIM = cfg.DIM
+VDIM = cfg.VDIM
 rst_out_ev, ck_ev = CreateEvents(["rst_out", "ck_ev"])
 src_rdy, src_ack, inst_rdy, inst_ack, inst_commit_dval = CreateBuses([
 	(("dut", "abofs_rdy"),),
@@ -93,24 +77,24 @@ src_rdy, src_ack, inst_rdy, inst_ack, inst_commit_dval = CreateBuses([
 ])
 src_bus, inst_bus = CreateBuses([
 	(
-		("dut", "i_bofs", (DIM,)),
-		(None , "i_aofs", (DIM,)),
-		(None , "i_alast", (DIM,)),
-		(None , "i_blocal_last", (DIM,)),
-		(None , "i_bsub_up_order", (DIM,)),
-		(None , "i_bsub_lo_order", (DIM,)),
-		(None , "i_aboundary", (DIM,)),
-		(None , "i_inst_id_begs", (DIM+1,)),
-		(None , "i_inst_id_ends", (DIM+1,)),
+		("dut", "i_bofs", (VDIM,)),
+		(None , "i_aofs_beg", (VDIM,)),
+		(None , "i_aofs_end", (VDIM,)),
+		(None , "i_bgrid_step", (VDIM,)),
+		(None , "i_bsub_up_order", (VDIM,)),
+		(None , "i_bsub_lo_order", (VDIM,)),
+		(None , "i_aboundary", (VDIM,)),
+		(None , "i_inst_id_begs", (VDIM+1,)),
+		(None , "i_inst_id_ends", (VDIM+1,)),
 	),
 	(
-		("dut", "o_bofs", (DIM,)),
-		(None , "o_aofs", (DIM,)),
+		("dut", "o_bofs", (VDIM,)),
+		(None , "o_aofs", (VDIM,)),
 		(None , "o_pc"),
 		(None , "o_warpid"),
 	),
 ])
-scb = Scoreboard()
+scb = Scoreboard("SimdDriver")
 tst = scb.GetTest("test", 10)
 col = Stacker(callbacks=[tst.Get])
 RegisterCoroutines([

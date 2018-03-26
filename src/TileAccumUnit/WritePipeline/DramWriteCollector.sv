@@ -35,7 +35,7 @@ module DramWriteCollector(
 //======================================
 localparam GBW = TauCfg::GLOBAL_ADDR_BW;
 localparam DBW = TauCfg::DATA_BW;
-localparam VSIZE = TauCfg::VECTOR_SIZE;
+localparam VSIZE = TauCfg::VSIZE;
 localparam CSIZE = TauCfg::CACHE_SIZE;
 
 //======================================

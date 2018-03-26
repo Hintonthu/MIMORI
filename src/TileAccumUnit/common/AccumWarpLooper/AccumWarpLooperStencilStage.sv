@@ -16,7 +16,6 @@
 // along with MIMORI.  If not, see <http://www.gnu.org/licenses/>.
 
 import TauCfg::*;
-import Default::*;
 
 module AccumWarpLooperStencilStage(
 	`clk_port,
@@ -41,10 +40,10 @@ module AccumWarpLooperStencilStage(
 //======================================
 // Parameter
 //======================================
-parameter N_CFG = Default::N_CFG;
-parameter ABW = Default::ABW;
+parameter N_CFG = TauCfg::N_ICFG;
+parameter ABW = TauCfg::GLOBAL_ADDR_BW;
 localparam WBW = TauCfg::WORK_BW;
-localparam DIM = TauCfg::DIM;
+localparam VDIM = TauCfg::VDIM;
 localparam STSIZE = TauCfg::STENCIL_SIZE;
 // derived
 localparam NCFG_BW = $clog2(N_CFG+1);
@@ -57,7 +56,7 @@ localparam ST_BW = $clog2(STSIZE+1);
 `rdyack_input(src);
 input [NCFG_BW-1:0] i_id;
 input [ABW-1:0]     i_linear;
-input [WBW-1:0]     i_bofs [DIM];
+input [WBW-1:0]     i_bofs [VDIM];
 input               i_retire;
 input               i_islast;
 input               i_stencil;
@@ -67,7 +66,7 @@ input [ABW-1:0]     i_stencil_lut [STSIZE];
 `rdyack_output(dst);
 output logic [NCFG_BW-1:0] o_id;
 output logic [ABW-1:0]     o_linear;
-output logic [WBW-1:0]     o_bofs [DIM];
+output logic [WBW-1:0]     o_bofs [VDIM];
 output logic               o_retire;
 output logic               o_islast;
 
@@ -127,7 +126,7 @@ AcceptIf u_acc(
 
 `ff_rst
 	o_id <= '0;
-	for (int i = 0; i < DIM; i++) begin
+	for (int i = 0; i < VDIM; i++) begin
 		o_bofs[i] <= '0;
 	end
 	islast_r <= 1'b0;
@@ -135,7 +134,7 @@ AcceptIf u_acc(
 	linear_r <= '0;
 `ff_cg(src_ack)
 	o_id <= i_id;
-	for (int i = 0; i < DIM; i++) begin
+	for (int i = 0; i < VDIM; i++) begin
 		o_bofs[i] <= i_bofs[i];
 	end
 	islast_r <= i_islast;

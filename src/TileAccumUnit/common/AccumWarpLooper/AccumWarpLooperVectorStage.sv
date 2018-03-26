@@ -16,14 +16,12 @@
 // along with MIMORI.  If not, see <http://www.gnu.org/licenses/>.
 
 import TauCfg::*;
-import Default::*;
 
 module AccumWarpLooperVectorStage(
 	`clk_port,
 	`rdyack_port(src),
 	i_id,
-	i_linear1,
-	i_linear2,
+	i_linear,
 	i_bofs,
 	i_retire,
 	i_islast,
@@ -42,11 +40,11 @@ module AccumWarpLooperVectorStage(
 //======================================
 // Parameter
 //======================================
-parameter N_CFG = Default::N_CFG;
-parameter ABW = Default::ABW;
+parameter N_CFG = TauCfg::N_ICFG;
+parameter ABW = TauCfg::GLOBAL_ADDR_BW;
 localparam WBW = TauCfg::WORK_BW;
-localparam DIM = TauCfg::DIM;
-localparam VSIZE = TauCfg::VECTOR_SIZE;
+localparam VDIM = TauCfg::VDIM;
+localparam VSIZE = TauCfg::VSIZE;
 // derived
 localparam NCFG_BW = $clog2(N_CFG+1);
 localparam CV_BW = $clog2(VSIZE);
@@ -58,14 +56,13 @@ localparam CCV_BW = $clog2(CV_BW+1);
 `clk_input;
 `rdyack_input(src);
 input [NCFG_BW-1:0] i_id;
-input [ABW-1:0]     i_linear1;
-input [ABW-1:0]     i_linear2;
-input [WBW-1:0]     i_bofs  [DIM];
+input [ABW-1:0]     i_linear;
+input [WBW-1:0]     i_bofs  [VDIM];
 input               i_retire;
 input               i_islast;
-input [WBW-1:0]     i_bboundary      [DIM];
-input [CV_BW-1:0]   i_bsubofs [VSIZE][DIM];
-input [CCV_BW-1:0]  i_bsub_lo_order  [DIM];
+input [WBW-1:0]     i_bboundary      [VDIM];
+input [CV_BW-1:0]   i_bsubofs [VSIZE][VDIM];
+input [CCV_BW-1:0]  i_bsub_lo_order  [VDIM];
 input [ABW-1:0]     i_mofs_bsubsteps [N_CFG][CV_BW];
 `rdyack_output(dst);
 output logic [NCFG_BW-1:0] o_id;
@@ -81,7 +78,7 @@ logic [ABW-1:0] address_w [VSIZE];
 logic [VSIZE-1:0] valid_w;
 logic [ABW-1:0] mofs_bsubstep [CV_BW];
 logic islast_r;
-logic [WBW-1:0] vector_blockofs [VSIZE][DIM];
+logic [WBW-1:0] vector_blockofs [VSIZE][VDIM];
 
 //======================================
 // Submodule
@@ -107,12 +104,13 @@ assign mofs_bsubstep = i_mofs_bsubsteps[i_id];
 assign fin_dval = dst_ack && islast_r;
 always_comb begin
 	for (int i = 0; i < VSIZE; i++) begin
-		address_w[i] = i_linear1 + i_linear2;
+		address_w[i] = '0;
 		for (int j = 0; j < CV_BW; j++) begin
 			if (((i>>j)&1) != 0) begin
 				address_w[i] = address_w[i] + mofs_bsubstep[j];
 			end
 		end
+		address_w[i] = address_w[i] + i_linear;
 	end
 end
 

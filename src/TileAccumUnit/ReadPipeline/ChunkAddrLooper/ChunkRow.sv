@@ -40,7 +40,7 @@ module ChunkRow(
 //======================================
 localparam GBW = TauCfg::GLOBAL_ADDR_BW;
 localparam CSIZE = TauCfg::CACHE_SIZE;
-localparam VSIZE = TauCfg::VECTOR_SIZE;
+localparam VSIZE = TauCfg::VSIZE;
 // derived
 localparam V_BW = $clog2(VSIZE);
 localparam C_BW = $clog2(CSIZE);
@@ -121,16 +121,16 @@ assign work_todo = {has_pad, has_rborder, has_center, has_lborder} & ~work_done_
 assign o_cmd_addr = cur_bounded >> C_BW << C_BW;
 assign o_cmd_addrofs = cur_bounded[C_BW-1:0];
 always_comb begin
-	br = i_row_linear + i_bound + 1'b1;
+	br = i_row_linear + i_bound;
 	// bl = i_row_linear;
 	l = i_row_linear + i_l; // l can be l.t. 0
-	r = l + i_n + 'b1; // r can be l.t. 0
+	r = l + i_n; // r can be l.t. 0
 	has_lborder = i_l[GBW-1]; // l negative?
 	if ($signed(r) < $signed(i_row_linear)) begin
 		has_center = 1'b0; // r positive & l < boundary? (r already negative)
 		b0 = r;
 	end else begin
-		has_center = $signed(i_l) <= $signed(i_bound); // r positive & l <= boundary?
+		has_center = $signed(i_l) < $signed(i_bound); // r positive & l <= boundary?
 		b0 = i_row_linear;
 	end
 	if ($signed(r) <= $signed(br)) begin
@@ -158,7 +158,7 @@ always_comb begin
 		end
 		work_selected_r[2]: begin
 			b_curstage = r;
-			cur_bounded = i_row_linear + i_bound;
+			cur_bounded = i_row_linear + i_bound - 'b1;
 			o_cmd_type = 'd1;
 		end
 		default: begin
