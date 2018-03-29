@@ -45,12 +45,10 @@ class DramRespChan(object):
 		self.ck_ev = ck_ev
 		self.mspace = mspace
 		self.q = deque()
-		self.w.SetToX()
 		self.ra_ack.Write()
 		self.rd_rdy.Write()
 		self.rd.Write()
 		self.w_rdy.Write()
-		self.w.Write()
 		self.dram_counter = 0.
 		self.dram_speed_inc = 1 / dram_speed
 		Fork(self.MainLoop())
