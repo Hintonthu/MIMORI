@@ -238,16 +238,29 @@ endfunction
 `DefineAluBodyBegin(AluOpMac)
 	logic signed [2*DBW-1:0] mul [VSIZE];
 `DefineAluComputeBegin
-	mul[i] = (src_op_b[i][DBW-1:0]*src_op_c[i][DBW-1:0]) >> i_shamt;
+	mul[i] = (
+		$signed(src_op_b[i][DBW-1:0])*
+		$signed(src_op_c[i][DBW-1:0])
+	) >> i_shamt;
 	AluOpMac[i] = src_op_a[i] + mul[i][TDBW-1:0];
 `DefineAluComputeBodyEnd(AluOpMac)
+
+`DefineAluBodyBegin(AluLogic)
+`DefineAluComputeBegin
+	case (i_shamt)
+		5'b00000: AluLogic[i] = (src_op_a[i] == 'sb0) ? src_op_b[i] : src_op_c[i];
+		5'b00010: AluLogic[i] = (src_op_b[i] > src_op_c[i]) ? src_op_b[i] : src_op_c[i];
+		5'b00011: AluLogic[i] = (src_op_b[i] < src_op_c[i]) ? src_op_b[i] : src_op_c[i];
+		default : AluLogic[i] = 'sb0;
+	endcase
+`DefineAluComputeBodyEnd(AluLogic)
 
 function ResultType AluIdx;
 	input [WBW-1:0] i_aofs [VDIM];
 	input [WBW-1:0] i_bofs [VSIZE][VDIM];
 	input [4:0] i_shamt;
 	for (int i = 0; i < VSIZE; i++) begin
-		AluIdx[i] = i_shamt[3] ? i_bofs[i][i_shamt[2:0]] : i_aofs[i_shamt[2:0]];
+		AluIdx[i] = i_shamt[2] ? i_bofs[i][i_shamt[2:0]] : i_aofs[i_shamt[2:0]];
 	end
 endfunction
 
@@ -255,7 +268,7 @@ always_comb sel_a = SelectOp(i_a, i_const_a, i_rdata, i_sramrd0, i_sramrd1, i_tb
 always_comb sel_b = SelectOp(i_b, i_const_b, i_rdata, i_sramrd0, i_sramrd1, i_tbuf_rdatas);
 always_comb sel_c = SelectOp(i_c, i_const_c, i_rdata, i_sramrd0, i_sramrd1, i_tbuf_rdatas);
 always_comb for (int i = 0; i < VDIM; i++) begin
-	bofsz[i] = (i_opcode == 3'b111 && i_shamt[4:3] == 2'b01)  ? i_bofs[i] : '0;
+	bofsz[i] = (i_opcode == 3'b111 && i_shamt[4:2] == 3'b001)  ? i_bofs[i] : '0;
 end
 always_comb begin
 	priority case (i_opcode)
@@ -264,8 +277,8 @@ always_comb begin
 		3'b010: result = AluOp2Norm(sel_a, sel_b, sel_c, i_shamt, i_opcode == 3'b010);
 		3'b011: result = AluOp1Norm(sel_a, sel_b, sel_c, i_shamt, i_opcode == 3'b011);
 		3'b100: result = AluOpMac(sel_a, sel_b, sel_c, i_shamt, i_opcode == 3'b100);
-		// 3'b101: result = AluOpNull();
 		// 3'b110: result = AluOpNull();
+		3'b110: result = AluLogic(sel_a, sel_b, sel_c, i_shamt, i_opcode == 3'b110);
 		3'b111: result = AluIdx(i_aofs, vector_blockofs, i_shamt);
 	endcase
 	for (int i = 0; i < VSIZE; i++) begin
