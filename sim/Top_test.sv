@@ -14,18 +14,19 @@
 
 // You should have received a copy of the GNU General Public License
 // along with MIMORI.  If not, see <http://www.gnu.org/licenses/>.
+`timescale 1ns/1ps
 `include "define.sv"
 `ifdef GATE_LEVEL
 `include "Top_syn_include.sv"
-`timescale 1ns/1ps
 `else
-`timescale 1ns/1ps
 `include "Top_include.sv"
 `endif
+`timescale 1ns/1ps
 import TauCfg::*;
 
-`define CLK 3
-`define HCLK 1.5
+`define CLK 10
+`define HCLK 5
+`define INPUT_DELAY 2
 
 module Top_test;
 
@@ -149,7 +150,11 @@ logic w_canack;
 `rdyack_logic(ra);
 `rdyack_logic(rd);
 `Pos(rst_out, i_rst)
+`ifdef GATE_LEVEL
+`PosIfDelayed(ck_ev, i_clk, i_rst, `INPUT_DELAY)
+`else
 `PosIf(ck_ev, i_clk, i_rst)
+`endif
 `WithFinish
 
 always #`HCLK i_clk = ~i_clk;
