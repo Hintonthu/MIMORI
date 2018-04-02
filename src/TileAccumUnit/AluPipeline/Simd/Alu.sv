@@ -262,7 +262,7 @@ function ResultType AluIdx;
 	input [WBW-1:0] i_bofs [VSIZE][VDIM];
 	input [4:0] i_shamt;
 	for (int i = 0; i < VSIZE; i++) begin
-		AluIdx[i] = i_shamt[2] ? i_bofs[i][i_shamt[2:0]] : i_aofs[i_shamt[2:0]];
+		AluIdx[i] = i_shamt[3] ? i_bofs[i][i_shamt[2:0]] : i_aofs[i_shamt[2:0]];
 	end
 endfunction
 
