@@ -1,5 +1,5 @@
 # Copyright
-# Yu Sheng Lin, 2016-2017
+# Yu Sheng Lin, 2016-2018
 # Yen Hsi Wang, 2017
 
 # This file is part of MIMORI.
@@ -52,6 +52,7 @@ def main():
 			npd.copyto(i_data[2], TEST_UMCFG["mboundary"][0])
 			npd.copyto(i_data[3], TEST_UMCFG["mboundary_lmwidth"][0])
 			i_data[4][0] = TEST_UMCFG["mlinear"][0]
+			i_data[5][0] = 1 if TEST_UMCFG["mwrap"][0] == UmiModel.MEM_WRAP else 0
 			test.Expect(tuple(
 				ans[k][:,newaxis] for k in ("cmd_type","islast","addr","ofs","len")
 			))
@@ -77,6 +78,7 @@ mrdy_bus, mack_bus, crdy_bus, cack_bus, mofs_bus, cmd_bus = CreateBuses([
 		(None , "i_mbound", (cfg.DIM,)),
 		(None , "i_mlast" , (cfg.DIM,)),
 		(None , "i_maddr"),
+		(None , "i_wrap"),
 	),
 	(
 		("dut", "o_cmd_type"),

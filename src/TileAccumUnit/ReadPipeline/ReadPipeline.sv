@@ -1,4 +1,4 @@
-// Copyright 2016
+// Copyright 2016-2018
 // Yu Sheng Lin
 // Yan Hsi Wang
 
@@ -47,6 +47,8 @@ module ReadPipeline(
 	i_local_pads,
 	i_local_bsubsteps,
 	i_local_mboundaries,
+	i_wrap,
+	i_pad_value,
 	i_id_begs,
 	i_id_ends,
 	i_stencil,
@@ -121,6 +123,8 @@ input [CCV_BW-1:0]  i_local_bit_swaps    [N_ICFG];
 input [CV_BW-1:0]   i_local_pads         [N_ICFG][DIM];
 input [LBW-1:0]     i_local_bsubsteps    [N_ICFG][CV_BW];
 input [LBW-1:0]     i_local_mboundaries  [N_ICFG][DIM];
+input [N_ICFG-1:0]  i_wrap;
+input [DBW-1:0]     i_pad_value [N_ICFG];
 input [ICFG_BW-1:0] i_id_begs [VDIM+1];
 input [ICFG_BW-1:0] i_id_ends [VDIM+1];
 input               i_stencil;
@@ -313,7 +317,8 @@ SramWriteCollector#(.LBW(LBW)) u_swc(
 	`rdyack_connect(alloc_linear, alloc_writer_linear),
 	.i_linear(alloc_writer_linear),
 	.i_linear_id(alloc_writer_linear_id),
-	.i_sizes(i_local_sizes),
+	.i_size(i_local_sizes[alloc_writer_linear_id]),
+	.i_padv(i_pad_value[alloc_writer_linear_id]),
 	`rdyack_connect(cmd, cal_writer_cmd),
 	.i_cmd_type(cal_writer_type),
 	.i_cmd_islast(cal_writer_islast),
@@ -355,6 +360,7 @@ ChunkAddrLooper#(.LBW(LBW)) u_cal_addr(
 	.i_mbound(i_global_mboundaries[ch_cmd_mid]),
 	.i_mlast(i_global_cboundaries[ch_cmd_mid]),
 	.i_maddr(i_global_linears[ch_cmd_mid]),
+	.i_wrap(i_wrap[ch_cmd_mid]),
 	`rdyack_connect(cmd, cal_addr),
 	.o_cmd_type(),
 	.o_cmd_islast(cal_addr_islast),
@@ -370,6 +376,7 @@ ChunkAddrLooper#(.LBW(LBW)) u_cal_cmd(
 	.i_mbound(i_global_mboundaries[ch_addr_mid]),
 	.i_mlast(i_global_cboundaries[ch_addr_mid]),
 	.i_maddr(i_global_linears[ch_addr_mid]),
+	.i_wrap(i_wrap[ch_addr_mid]),
 	`rdyack_connect(cmd, cal_writer_cmd),
 	.o_cmd_type(cal_writer_type),
 	.o_cmd_islast(cal_writer_islast),

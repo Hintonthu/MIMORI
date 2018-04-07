@@ -1,4 +1,4 @@
-// Copyright 2016
+// Copyright 2016-2018
 // Yu Sheng Lin
 
 // This file is part of MIMORI.
@@ -24,9 +24,11 @@ module ChunkRow(
 	i_row_linear,
 	i_row_islast,
 	i_row_pad,
+	i_row_valid,
 	i_l,
 	i_n,
 	i_bound,
+	i_wrap,
 	`rdyack_port(cmd),
 	o_cmd_type, // 0,1,2
 	o_cmd_islast,
@@ -54,9 +56,11 @@ localparam V_BW1 = $clog2(VSIZE+1);
 input [GBW-1:0]  i_row_linear;
 input            i_row_islast;
 input [V_BW-1:0] i_row_pad;
+input            i_row_valid;
 input [GBW-1:0]  i_l;
 input [GBW-1:0]  i_n;
 input [GBW-1:0]  i_bound;
+input            i_wrap;
 `rdyack_output(cmd);
 output logic [1:0]       o_cmd_type;
 output logic             o_cmd_islast;
@@ -69,6 +73,7 @@ output logic [V_BW1-1:0] o_cmd_len;
 //======================================
 `rdyack_logic(init_dst);
 `dval_logic(init);
+logic           invalid_line;
 logic [GBW-1:0] br;
 logic [GBW-1:0] l;
 logic [GBW-1:0] r;
@@ -116,24 +121,30 @@ FindFromLsb#(4,1) u_fsm(
 //======================================
 // Combinational
 //======================================
+//         0         br
+//         |--valid--|
+//    |------wanted------|
+//    l                  r
+assign invalid_line = !(i_row_valid || i_wrap);
 assign cmd_rdy = init_dst_rdy;
 assign work_todo = {has_pad, has_rborder, has_center, has_lborder} & ~work_done_r;
 assign o_cmd_addr = cur_bounded >> C_BW << C_BW;
 assign o_cmd_addrofs = cur_bounded[C_BW-1:0];
 always_comb begin
+	// if this is not a valid row, then we all values is left (b0~b1)
 	br = i_row_linear + i_bound;
 	// bl = i_row_linear;
-	l = i_row_linear + i_l; // l can be l.t. 0
+	l = i_row_linear + i_l; // i_l can be l.t. 0
 	r = l + i_n; // r can be l.t. 0
-	has_lborder = i_l[GBW-1]; // l negative?
-	if ($signed(r) < $signed(i_row_linear)) begin
+	has_lborder = i_l[GBW-1] || invalid_line; // l negative?
+	if ($signed(r) < $signed(i_row_linear) || invalid_line) begin
 		has_center = 1'b0; // r positive & l < boundary? (r already negative)
 		b0 = r;
 	end else begin
 		has_center = $signed(i_l) < $signed(i_bound); // r positive & l <= boundary?
 		b0 = i_row_linear;
 	end
-	if ($signed(r) <= $signed(br)) begin
+	if ($signed(r) <= $signed(br) || invalid_line) begin
 		has_rborder = 1'b0; // r > boundary?
 		b1 = r;
 	end else begin
@@ -149,7 +160,7 @@ always_comb begin
 		work_selected_r[0]: begin
 			b_curstage = b0;
 			cur_bounded = i_row_linear;
-			o_cmd_type = 'd1;
+			o_cmd_type = i_wrap ? 'd1 : 'd2;
 		end
 		work_selected_r[1]: begin
 			b_curstage = b1;
@@ -159,7 +170,7 @@ always_comb begin
 		work_selected_r[2]: begin
 			b_curstage = r;
 			cur_bounded = i_row_linear + i_bound - 'b1;
-			o_cmd_type = 'd1;
+			o_cmd_type = i_wrap ? 'd1 : 'd2;
 		end
 		default: begin
 			b_curstage = r; // don't care

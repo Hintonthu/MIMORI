@@ -1,4 +1,4 @@
-// Copyright 2017
+// Copyright 2017-2018
 // Yu Sheng Lin
 
 // This file is part of MIMORI.
@@ -26,10 +26,12 @@ module ChunkRowStart(
 	i_mbound,
 	i_mlast,
 	i_maddr,
+	i_wrap,
 	`rdyack_port(row),
 	o_row_linear,
 	o_row_islast,
-	o_row_pad
+	o_row_pad,
+	o_row_valid
 );
 
 //======================================
@@ -53,10 +55,12 @@ input [V_BW-1:0] i_mpad    [DIM];
 input [GBW-1:0]  i_mbound  [DIM];
 input [GBW-1:0]  i_mlast   [DIM];
 input [GBW-1:0]  i_maddr;
+input            i_wrap;
 `rdyack_output(row);
 output logic [GBW-1:0]  o_row_linear;
 output logic            o_row_islast;
 output logic [V_BW-1:0] o_row_pad;
+output logic            o_row_valid;
 
 //======================================
 // Internal
@@ -69,6 +73,7 @@ logic [GBW-1:0]  o_row_clamp   [DIM-1];
 logic [DIM-1:0]  o_routing_rev;
 logic [DIM-1:0]  o_routing_2d [1];
 logic [V_BW-1:0] o_row_pad_2d [1];
+logic [DIM-2:0]  o_row_valid_all;
 
 //======================================
 // Submodule
@@ -117,12 +122,22 @@ always_comb begin
 	for (int i = 0; i < DIM-1; i++) begin
 		o_row_unclamp[i] = o_cur_row[i] + i_mofs[i];
 		unique case (1'b1)
-			o_row_unclamp[i][GBW-1]:                             o_row_clamp[i] = '0; // sign bit (negative)
-			($signed(o_row_unclamp[i]) >= $signed(i_mbound[i])): o_row_clamp[i] = i_mbound[i]-i_mbound[i+1];
-			default:                                             o_row_clamp[i] = o_row_unclamp[i];
+			o_row_unclamp[i][GBW-1]: begin: neg_value
+				o_row_clamp[i] = '0;
+				o_row_valid_all[i] = 1'b0;
+			end
+			($signed(o_row_unclamp[i]) >= $signed(i_mbound[i])): begin: over_run
+				o_row_clamp[i] = i_mbound[i]-i_mbound[i+1];
+				o_row_valid_all[i] = 1'b0;
+			end
+			default: begin: normal_mode
+				o_row_clamp[i] = o_row_unclamp[i];
+				o_row_valid_all[i] = 1'b1;
+			end
 		endcase
 		o_row_linear = o_row_linear + o_row_clamp[i];
 	end
+	o_row_valid = i_wrap || (&o_row_valid_all);
 end
 
 endmodule

@@ -22,6 +22,7 @@ from functools import partial
 from numpy import newaxis
 import numpy as npd
 import bisect
+from os import environ
 i16 = npd.int16
 class npi(object): pass
 
@@ -115,7 +116,7 @@ class UmiModel(object):
 		'xor_src', 'xor_dst', 'xor_swap', # XOR scheme: TODO document
 	], [
 		DIM,1,2*VDIM,2*VDIM,2*VDIM,DIM,DIM,LG_VSIZE,
-		DIM,1,
+		1,1,
 		2*VDIM,2*VDIM,
 		DIM,
 		DIM,
@@ -444,7 +445,7 @@ class UmiModel(object):
 		rg = npi.arange(beg, end)
 		shape = (end-beg, UmiModel.VDIM)
 		bofs, aofs = npd.broadcast_to(bofs, shape), npd.broadcast_to(aofs, shape)
-		return self._BA2M(bofs, aofs, rg, um, False)
+		return self._BA2M(bofs, aofs, rg, um, False) + um['mstart'][rg]
 
 	def CreateVectorAddressTransaction(self, bofs, aofs, rg_flat, linear, um, is_local):
 		adr = npi.sum(self._BA2M(bofs, aofs, rg_flat, um, is_local), axis=1) + linear[rg_flat]
@@ -456,6 +457,7 @@ class UmiModel(object):
 		lma = um['lmpad'][idx]
 		mbo = um['mboundary'][idx]
 		mli = um['mlinear'][idx]
+		wrap = um['mwrap'][idx]
 		row_start = npi.indices(lmw[:-1]).reshape((self.DIM-1,-1)).T * mbo[1:] + mem_start[:-1]
 		row_start_clip = npd.clip(row_start, 0, mbo[:-1] - mbo[1:])
 		row_valid = npd.all(row_start == row_start_clip, axis=1)
@@ -465,7 +467,6 @@ class UmiModel(object):
 			axis=1
 		)
 		row_pad = lma[row_pad_idx]
-		# extend mode (only support this now)
 		req = list()
 		for line in range(row_start.shape[0]):
 			n = lmw[-1]
@@ -477,21 +478,28 @@ class UmiModel(object):
 			b0 = min((r, bl))
 			b1 = min((r, br))
 			b2 = r
-			while l < b0:
-				nxt = min((b0, l+self.VSIZE))
-				curlen = nxt-l
-				req.append((1, 0, bl&~DM, bl&DM, curlen))
-				l = nxt
-			while l < b1:
-				nxt = min((b1, (l|DM)+1, l+self.VSIZE))
-				curlen = nxt-l
-				req.append((0, 0, l&~DM, l&DM, curlen))
-				l = nxt
-			while l < b2:
-				nxt = min((b2, l+self.VSIZE))
-				curlen = nxt-l
-				req.append((1, 0, (br-1)&~DM, (br-1)&DM, curlen))
-				l = nxt
+			if row_valid[line] or wrap == UmiModel.MEM_WRAP:
+				while l < b0:
+					nxt = min((b0, l+self.VSIZE))
+					curlen = nxt-l
+					req.append((1, 0, bl&~DM, bl&DM, curlen))
+					l = nxt
+				while l < b1:
+					nxt = min((b1, (l|DM)+1, l+self.VSIZE))
+					curlen = nxt-l
+					req.append((0, 0, l&~DM, l&DM, curlen))
+					l = nxt
+				while l < b2:
+					nxt = min((b2, l+self.VSIZE))
+					curlen = nxt-l
+					req.append((1, 0, (br-1)&~DM, (br-1)&DM, curlen))
+					l = nxt
+			else:
+				while l < b2:
+					nxt = min((b2, l+self.VSIZE))
+					curlen = nxt-l
+					req.append((2, 0, bl&~DM, bl&DM, curlen))
+					l = nxt
 			if p != 0:
 				req.append((2, 0, req[-1][2], req[-1][3], p))
 		ret = npd.array(req, dtype=self.DRAM_RD_TXDTYPE)
@@ -566,13 +574,17 @@ um_i0 = npd.empty(1, UmiModel.UMCFG_DTYPE)
 um_i1 = npd.empty(1, UmiModel.UMCFG_DTYPE)
 um_o = npd.empty(1, UmiModel.UMCFG_DTYPE)
 
+try:
+	PAD = int(environ["PAD_VALUE"])
+except:
+	PAD = None
 p['total'] = [1,1,1,1,20,10]
 p['local'] = [1,1,1,1,16,8]
 p['vsize'] = [1,1,1,1,4,8]
 p['vshuf'] = [1,1,1,1,4,1]
 a['total'] = [1,1,1,1,3,3]
 a['local'] = [1,1,1,1,2,2]
-um_i0['mwrap'].fill(UmiModel.MEM_WRAP)
+um_i0['mwrap'].fill(UmiModel.MEM_WRAP if PAD is None else UmiModel.MEM_PAD)
 um_i0['mlinear'] = [0]
 um_i0['ustart'] = [[0,0,0,0,-1,-1,0,0,0,0,0,0],]
 um_i0['ustride'] = [[0,0,0,0,1,1,0,0,0,0,1,1],]
@@ -581,6 +593,7 @@ um_i0['lmwidth'] = [[1,1,17,9],]
 um_i0['lmalign'] = [[192,192,192,10],]
 um_i0['mwidth'] = [[1,1,100,301],]
 um_i0['xor_scheme'] = -1
+um_i0['pad_value'] = 0 if PAD is None else PAD
 
 um_i1['mwrap'].fill(UmiModel.MEM_WRAP)
 um_i1['mlinear'] = [100000]
@@ -603,7 +616,8 @@ cfg0 = UmiModel(p, a, um_i0, um_i1, um_o, insts, n_i0, n_i1, n_o, n_inst)
 def VerfFunc0(CSIZE):
 	# init
 	img = npd.random.randint(10, size=30100, dtype=i16)
-	conv = npd.arange(16, dtype=i16)
+	# conv = npd.arange(16, dtype=i16)
+	conv = npd.ones(16, dtype=i16)
 	result = npd.zeros(1000000, dtype=i16)
 	img_2d = npd.reshape(img[:30100], (100,301))
 	conv_2d = npd.reshape(conv[:9], (3,3))
@@ -618,17 +632,20 @@ def VerfFunc0(CSIZE):
 	for y in range(20):
 		for x in range(10):
 			yy, xx = npd.ogrid[y-1:y+2, x-1:x+2]
-			yy = npd.fmax(yy, 0)
-			xx = npd.fmax(xx, 0)
-			wind = img_2d[yy,xx]
+			yyy = npd.fmax(yy, 0)
+			xxx = npd.fmax(xx, 0)
+			wind = img_2d[yyy,xxx]
+			if not PAD is None:
+				wind[npd.logical_or(yyy != yy, xxx != xx)] = PAD
 			gold_2d[y,x] = (1 + npd.sum(wind * conv_2d, dtype=i16))
+	npd.savetxt("img.txt",    img_2d[:20,:10], "%d")
 	npd.savetxt("ans.txt",   gold_2d[:20,:10], "%d")
 	npd.savetxt("res.txt", result_2d[:20,:10], "%d")
 	for y in range(20):
 		for x in range(10):
 			gold = gold_2d[y,x]
 			got = result_2d[y,x]
-			assert gold == got, f"Error at pixel {y} {x}, {got} != {gold}, {wind}/{conv_2d}/{img_2d}"
+			assert gold == got, f"Error at pixel {y} {x}, {got} != {gold}"
 	result_2d[:20,:10] = 0
 	assert npd.all(result_2d == 0)
 	print("SimpConv test result successes")
@@ -977,7 +994,6 @@ sample_conf.append(cfg5)
 verf_func.append(VerfFunc5)
 
 try:
-	from os import environ
 	WHAT = int(environ["TEST_CFG"])
 except:
 	WHAT = 0

@@ -22,7 +22,8 @@ module SramWriteCollector(
 	`rdyack_port(alloc_linear),
 	i_linear,
 	i_linear_id,
-	i_sizes,
+	i_size,
+	i_padv,
 	`rdyack_port(cmd),
 	i_cmd_type,
 	i_cmd_islast,
@@ -67,7 +68,8 @@ localparam [READ_DIFF_BW-1:0] READ_PAD_ZERO = 0;
 `rdyack_input(alloc_linear);
 input [LBW-1:0]     i_linear;
 input [ICFG_BW-1:0] i_linear_id;
-input [LBW:0]       i_sizes       [N_ICFG];
+input [LBW:0]       i_size;
+input [DBW-1:0]     i_padv;
 `rdyack_input(cmd);
 input [1:0]        i_cmd_type;
 input              i_cmd_islast;
@@ -112,6 +114,7 @@ logic [LBW:0] filled_nxt;
 logic [LBW:0] filled_w;
 logic         fill_done;
 logic [LBW:0] size_r;
+logic [DBW-1:0] padv_r;
 logic [VSIZE-1:0] wmask;
 
 //======================================
@@ -206,7 +209,7 @@ always_comb begin
 			data_w[i] = data_1d_shiftr[DBW-1:0];
 		end
 		default: for (int i = 0; i < VSIZE; i++) begin
-			data_w[i] = '0;
+			data_w[i] = padv_r;
 		end
 	endcase
 end
@@ -218,10 +221,12 @@ end
 	o_linear <= '0;
 	o_id <= '0;
 	size_r <= '0;
+	padv_r <= '0;
 `ff_cg(alloc_linear_ack)
 	o_linear <= i_linear;
 	o_id <= i_linear_id;
-	size_r <= i_sizes[i_linear_id];
+	size_r <= i_size;
+	padv_r <= i_padv;
 `ff_end
 
 `ff_rst
