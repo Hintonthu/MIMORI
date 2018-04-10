@@ -1,3 +1,5 @@
+`ifndef __OFFSET_STAGE__
+`define __OFFSET_STAGE__
 // Copyright 2016 Yu Sheng Lin
 
 // This file is part of MIMORI.
@@ -15,7 +17,9 @@
 // You should have received a copy of the GNU General Public License
 // along with MIMORI.  If not, see <http://www.gnu.org/licenses/>.
 
-import TauCfg::*;
+`include "common/define.sv"
+`include "common/Controllers.sv"
+`include "common/ND.sv"
 
 module OffsetStage(
 	`clk_port,
@@ -110,4 +114,4 @@ AcceptIf u_ac(
 `ff_end
 
 endmodule
-
+`endif

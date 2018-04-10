@@ -1,6 +1,1 @@
-`include "define.sv"
-`include "common/ND.sv"
-`include "common/BitOperation.sv"
-`include "common/Controllers.sv"
-`include "common/OffsetStage.sv"
 `include "TileAccumUnit/CoreAccumLooper.sv"

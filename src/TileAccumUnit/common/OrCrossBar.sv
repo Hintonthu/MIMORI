@@ -1,3 +1,5 @@
+`ifndef __OR_CROSSBAR__
+`define __OR_CROSSBAR__
 // Copyright 2016 Yu Sheng Lin
 
 // This file is part of MIMORI.
@@ -54,3 +56,4 @@ always_comb begin
 end
 
 endmodule
+`endif

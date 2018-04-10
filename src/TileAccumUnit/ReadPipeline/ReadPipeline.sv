@@ -17,7 +17,14 @@
 // You should have received a copy of the GNU General Public License
 // along with MIMORI.  If not, see <http://www.gnu.org/licenses/>.
 
-import TauCfg::*;
+`include "common/define.sv"
+`include "common/Controllers.sv"
+`include "TileAccumUnit/ReadPipeline/Allocator.sv"
+`include "TileAccumUnit/ReadPipeline/ChunkAddrLooper/ChunkAddrLooper.sv"
+`include "TileAccumUnit/ReadPipeline/ChunkHead.sv"
+`include "TileAccumUnit/ReadPipeline/LinearCollector.sv"
+`include "TileAccumUnit/ReadPipeline/RemapCache/RemapCache.sv"
+`include "TileAccumUnit/ReadPipeline/SramWriteCollector.sv"
 
 module ReadPipeline(
 	`clk_port,

@@ -1,3 +1,5 @@
+`ifndef __ND__
+`define __ND__
 // Copyright 2016-2018 Yu Sheng Lin
 
 // This file is part of MIMORI.
@@ -14,6 +16,8 @@
 
 // You should have received a copy of the GNU General Public License
 // along with MIMORI.  If not, see <http://www.gnu.org/licenses/>.
+
+`include "common/BitOperation.sv"
 
 module NDAdder(
 	i_restart,
@@ -202,3 +206,4 @@ always_comb begin
 end
 
 endmodule
+`endif

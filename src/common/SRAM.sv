@@ -1,3 +1,5 @@
+`ifndef __SRAM__
+`define __SRAM__
 // Copyright 2016-2018 Yu Sheng Lin
 
 // This file is part of MIMORI.
@@ -15,9 +17,21 @@
 // You should have received a copy of the GNU General Public License
 // along with MIMORI.  If not, see <http://www.gnu.org/licenses/>.
 
-import SramCfg::*;
+`ifndef SRAM_GEN_MODE
+`define SRAM_GEN_MODE BEHAVIOUR
+`endif
+`ifndef SRAM_CON_RW
+`define SRAM_CON_RW UNDEF
+`endif
+package SramCfg;
+	typedef enum int {BEHAVIOUR, SYNOPSYS32} GenerateMode;
+	typedef enum int {UNDEF, OLD, NEW} ConcurrentRW;
+	parameter GenerateMode GEN_MODE = `SRAM_GEN_MODE;
+	parameter ConcurrentRW CON_RW = `SRAM_CON_RW;
+endpackage
 
-module SRAMDualPort(
+
+module SRAMTwoPort(
 	i_clk,
 	i_we,
 	i_re,
@@ -103,3 +117,4 @@ end else begin: fail
 end endgenerate
 
 endmodule
+`endif

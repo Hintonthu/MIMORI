@@ -15,7 +15,10 @@
 // You should have received a copy of the GNU General Public License
 // along with MIMORI.  If not, see <http://www.gnu.org/licenses/>.
 
-import TauCfg::*;
+`include "common/define.sv"
+`include "TileAccumUnit/AluPipeline/Simd/Alu.sv"
+`include "TileAccumUnit/AluPipeline/Simd/SimdTmpBuffer.sv"
+`include "TileAccumUnit/AluPipeline/Simd/SimdOperand.sv"
 
 module Simd(
 	`clk_port,
@@ -190,7 +193,7 @@ Alu u_alu(
 	`dval_connect(inst_commit, inst_commit)
 );
 
-SRAMDualPort#(.BW(FLAT_BW), .NDATA(NWORD)) u_register(
+SRAMTwoPort#(.BW(FLAT_BW), .NDATA(NWORD)) u_register(
 	.i_clk(i_clk),
 	.i_we(alu_reg_we_dval),
 	.i_re(op_reg_re),

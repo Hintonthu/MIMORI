@@ -16,7 +16,6 @@
 // You should have received a copy of the GNU General Public License
 // along with MIMORI.  If not, see <http://www.gnu.org/licenses/>.
 
-import TauCfg::*;
 
 module ChunkRow(
 	`clk_port,

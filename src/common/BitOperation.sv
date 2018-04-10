@@ -1,3 +1,5 @@
+`ifndef __BIT_OPERATION__
+`define __BIT_OPERATION__
 // Copyright 2016 Yu Sheng Lin
 
 // This file is part of MIMORI.
@@ -61,3 +63,4 @@ always_comb begin
 end
 
 endmodule
+`endif
