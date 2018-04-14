@@ -33,7 +33,7 @@ module Top(
 	i_aboundary,
 	i_i0_local_xor_masks,    // TODO: document
 	i_i0_local_xor_schemes,  // TODO: document
-	i_i0_local_bit_swaps,    // TODO: document
+	i_i0_local_xor_configs,    // TODO: document
 	i_i0_local_boundaries,   // memory multiplier (also boundary)
 	i_i0_local_bsubsteps,    // memory offsets for a warp
 	i_i0_local_pads,         // padding after each dimension
@@ -57,7 +57,7 @@ module Top(
 	i_i0_stencil_lut,
 	i_i1_local_xor_masks,
 	i_i1_local_xor_schemes,
-	i_i1_local_bit_swaps,
+	i_i1_local_xor_configs,
 	i_i1_local_boundaries,
 	i_i1_local_bsubsteps,
 	i_i1_local_pads,
@@ -157,8 +157,8 @@ input [WBW-1:0]     i_agrid_step     [VDIM];
 input [WBW-1:0]     i_agrid_end      [VDIM];
 input [WBW-1:0]     i_aboundary      [VDIM];
 input [CV_BW-1:0]   i_i0_local_xor_masks      [N_ICFG];
-input [CX_BW-1:0]   i_i0_local_xor_schemes    [N_ICFG][CV_BW];
-input [CCV_BW-1:0]  i_i0_local_bit_swaps      [N_ICFG];
+input [CCV_BW-1:0]  i_i0_local_xor_schemes    [N_ICFG][CV_BW];
+input [XOR_BW-1:0]  i_i0_local_xor_configs    [N_ICFG];
 input [LBW0-1:0]    i_i0_local_boundaries     [N_ICFG][DIM];
 input [LBW0-1:0]    i_i0_local_bsubsteps      [N_ICFG][CV_BW];
 input [CV_BW-1:0]   i_i0_local_pads           [N_ICFG][DIM];
@@ -181,8 +181,8 @@ input [ST_BW-1:0]   i_i0_stencil_begs [N_ICFG];
 input [ST_BW-1:0]   i_i0_stencil_ends [N_ICFG];
 input [LBW0-1:0]    i_i0_stencil_lut [STSIZE];
 input [CV_BW-1:0]   i_i1_local_xor_masks      [N_ICFG];
-input [CX_BW-1:0]   i_i1_local_xor_schemes    [N_ICFG][CV_BW];
-input [CCV_BW-1:0]  i_i1_local_bit_swaps      [N_ICFG];
+input [CCV_BW-1:0]  i_i1_local_xor_schemes    [N_ICFG][CV_BW];
+input [XOR_BW-1:0]  i_i1_local_xor_configs    [N_ICFG];
 input [LBW1-1:0]    i_i1_local_boundaries     [N_ICFG][DIM];
 input [LBW1-1:0]    i_i1_local_bsubsteps      [N_ICFG][CV_BW];
 input [CV_BW-1:0]   i_i1_local_pads           [N_ICFG][DIM];
@@ -263,7 +263,7 @@ TileAccumUnit u_tau(
 	.i_aboundary(i_aboundary),
 	.i_i0_local_xor_masks(i_i0_local_xor_masks),
 	.i_i0_local_xor_schemes(i_i0_local_xor_schemes),
-	.i_i0_local_bit_swaps(i_i0_local_bit_swaps),
+	.i_i0_local_xor_configs(i_i0_local_xor_configs),
 	.i_i0_local_boundaries(i_i0_local_boundaries),
 	.i_i0_local_bsubsteps(i_i0_local_bsubsteps),
 	.i_i0_local_pads(i_i0_local_pads),
@@ -287,7 +287,7 @@ TileAccumUnit u_tau(
 	.i_i0_stencil_lut(i_i0_stencil_lut),
 	.i_i1_local_xor_masks(i_i1_local_xor_masks),
 	.i_i1_local_xor_schemes(i_i1_local_xor_schemes),
-	.i_i1_local_bit_swaps(i_i1_local_bit_swaps),
+	.i_i1_local_xor_configs(i_i1_local_xor_configs),
 	.i_i1_local_boundaries(i_i1_local_boundaries),
 	.i_i1_local_bsubsteps(i_i1_local_bsubsteps),
 	.i_i1_local_pads(i_i1_local_pads),

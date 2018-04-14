@@ -1,4 +1,4 @@
-// Copyright 2016 Yu Sheng Lin
+// Copyright 2016-2018 Yu Sheng Lin
 
 // This file is part of MIMORI.
 
@@ -16,10 +16,12 @@
 // along with MIMORI.  If not, see <http://www.gnu.org/licenses/>.
 
 `include "common/define.sv"
+`include "TileAccumUnit/ReadPipeline/RemapCache/codegen/RemapCacheSwapUnit5.sv"
 
 module BankSramButterflyWriteIf(
 	i_xor_mask,
 	i_xor_scheme,
+	i_xor_config,
 	i_hiaddr,
 	i_data,
 	o_data
@@ -31,45 +33,48 @@ module BankSramButterflyWriteIf(
 parameter BW = 8;
 parameter NDATA = 32;
 parameter NBANK = 16;
-parameter XOR_BW = 4;
+parameter XOR_BW = TauCfg::XOR_BW;
 localparam CLOG2_NDATA = $clog2(NDATA);
 localparam CLOG2_NBANK = $clog2(NBANK);
-localparam CLOG2_XOR_BW = $clog2(XOR_BW);
+localparam CCLOG2_NBANK = $clog2(CLOG2_NBANK);
+localparam BANK_MASK = NBANK-1;
 
 //======================================
 // I/O
 //======================================
 input [CLOG2_NBANK-1:0]  i_xor_mask;
-input [CLOG2_XOR_BW-1:0] i_xor_scheme [CLOG2_NBANK];
-input [CLOG2_NDATA-1:0] i_hiaddr;
+input [CCLOG2_NBANK-1:0] i_xor_scheme [CLOG2_NBANK];
+input [XOR_BW-1:0]       i_xor_config;
+input [CLOG2_NDATA-1:0]  i_hiaddr;
 input        [BW-1:0] i_data [NBANK];
 output logic [BW-1:0] o_data [NBANK];
 
 //======================================
 // Internal
 //======================================
-logic [CLOG2_NBANK-1:0] butterfly;
-logic [CLOG2_NBANK-1:0] butterfly_masked;
-logic [BW-1:0] bf [CLOG2_NBANK+1][NBANK];
+logic [CLOG2_NBANK-1:0] i_flags;
 
 //======================================
 // Combinational
 //======================================
-always_comb begin
-	for (int i = 0; i < CLOG2_NBANK; ++i) begin
-		butterfly[i] = i_hiaddr[i_xor_scheme[i]];
-	end
-	butterfly_masked = i_xor_mask & butterfly;
-end
+`include "TileAccumUnit/ReadPipeline/RemapCache/rmc_common_include.sv"
+assign i_flags = XMask(i_hiaddr, i_xor_mask, i_xor_scheme);
 
-always_comb begin
-	bf[0] = i_data;
-	for (int i = 0; i < CLOG2_NBANK; ++i) begin
-		for (int j = 0; j < NBANK; ++j) begin
-			bf[i+1][j] = butterfly_masked[i] ? bf[i][j^(1<<i)] : bf[i][j];
-		end
+//======================================
+// Submodules
+//======================================
+// I give up. Let the code generator do it.
+generate if (CLOG2_NBANK == 5) begin: rmc_write_5
+	RemapCacheSwapUnit5#(BW) u_rmc_su(
+		.i_data(i_data),
+		.i_flags({i_flags, i_xor_config}),
+		.o_data(o_data)
+	);
+end else begin: rmc_write_error
+	initial begin
+		$display("Only support 32-way SIMD now.");
+		$finish;
 	end
-	o_data = bf[CLOG2_NBANK];
-end
+end endgenerate
 
 endmodule

@@ -23,7 +23,7 @@ from UmiModel import npi, npd, newaxis
 def main():
 	scb = Scoreboard("RemapCache")
 	test = scb.GetTest(f"test{RMC_CONF}")
-	st = Stacker(0, [test.Get])
+	st = Stacker(0, [lambda mat: npd.savetxt("rmc_got.txt", mat[0], fmt="%d"), test.Get])
 	wad_master = OneWire.Master(wad_dval_bus, wad_bus, ck_ev)
 	ra_master = TwoWire.Master(ra_rdy_bus, ra_ack_bus, ra_bus, ck_ev)
 	rd_slave = TwoWire.Slave(rd_rdy_bus, rd_ack_bus, rd_bus, ck_ev, callbacks=[st.Get])
@@ -32,9 +32,9 @@ def main():
 	yield rst_out_ev
 
 	# start simulation
-	cfg_bus.values[0][0] = XM
-	npd.copyto(cfg_bus.values[1], XS)
-	cfg_bus.values[2][0] = BS
+	cfg_bus.values.i_xor_masks[0] = BMASK
+	npd.copyto(cfg_bus.values.i_xor_schemes, XOR_SRC)
+	cfg_bus.values.i_xor_configs[0] = BROT
 	cfg_bus.Write()
 	yield ck_ev
 
@@ -51,9 +51,8 @@ def main():
 
 	NTEST = N_VEC*VSIZE-sum(STRIDES)-1
 	raddr = npi.arange(NTEST)[:, newaxis] + STEP
-	ans = npi.arange(NTEST)[:, newaxis] + DSTEP
 	st.Resize(NTEST)
-	test.Expect((ans,))
+	test.Expect((raddr,))
 	def IterRead():
 		for i in raddr:
 			ra_data[0][0] = 0
@@ -68,38 +67,33 @@ def main():
 
 VSIZE = 32
 CV_BW = 5
-SBXX = (
+SBXB = (
 	# (1) normal
 	([3,2,12,8,16], 0, 0, 0),
 	# (2) broadcast
 	([3,0,12,8,16], 0, 0, 0),
 	# (3) shuffle
-	([3,2,12,8,16], 1, 0, 0),
+	([12,24,48,1,2], 0, 0, 2),
 	# (4) shuffle+broadcast
-	([3,0,12,8,16], 1, 0, 0),
-	# (5) XOR+broadcast
-	([3,32,12,8,16], 0, 0b010, 0),
+	([12,8,16,3,0], 0, 0, 2),
+	# (5) xor
+	([4,8,16,32,64], 0b11000, [-1,-1,-1,0,1], 2),
+	# (6) xor+shuffle
+	([16,32,64,2,4], 0b00110, [-1,0,1,-1,-1], 0b010_01_0_01),
 )
 try:
 	from os import environ
 	RMC_CONF = int(environ["RMC_CONF"])
-	STRIDES, BS, XM, XS = SBXX[RMC_CONF]
 except:
 	RMC_CONF = 0
-	STRIDES, BS, XM, XS = SBXX[0]
 
+STRIDES, BMASK, XOR_SRC, BROT = SBXB[RMC_CONF]
 N_VEC = 10
 STEP = [0]
-DSTEP = [0]
 LS = len(STRIDES)
 for i in range(LS):
-	ii = i+BS
-	if ii >= LS:
-		ii -= LS
 	STEP = STEP + [j+STRIDES[i] for j in STEP]
-	DSTEP = DSTEP + [j+STRIDES[ii] for j in DSTEP]
 STEP = npi.array(STEP)
-DSTEP = npi.array(DSTEP)
 (
 	ra_rdy_bus, ra_ack_bus,
 	rd_rdy_bus, rd_ack_bus,
@@ -126,7 +120,7 @@ DSTEP = npi.array(DSTEP)
 	(
 		("dut", "i_xor_masks"  , (1,)),
 		(None , "i_xor_schemes", (1,CV_BW)),
-		(None , "i_bit_swaps"  , (1,)),
+		(None , "i_xor_configs", (1,)),
 	),
 ])
 rst_out_ev, ck_ev = CreateEvents(["rst_out", "ck_ev"])

@@ -218,8 +218,8 @@ class UmiModel(object):
 			no_extra_match = npd.bitwise_and(lo, strides) == 0
 			exact_match = npd.logical_and(has_match, no_extra_match)
 			ret[npd.any(exact_match, axis=1)] = i
-			hi = npd.roll(hi, 1, axis=1)
-			lo = npd.roll(lo, 1, axis=1)
+			hi = npd.roll(hi, -1, axis=1)
+			lo = npd.roll(lo, -1, axis=1)
 		return ret
 
 	@staticmethod
@@ -354,7 +354,7 @@ class UmiModel(object):
 	def add_lut(self, name, a):
 		limit = UmiModel.limits[name]
 		a = npi.array(a)
-		l = a.size
+		l = a.shape[0]
 		assert len(a.shape) == 1 and l <= limit
 		self.luts[name] = (l, a)
 
@@ -992,6 +992,67 @@ def VerfFunc5(CSIZE):
 
 sample_conf.append(cfg5)
 verf_func.append(VerfFunc5)
+
+##########
+## TEST 6
+##########
+n_i0 = ([0,0,0,0,0,0,0], [1,1,1,1,1,1,1])
+n_i1 = ([0,0,0,0,0,0,0], [0,0,0,0,0,0,0])
+n_o = ([0,0,0,0,0,0,0], [0,0,0,0,0,0,1])
+n_inst = ([0,0,0,0,0,0,0], [1,1,1,1,1,1,1])
+insts = npd.array([
+	# OOOSSSSSRDDTWWWAAAAABBBBBCCCCC
+	0b000000000000000000001000000000, # DRAM = I0+0 (DRAM)
+], dtype=npd.uint32)
+p = npd.empty(1, UmiModel.PCFG_DTYPE)
+a = npd.empty(1, UmiModel.ACFG_DTYPE)
+um_i0 = npd.empty(1, UmiModel.UMCFG_DTYPE)
+um_i1 = npd.empty(0, UmiModel.UMCFG_DTYPE)
+um_o = npd.empty(1, UmiModel.UMCFG_DTYPE)
+
+H, W = 33, 121
+H4, W4 = H//4, W//4
+p['total'] = [1,1,1,1,H4,W4]
+p['local'] = [1,1,1,1,4,32]
+p['vsize'] = [1,1,1,1,1,32]
+p['vshuf'] = [1,1,1,1,1,1]
+a['total'] = [1,1,1,1,1,1]
+a['local'] = [1,1,1,1,1,1]
+um_i0['mwrap'].fill(UmiModel.MEM_WRAP)
+um_i0['mlinear'] = [10000]
+um_i0['ustart'] = [[0,0,0,0,0,0,0,0,0,0,0,0],]
+um_i0['ustride'] = [[0,0,0,0,0,0,0,0,0,0,1,4],]
+um_i0['udim'] = [[0,0,0,0,0,0,0,0,0,0,1,3],]
+um_i0['lmwidth'] = [[1,4,1,125],]
+um_i0['lmalign'] = [[512,512,125,125],]
+um_i0['mwidth'] = [[1,H4,4,W],]
+um_i0['xor_scheme'] = [[0,1,-1,-1,-1],]
+um_o['mwrap'].fill(UmiModel.MEM_WRAP)
+um_o['mlinear'] = [300000]
+um_o['ustart'] = [[0,0,0,0,0,0,0,0,0,0,0,0],]
+um_o['ustride'] = [[0,0,0,0,0,0,0,0,0,0,1,1],]
+um_o['udim'] = [[0,0,0,0,0,0,0,0,0,0,2,3],]
+um_o['mwidth'] = [[1,1,H4,W4],]
+
+cfg6 = UmiModel(p, a, um_i0, um_i1, um_o, insts, n_i0, n_i1, n_o, n_inst)
+def VerfFunc6(CSIZE):
+	# init
+	hi_flat = npd.random.randint(10, size=10000, dtype=i16)
+	lo_flat = npd.zeros(2000, i16)
+	hi = npd.reshape(hi_flat[:H*W], (H,W))
+	lo = npd.reshape(lo_flat[:H4*W4], (H4,W4))
+	yield MemorySpace([
+		(10000, hi_flat),
+		(300000, lo_flat),
+	], CSIZE)
+	npd.savetxt("hi.txt", hi, "%d")
+	npd.savetxt("lo.txt", lo, "%d")
+	# check
+	assert npd.all(lo == hi[::4,::4])
+	print("Downsample test result successes")
+
+sample_conf.append(cfg6)
+verf_func.append(VerfFunc6)
 
 try:
 	WHAT = int(environ["TEST_CFG"])

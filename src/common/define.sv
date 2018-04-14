@@ -38,7 +38,6 @@ package TauCfg;
 	parameter VDIM = 6; // #DIM of parallelism/accumumation idx
 	parameter DIM = 4;  // #DIM of actual tensor
 	parameter CACHE_SIZE = 8;
-	parameter XOR_BW = 5; // inspect at most 5b for XOR scheme
 	parameter SRAM_NWORD = 64;
 	parameter WARP_REG_ADDR_SPACE = 8;
 	parameter MAX_WARP = 64;
@@ -50,6 +49,7 @@ package TauCfg;
 	parameter MAX_PENDING_BLOCK = 1023;
 	parameter MAX_PENDING_INST = 7;
 	// derived
+	localparam XOR_BW = 8; // this is a magic number for N=32
 	localparam ICFG_BW = $clog2(N_ICFG+1);
 	localparam OCFG_BW = $clog2(N_OCFG+1);
 	localparam INST_BW = $clog2(N_INST+1);
