@@ -17,4 +17,7 @@ set_output_delay [expr $CLK_PERIOD*0.1] -clock clk [all_outputs]
 set_load 0.05 [all_outputs]
 # Similarly, this should be calculated at APR, default = 1000.
 # However, 1000 causes a crazy delay, we must use a smaller one to help timing closure.
+set_max_area 0
+set_max_transition 30 [current_design]
+set_max_fanout [expr $CLK_PERIOD*0.3] [current_design]
 set high_fanout_net_threshold 60
