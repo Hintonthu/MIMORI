@@ -1,3 +1,5 @@
+`ifndef __ACCUMWARPLOOPER__
+`define __ACCUMWARPLOOPER__
 // Copyright 2016 Yu Sheng Lin
 
 // This file is part of MIMORI.
@@ -15,7 +17,14 @@
 // You should have received a copy of the GNU General Public License
 // along with MIMORI.  If not, see <http://www.gnu.org/licenses/>.
 
-import TauCfg::*;
+`include "common/define.sv"
+`include "common/Controllers.sv"
+`include "common/OffsetStage.sv"
+`include "common/ND.sv"
+`include "TileAccumUnit/common/AccumWarpLooper/AccumWarpLooperIndexStage.sv"
+`include "TileAccumUnit/common/AccumWarpLooper/AccumWarpLooperMemofsStage.sv"
+`include "TileAccumUnit/common/AccumWarpLooper/AccumWarpLooperStencilStage.sv"
+`include "TileAccumUnit/common/AccumWarpLooper/AccumWarpLooperVectorStage.sv"
 
 module AccumWarpLooper(
 	`clk_port,
@@ -62,6 +71,7 @@ parameter USE_LOFS = 0;
 localparam WBW = TauCfg::WORK_BW;
 localparam VDIM = TauCfg::VDIM;
 localparam DIM = TauCfg::DIM;
+localparam DIM_BW = TauCfg::DIM_BW;
 localparam VSIZE = TauCfg::VSIZE;
 localparam STSIZE = TauCfg::STENCIL_SIZE;
 localparam SS_BW = TauCfg::STRIDE_BW;
@@ -309,3 +319,4 @@ AccumWarpLooperVectorStage#(.N_CFG(N_CFG), .ABW(ABW)) u_s4_vofs(
 );
 
 endmodule
+`endif

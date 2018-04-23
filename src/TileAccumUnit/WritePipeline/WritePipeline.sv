@@ -15,7 +15,9 @@
 // You should have received a copy of the GNU General Public License
 // along with MIMORI.  If not, see <http://www.gnu.org/licenses/>.
 
-import TauCfg::*;
+`include "common/define.sv"
+`include "TileAccumUnit/common/AccumWarpLooper/AccumWarpLooper.sv"
+`include "TileAccumUnit/WritePipeline/DramWriteCollector/DramWriteCollector.sv"
 
 module WritePipeline(
 	`clk_port,

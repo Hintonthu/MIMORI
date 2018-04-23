@@ -8,26 +8,34 @@ shift amount
 
 # opcode OOO:
 
-* 000 a + ((b+c)     >> shamt)
-* 001 a + ((b-c)     >> shamt)
-* 010 a + ((b-c)^2   >> shamt)  * only lower 16 bit of b and c is used
-* 011 a + (|b-c|     >> shamt)
-* 100 a + ((b*c)     >> shamt)  * only lower 16 bit of b and c is used
-* 101 a+LUT[b](c>>shamt)        * similar to texture, BBBBB must be 0~7
-* 110
-	* shamt = 00000 bool(a) ? b : c
-	* shamt = 00001 reserved
-	* shamt = 00010 b>c     ? b : c , AAAAA should be 0XXXX, but XXXX has no effect
-	* shamt = 00011 b<c     ? b : c , AAAAA should be 0XXXX, but XXXX has no effect
-	* shamt = 001XX reserved
-	* shamt = 01XXX LOGIC_LUT[XXX](a,b,c)
-	* shamt = 1XXXX reserved
-* 111
-	* shamt = 00XXX aofs[0-5]
-	* shamt = 01XXX bofs[0-5]
-	* other shamt values are reserved, and XXX>5 is also invalid.
-	* AAAAA-CCCCC must be 0XXXX, but XXXX has no effect
-* 101 and 110 are not implemented yet
+* `000 a + ((b+c)     >> shamt)`
+* `001 a + ((b-c)     >> shamt)`
+* `010 a + ((b-c)^2   >> shamt)` ; only lower 16 bit of b and c is used
+* `011 a + (|b-c|     >> shamt)`
+* `100 a + ((b*c)     >> shamt)` ; only lower 16 bit of b and c is used
+* `101`
+	* Table interpolation, similar to texture, BBBBB must be `0pqrr`.
+	* Define the lowest bits of `{c, 5'b0} >> shamt` as `yyyyzzzzz`.
+	* Define `S(m, nlll...) = {m^n}lll...`, ex: `S(1, 110) = 010`.
+	* This instruction gives an interpolation:
+		* `T0 = LUT[rr][S(p, yyyy)]`
+		* `T1 = LUT[rr][S(p, yyyy)+1]`
+		* `INTERP = T0*(32-zzzzz)+T1*zzzzz`
+		* result = `S(q, INTERP/32)`
+* `110`
+	* `shamt = 00000 bool(a) ? b : c`
+	* `shamt = 00001 max(a, b)` ; CCCCC should be `0xxxx`, which has no effect
+	* `shamt = 00010 min(a, c)` ; BBBBB should be `0xxxx`, which has no effect
+	* `shamt = 00011 min(max(a, b), c)`
+	* `shamt = 001xx` ; reserved
+	* `shamt = 01xxx LOGIC_LUT[xxx](a,b,c)`
+	* `shamt = 1xxxx` ; reserved
+* `111`
+	* `shamt = 00xxx aofs[0-5]`
+	* `shamt = 01xxx bofs[0-5]`
+	* other shamt values are reserved, and `xxx>5` is also invalid.
+	* `AAAAA-CCCCC` must be `0xxxx`, but `xxxx` has no effect.
+* `101` and `110` are partially implemented yet.
 
 # src operand format (AAAAA)~(CCCCC)
 

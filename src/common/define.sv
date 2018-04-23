@@ -1,3 +1,6 @@
+`ifndef __DEFINE__
+`define __DEFINE__
+
 `define rdyack_input(name) output logic name``_ack; input name``_rdy
 `define rdyack_output(name) output logic name``_rdy; input name``_ack
 `define rdyack_logic(name) logic name``_rdy, name``_ack
@@ -17,26 +20,6 @@
 `define ff_cg(cg) end else if (cg) begin
 `define ff_nocg end else begin
 `define ff_end end
-`define deffsm1(N,n,f1               ) typedef enum {f1,               N``_N}N;logic[N``_N-1:0]n``_r,n``_w;always_ff@(posedge i_clk or negedge i_rst)if(!i_rst)n``_r<='b1<<f1;else n``_r<=n``_w;
-`define deffsm2(N,n,f1,f2            ) typedef enum {f1,f2,            N``_N}N;logic[N``_N-1:0]n``_r,n``_w;always_ff@(posedge i_clk or negedge i_rst)if(!i_rst)n``_r<='b1<<f1;else n``_r<=n``_w;
-`define deffsm3(N,n,f1,f2,f3         ) typedef enum {f1,f2,f3,         N``_N}N;logic[N``_N-1:0]n``_r,n``_w;always_ff@(posedge i_clk or negedge i_rst)if(!i_rst)n``_r<='b1<<f1;else n``_r<=n``_w;
-`define deffsm4(N,n,f1,f2,f3,f4      ) typedef enum {f1,f2,f3,f4,      N``_N}N;logic[N``_N-1:0]n``_r,n``_w;always_ff@(posedge i_clk or negedge i_rst)if(!i_rst)n``_r<='b1<<f1;else n``_r<=n``_w;
-`define deffsm5(N,n,f1,f2,f3,f4,f5   ) typedef enum {f1,f2,f3,f4,f5,   N``_N}N;logic[N``_N-1:0]n``_r,n``_w;always_ff@(posedge i_clk or negedge i_rst)if(!i_rst)n``_r<='b1<<f1;else n``_r<=n``_w;
-`define deffsm6(N,n,f1,f2,f3,f4,f5,f6) typedef enum {f1,f2,f3,f4,f5,f6,N``_N}N;logic[N``_N-1:0]n``_r,n``_w;always_ff@(posedge i_clk or negedge i_rst)if(!i_rst)n``_r<='b1<<f1;else n``_r<=n``_w;
-`define fsm_to(n,f) n``_w[f] = 1'b1
-
-`ifndef SRAM_GEN_MODE
-`define SRAM_GEN_MODE BEHAVIOUR
-`endif
-`ifndef SRAM_CON_RW
-`define SRAM_CON_RW UNDEF
-`endif
-package SramCfg;
-	typedef enum int {BEHAVIOUR, SYNOPSYS32} GenerateMode;
-	typedef enum int {UNDEF, OLD, NEW} ConcurrentRW;
-	parameter GenerateMode GEN_MODE = `SRAM_GEN_MODE;
-	parameter ConcurrentRW CON_RW = `SRAM_CON_RW;
-endpackage
 
 package TauCfg;
 	parameter VSIZE = 32;
@@ -79,3 +62,4 @@ package TauCfg;
 	localparam BLOCK_PBW = $clog2(MAX_PENDING_BLOCK+1);
 	localparam INST_PBW = $clog2(MAX_PENDING_INST+1);
 endpackage
+`endif

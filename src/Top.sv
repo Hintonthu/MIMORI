@@ -15,7 +15,9 @@
 // You should have received a copy of the GNU General Public License
 // along with MIMORI.  If not, see <http://www.gnu.org/licenses/>.
 
-import TauCfg::*;
+`include "common/define.sv"
+`include "ParallelBlockLooper"
+`include "TileAccumUnit/TileAccumUnit.sv"
 
 module Top(
 	`clk_port,
@@ -45,6 +47,8 @@ module Top(
 	i_i0_bstrides_shamt,     // describe parallelism strides
 	i_i0_astrides_frac,      // describe accumulation strides
 	i_i0_astrides_shamt,     // describe accumulation strides
+	i_i0_wrap,               // padding or wrapping?
+	i_i0_pad_value,          // padding value
 	i_i0_id_begs,
 	i_i0_id_ends,
 	i_i0_stencil,
@@ -67,6 +71,8 @@ module Top(
 	i_i1_bstrides_shamt,
 	i_i1_astrides_frac,
 	i_i1_astrides_shamt,
+	i_i1_wrap,
+	i_i1_pad_value,
 	i_i1_id_begs,
 	i_i1_id_ends,
 	i_i1_stencil,
@@ -166,6 +172,8 @@ input [SF_BW-1:0]   i_i0_bstrides_frac        [N_ICFG][VDIM];
 input [SS_BW-1:0]   i_i0_bstrides_shamt       [N_ICFG][VDIM];
 input [SF_BW-1:0]   i_i0_astrides_frac        [N_ICFG][VDIM];
 input [SS_BW-1:0]   i_i0_astrides_shamt       [N_ICFG][VDIM];
+input [N_ICFG-1:0]  i_i0_wrap;
+input [DBW-1:0]     i_i0_pad_value [N_ICFG];
 input [ICFG_BW-1:0] i_i0_id_begs [VDIM+1];
 input [ICFG_BW-1:0] i_i0_id_ends [VDIM+1];
 input               i_i0_stencil;
@@ -188,6 +196,8 @@ input [SF_BW-1:0]   i_i1_bstrides_frac        [N_ICFG][VDIM];
 input [SS_BW-1:0]   i_i1_bstrides_shamt       [N_ICFG][VDIM];
 input [SF_BW-1:0]   i_i1_astrides_frac        [N_ICFG][VDIM];
 input [SS_BW-1:0]   i_i1_astrides_shamt       [N_ICFG][VDIM];
+input [N_ICFG-1:0]  i_i1_wrap;
+input [DBW-1:0]     i_i1_pad_value [N_ICFG];
 input [ICFG_BW-1:0] i_i1_id_begs [VDIM+1];
 input [ICFG_BW-1:0] i_i1_id_ends [VDIM+1];
 input               i_i1_stencil;
@@ -267,6 +277,8 @@ TileAccumUnit u_tau(
 	.i_i0_global_ashufs(i_i0_global_ashufs),
 	.i_i0_astrides_frac(i_i0_astrides_frac),
 	.i_i0_astrides_shamt(i_i0_astrides_shamt),
+	.i_i0_wrap(i_i0_wrap),
+	.i_i0_pad_value(i_i0_pad_value),
 	.i_i0_id_begs(i_i0_id_begs),
 	.i_i0_id_ends(i_i0_id_ends),
 	.i_i0_stencil(i_i0_stencil),
@@ -289,6 +301,8 @@ TileAccumUnit u_tau(
 	.i_i1_global_ashufs(i_i1_global_ashufs),
 	.i_i1_astrides_frac(i_i1_astrides_frac),
 	.i_i1_astrides_shamt(i_i1_astrides_shamt),
+	.i_i1_wrap(i_i1_wrap),
+	.i_i1_pad_value(i_i1_pad_value),
 	.i_i1_id_begs(i_i1_id_begs),
 	.i_i1_id_ends(i_i1_id_ends),
 	.i_i1_stencil(i_i1_stencil),

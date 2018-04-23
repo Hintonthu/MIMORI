@@ -15,6 +15,8 @@
 // You should have received a copy of the GNU General Public License
 // along with MIMORI.  If not, see <http://www.gnu.org/licenses/>.
 
+`include "common/define.sv"
+
 module BankSramButterflyWriteIf(
 	i_xor_mask,
 	i_xor_scheme,

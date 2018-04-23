@@ -1,5 +1,5 @@
 // Copyright
-// Yu Sheng Lin, 2016-2017
+// Yu Sheng Lin, 2016-2018
 // Yen Hsi Wang, 2017
 
 // This file is part of MIMORI.
@@ -17,7 +17,9 @@
 // You should have received a copy of the GNU General Public License
 // along with MIMORI.  If not, see <http://www.gnu.org/licenses/>.
 
-import TauCfg::*;
+`include "common/define.sv"
+`include "TileAccumUnit/ReadPipeline/ChunkAddrLooper/ChunkRowStart.sv"
+`include "TileAccumUnit/ReadPipeline/ChunkAddrLooper/ChunkRow.sv"
 
 module ChunkAddrLooper(
 	`clk_port,
@@ -27,6 +29,7 @@ module ChunkAddrLooper(
 	i_mbound,
 	i_mlast,
 	i_maddr,
+	i_wrap,
 	`rdyack_port(cmd),
 	o_cmd_type, // 0,1,2
 	o_cmd_islast,
@@ -59,6 +62,7 @@ input [V_BW-1:0] i_mpad    [DIM];
 input [GBW-1:0]  i_mbound  [DIM];
 input [GBW-1:0]  i_mlast   [DIM];
 input [GBW-1:0]  i_maddr;
+input            i_wrap;
 `rdyack_output(cmd);
 output logic [1:0]       o_cmd_type;
 output logic             o_cmd_islast;
@@ -79,11 +83,13 @@ output logic [V_BW1-1:0] o_cmd_len;
 logic [GBW-1:0]  s01_linear;
 logic            s01_rowlast;
 logic [V_BW-1:0] s01_pad;
+logic            s01_rvalid;
 logic [0:0]      s1_load_nxt;
 logic [1:0]      s1_load_new;
 logic [GBW-1:0]  s12_linear  [2];
 logic            s12_rowlast [2];
 logic [V_BW-1:0] s12_pad     [2];
+logic            s12_rvalid  [2];
 logic [1:0]       s23_cmd_type;
 logic             s23_cmd_blklast;
 logic [GBW-1:0]   s23_cmd_addr;
@@ -116,10 +122,12 @@ ChunkRowStart u_s0_row_start(
 	.i_mbound(i_mbound),
 	.i_mlast(i_mlast),
 	.i_maddr(i_maddr),
+	.i_wrap(i_wrap),
 	`rdyack_connect(row, s01),
 	.o_row_linear(s01_linear),
 	.o_row_islast(s01_rowlast),
-	.o_row_pad(s01_pad)
+	.o_row_pad(s01_pad),
+	.o_row_valid(s01_rvalid)
 );
 SFifoCtrl#(2) u_s1(
 	`clk_connect,
@@ -134,9 +142,11 @@ ChunkRow u_s2_row(
 	.i_row_linear(s12_linear[0]),
 	.i_row_islast(s12_rowlast[0]),
 	.i_row_pad(s12_pad[0]),
+	.i_row_valid(s12_rvalid[0]),
 	.i_l(i_mofs[DIM-1]),
 	.i_n(i_mlast[DIM-1]),
 	.i_bound(i_mbound[DIM-1]),
+	.i_wrap(i_wrap),
 	`rdyack_connect(cmd, s23),
 	.o_cmd_type(s23_cmd_type),
 	.o_cmd_islast(s23_cmd_blklast),
@@ -174,20 +184,24 @@ assign wait_fin_ack = cmd_blklast && cmd_ack;
 	s12_linear[0] <= '0;
 	s12_rowlast[0] <= 1'b0;
 	s12_pad[0] <= '0;
+	s12_rvalid[0] <= 1'b0;
 `ff_cg(s1_load_nxt[0] || s1_load_new[0])
 	s12_linear[0] <= s1_load_new[0] ? s01_linear : s12_linear[1];
 	s12_rowlast[0] <= s1_load_new[0] ? s01_rowlast : s12_rowlast[1];
 	s12_pad[0] <= s1_load_new[0] ? s01_pad : s12_pad[1];
+	s12_rvalid[0] <= s1_load_new[0] ? s01_rvalid : s12_rvalid[1];
 `ff_end
 
 `ff_rst
 	s12_linear[1] <= '0;
 	s12_rowlast[1] <= 1'b0;
 	s12_pad[1] <= '0;
+	s12_rvalid[1] <= 1'b0;
 `ff_cg(s1_load_new[1])
 	s12_linear[1] <= s01_linear;
 	s12_rowlast[1] <= s01_rowlast;
 	s12_pad[1] <= s01_pad;
+	s12_rvalid[1] <= s01_rvalid;
 `ff_end
 
 `ff_rst

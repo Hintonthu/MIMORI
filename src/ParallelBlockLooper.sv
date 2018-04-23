@@ -15,7 +15,8 @@
 // You should have received a copy of the GNU General Public License
 // along with MIMORI.  If not, see <http://www.gnu.org/licenses/>.
 
-import TauCfg::*;
+`include "common/define.sv"
+`include "common/Controllers.sv"
 
 module ParallelBlockLooper(
 	`clk_port,

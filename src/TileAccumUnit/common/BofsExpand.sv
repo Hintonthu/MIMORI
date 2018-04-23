@@ -1,3 +1,5 @@
+`ifndef __BOFS_EXPAND__
+`define __BOFS_EXPAND__
 // Copyright 2016 Yu Sheng Lin
 
 // This file is part of MIMORI.
@@ -14,8 +16,6 @@
 
 // You should have received a copy of the GNU General Public License
 // along with MIMORI.  If not, see <http://www.gnu.org/licenses/>.
-
-import TauCfg::*;
 
 module BofsExpand(
 	i_bofs,
@@ -63,3 +63,4 @@ always_comb begin
 end
 
 endmodule
+`endif

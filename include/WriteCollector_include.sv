@@ -1,7 +1,1 @@
-`include "define.sv"
-`include "common/BitOperation.sv"
-`include "common/Controllers.sv"
-`include "TileAccumUnit/common/OrCrossBar.sv"
-`include "TileAccumUnit/WritePipeline/DramWriteCollector/DramWriteCollectorAddrDecode.sv"
-`include "TileAccumUnit/WritePipeline/DramWriteCollector/DramWriteCollectorOutput.sv"
-`include "TileAccumUnit/WritePipeline/DramWriteCollector.sv"
+`include "TileAccumUnit/WritePipeline/DramWriteCollector/DramWriteCollector.sv"

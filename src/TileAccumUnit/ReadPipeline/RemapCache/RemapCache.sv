@@ -15,7 +15,9 @@
 // You should have received a copy of the GNU General Public License
 // along with MIMORI.  If not, see <http://www.gnu.org/licenses/>.
 
-import TauCfg::*;
+`include "common/SRAM.sv"
+`include "TileAccumUnit/ReadPipeline/RemapCache/BankSramReadIf.sv"
+`include "TileAccumUnit/ReadPipeline/RemapCache/BankSramWriteButterflyIf.sv"
 
 module RemapCache(
 	`clk_port,
@@ -122,7 +124,7 @@ BankSramButterflyWriteIf #(
 
 genvar gi;
 generate for (gi = 0; gi < VSIZE; gi++) begin: sram
-SRAMDualPort #(.BW(DBW), .NDATA(NDATA)) u_dp_sram(
+SRAMTwoPort #(.BW(DBW), .NDATA(NDATA)) u_dp_sram(
 	.i_clk(i_clk),
 	.i_we(wad_dval),
 	.i_re(sram_re[gi]),

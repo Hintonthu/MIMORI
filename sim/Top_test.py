@@ -132,6 +132,7 @@ def main():
 	)
 
 	i_data = cfg_master.values
+	CompressWrap = lambda x: npd.bitwise_or.reduce((x == UmiModel.MEM_WRAP).astype('i2') << npi.arange(x.shape[0]))
 	VL_IDX = slice(None), 1 << npi.arange(CV_BW)
 	npd.copyto(i_data.i_bgrid_step,    cfg.pcfg['local'][0])
 	npd.copyto(i_data.i_bgrid_end,     cfg.pcfg['end'][0])
@@ -158,6 +159,8 @@ def main():
 	npd.copyto(i_data.i_i0_bstrides_shamt,     cfg.umcfg_i0['ustride_shamt'][:,VDIM:])
 	npd.copyto(i_data.i_i0_astrides_frac,      cfg.umcfg_i0['ustride_frac' ][:,:VDIM])
 	npd.copyto(i_data.i_i0_astrides_shamt,     cfg.umcfg_i0['ustride_shamt'][:,:VDIM])
+	npd.copyto(i_data.i_i0_wrap,               CompressWrap(cfg.umcfg_i0['mwrap']))
+	npd.copyto(i_data.i_i0_pad_value,          cfg.umcfg_i0['pad_value'])
 	npd.copyto(i_data.i_i0_id_begs,            cfg.n_i0[0])
 	npd.copyto(i_data.i_i0_id_ends,            cfg.n_i0[1])
 	# TODO (begin)
@@ -184,6 +187,8 @@ def main():
 	npd.copyto(i_data.i_i1_bstrides_shamt,     cfg.umcfg_i1['ustride_shamt'][:,VDIM:])
 	npd.copyto(i_data.i_i1_astrides_frac,      cfg.umcfg_i1['ustride_frac' ][:,:VDIM])
 	npd.copyto(i_data.i_i1_astrides_shamt,     cfg.umcfg_i1['ustride_shamt'][:,:VDIM])
+	npd.copyto(i_data.i_i1_wrap,               CompressWrap(cfg.umcfg_i1['mwrap']))
+	npd.copyto(i_data.i_i1_pad_value,          cfg.umcfg_i1['pad_value'])
 	npd.copyto(i_data.i_i1_id_begs,            cfg.n_i1[0])
 	npd.copyto(i_data.i_i1_id_ends,            cfg.n_i1[1])
 	# TODO (begin)
@@ -291,6 +296,8 @@ w_bus, ra_bus, rd_bus, cfg_bus = CreateBuses([
 		(None   , "i_i0_bstrides_shamt"      , (N_I0CFG, VDIM,)),
 		(None   , "i_i0_astrides_frac"       , (N_I0CFG, VDIM,)),
 		(None   , "i_i0_astrides_shamt"      , (N_I0CFG, VDIM,)),
+		(None   , "i_i0_wrap"                , (N_I0CFG,)),
+		(None   , "i_i0_pad_value"           , (N_I0CFG,)),
 		(None   , "i_i0_id_begs"             , (VDIM+1,)),
 		(None   , "i_i0_id_ends"             , (VDIM+1,)),
 		(None   , "i_i0_stencil"),
@@ -313,6 +320,8 @@ w_bus, ra_bus, rd_bus, cfg_bus = CreateBuses([
 		(None   , "i_i1_bstrides_shamt"      , (N_I1CFG, VDIM,)),
 		(None   , "i_i1_astrides_frac"       , (N_I1CFG, VDIM,)),
 		(None   , "i_i1_astrides_shamt"      , (N_I1CFG, VDIM,)),
+		(None   , "i_i1_wrap"                , (N_I1CFG,)),
+		(None   , "i_i1_pad_value"           , (N_I1CFG,)),
 		(None   , "i_i1_id_begs"             , (VDIM+1,)),
 		(None   , "i_i1_id_ends"             , (VDIM+1,)),
 		(None   , "i_i1_stencil"),

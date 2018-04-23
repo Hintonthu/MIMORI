@@ -1,4 +1,4 @@
-// Copyright 2016 Yu Sheng Lin
+// Copyright 2016-2018 Yu Sheng Lin
 
 // This file is part of MIMORI.
 
@@ -15,7 +15,13 @@
 // You should have received a copy of the GNU General Public License
 // along with MIMORI.  If not, see <http://www.gnu.org/licenses/>.
 
-import TauCfg::*;
+`include "common/define.sv"
+`include "common/Controllers.sv"
+`include "DramArbiter/DramArbiter.sv"
+`include "TileAccumUnit/AccumBlockLooper.sv"
+`include "AluPipeline/AluPipeline.sv"
+`include "ReadPipeline/ReadPipeline.sv"
+`include "WritePipeline/WritePipeline.sv"
 
 module TileAccumUnit(
 	`clk_port,
@@ -45,6 +51,8 @@ module TileAccumUnit(
 	i_i0_global_ashufs,
 	i_i0_astrides_frac,
 	i_i0_astrides_shamt,
+	i_i0_wrap,
+	i_i0_pad_value,
 	i_i0_id_begs,
 	i_i0_id_ends,
 	i_i0_stencil,
@@ -67,6 +75,8 @@ module TileAccumUnit(
 	i_i1_global_ashufs,
 	i_i1_astrides_frac,
 	i_i1_astrides_shamt,
+	i_i1_wrap,
+	i_i1_pad_value,
 	i_i1_id_begs,
 	i_i1_id_ends,
 	i_i1_stencil,
@@ -166,6 +176,8 @@ input [SS_BW-1:0]   i_i0_bstrides_shamt     [N_ICFG][VDIM];
 input [DIM_BW-1:0]  i_i0_global_ashufs      [N_ICFG][VDIM];
 input [SF_BW-1:0]   i_i0_astrides_frac      [N_ICFG][VDIM];
 input [SS_BW-1:0]   i_i0_astrides_shamt     [N_ICFG][VDIM];
+input [N_ICFG-1:0]  i_i0_wrap;
+input [DBW-1:0]     i_i0_pad_value [N_ICFG];
 input [ICFG_BW-1:0] i_i0_id_begs [VDIM+1];
 input [ICFG_BW-1:0] i_i0_id_ends [VDIM+1];
 input               i_i0_stencil;
@@ -188,6 +200,8 @@ input [SS_BW-1:0]   i_i1_bstrides_shamt     [N_ICFG][VDIM];
 input [DIM_BW-1:0]  i_i1_global_ashufs      [N_ICFG][VDIM];
 input [SF_BW-1:0]   i_i1_astrides_frac      [N_ICFG][VDIM];
 input [SS_BW-1:0]   i_i1_astrides_shamt     [N_ICFG][VDIM];
+input [N_ICFG-1:0]  i_i1_wrap;
+input [DBW-1:0]     i_i1_pad_value [N_ICFG];
 input [ICFG_BW-1:0] i_i1_id_begs [VDIM+1];
 input [ICFG_BW-1:0] i_i1_id_ends [VDIM+1];
 input               i_i1_stencil;
@@ -399,6 +413,8 @@ ReadPipeline#(.LBW(LBW0)) u_r0(
 	.i_local_pads(i_i0_local_pads),
 	.i_local_bsubsteps(i_i0_local_bsubsteps),
 	.i_local_mboundaries(i_i0_local_boundaries),
+	.i_wrap(i_i0_wrap),
+	.i_pad_value(i_i0_pad_value),
 	.i_id_begs(i_i0_id_begs),
 	.i_id_ends(i_i0_id_ends),
 	.i_stencil(i_i0_stencil),
@@ -441,6 +457,8 @@ ReadPipeline#(.LBW(LBW1)) u_r1(
 	.i_local_pads(i_i1_local_pads),
 	.i_local_bsubsteps(i_i1_local_bsubsteps),
 	.i_local_mboundaries(i_i1_local_boundaries),
+	.i_wrap(i_i1_wrap),
+	.i_pad_value(i_i1_pad_value),
 	.i_id_begs(i_i1_id_begs),
 	.i_id_ends(i_i1_id_ends),
 	.i_stencil(i_i1_stencil),
