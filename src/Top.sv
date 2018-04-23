@@ -130,6 +130,7 @@ localparam XOR_BW = TauCfg::XOR_BW;
 localparam REG_ADDR = TauCfg::WARP_REG_ADDR_SPACE;
 localparam CONST_LUT = TauCfg::CONST_LUT;
 localparam CONST_TEX_LUT = TauCfg::CONST_TEX_LUT;
+localparam CONST_TEX_LUTSZ = TauCfg::CONST_TEX_LUTSZ;
 localparam STSIZE = TauCfg::STENCIL_SIZE;
 // derived
 localparam ICFG_BW = $clog2(N_ICFG+1);
@@ -219,7 +220,7 @@ input [INST_BW-1:0] i_inst_id_begs [VDIM+1];
 input [INST_BW-1:0] i_inst_id_ends [VDIM+1];
 input [ISA_BW-1:0]  i_insts [N_INST];
 input [TDBW-1:0]    i_consts [CONST_LUT];
-input [TDBW-1:0]    i_const_texs [CONST_TEX_LUT];
+input [TDBW-1:0]    i_const_texs [CONST_TEX_LUT][CONST_TEX_LUTSZ];
 input [REG_ABW-1:0] i_reg_per_warp;
 `rdyack_output(dramra);
 output [GBW-1:0] o_dramra;

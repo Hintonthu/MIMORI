@@ -71,6 +71,7 @@ localparam MAX_WARP = TauCfg::MAX_WARP;
 localparam REG_ADDR = TauCfg::WARP_REG_ADDR_SPACE;
 localparam CONST_LUT = TauCfg::CONST_LUT;
 localparam CONST_TEX_LUT = TauCfg::CONST_TEX_LUT;
+localparam CONST_TEX_LUTSZ = TauCfg::CONST_TEX_LUTSZ;
 localparam TBUF_SIZE = TauCfg::ALU_DELAY_BUF_SIZE;
 // derived
 localparam REG_ABW = $clog2(REG_ADDR);
@@ -87,7 +88,7 @@ typedef logic signed [TDBW-1:0] ResultType [VSIZE];
 `rdyack_input(op);
 input [CV_BW-1:0]    i_bsubofs [VSIZE][VDIM];
 input [CCV_BW-1:0]   i_bsub_lo_order  [VDIM];
-input [TDBW-1:0]     i_const_texs [CONST_TEX_LUT];
+input [TDBW-1:0]     i_const_texs [CONST_TEX_LUT][CONST_TEX_LUTSZ];
 input [2:0]          i_opcode;
 input [4:0]          i_shamt;
 input [WBW-1:0]      i_bofs [VDIM];
@@ -217,7 +218,7 @@ endfunction
 
 `DefineAluBodyBegin(AluOpSub)
 `DefineAluComputeBegin
-	AluOpSub[i] = src_op_a[i]+(src_op_b[i]-src_op_c[i])>>i_shamt;
+	AluOpSub[i] = src_op_a[i]+(src_op_b[i]-src_op_c[i])>>>i_shamt;
 `DefineAluComputeBodyEnd(AluOpSub)
 
 `DefineAluBodyBegin(AluOp2Norm)
@@ -225,7 +226,7 @@ endfunction
 	logic signed [2*DBW-1:0] mul [VSIZE];
 `DefineAluComputeBegin
 	diff[i] = src_op_b[i][DBW-1:0] - src_op_c[i][DBW-1:0];
-	mul[i] = (diff[i] * diff[i]) >> i_shamt;
+	mul[i] = (diff[i] * diff[i]) >>> i_shamt;
 	AluOp2Norm[i] = src_op_a[i] + mul[i][TDBW-1:0];
 `DefineAluComputeBodyEnd(AluOp2Norm)
 
@@ -235,7 +236,7 @@ endfunction
 `DefineAluComputeBegin
 	diff1[i] = src_op_b[i]-src_op_c[i];
 	diff2[i] = src_op_c[i]-src_op_b[i];
-	AluOp1Norm[i] = src_op_a[i] + (diff1[i] > 'sb0 ? diff1[i] : diff2[i])>>i_shamt;
+	AluOp1Norm[i] = src_op_a[i] + (diff1[i] > 'sb0 ? diff1[i] : diff2[i])>>>i_shamt;
 `DefineAluComputeBodyEnd(AluOp1Norm)
 
 `DefineAluBodyBegin(AluOpMac)
@@ -244,9 +245,41 @@ endfunction
 	mul[i] = (
 		$signed(src_op_b[i][DBW-1:0])*
 		$signed(src_op_c[i][DBW-1:0])
-	) >> i_shamt;
+	) >>> i_shamt;
 	AluOpMac[i] = src_op_a[i] + mul[i][TDBW-1:0];
 `DefineAluComputeBodyEnd(AluOpMac)
+
+`DefineAluBodyBegin(AluOpLUT)
+	localparam INTERP_BW = DBW+5;
+	logic p [VSIZE];
+	logic q [VSIZE];
+	logic [1:0] r [VSIZE];
+	logic [4:0] y [VSIZE];
+	logic [4:0] z [VSIZE];
+	logic signed [INTERP_BW-1:0] interp [VSIZE];
+	logic signed [TDBW:0] tmp_result [VSIZE];
+	logic [4:0] T0_idx [VSIZE];
+	logic [4:0] T1_idx [VSIZE];
+	logic signed [DBW-1:0] T0 [VSIZE];
+	logic signed [DBW-1:0] T1 [VSIZE];
+	logic signed [DBW+5-1:0] inst [VSIZE];
+`DefineAluComputeBegin
+	inst[i] = {{src_op_c[i][DBW-1:0]}, {5'b0}} >>> i_shamt;
+	y[i] = {1'b0, inst[i][8-:4]};
+	z[i] = inst[i][4-:5];
+	p[i] = src_op_b[i][3];
+	q[i] = src_op_b[i][2];
+	r[i] = src_op_b[i][1:0];
+	T0_idx[i] = {{p[i]^y[i][3]}, {y[i][2:0]}};
+	T0[i] = i_const_texs[r[i]][T0_idx[i]];
+	T1_idx[i] = {{p[i]^y[i][3]}, {y[i][2:0]}} + 5'b1;
+	T1[i] = i_const_texs[r[i]][T1_idx[i]];
+	interp[i] = (T0[i] << 5) + (T1[i]-T0[i])*z[i];
+	// overflow handling
+	tmp_result[i] = {{q[i]^interp[i][INTERP_BW-1]}, {interp[i][INTERP_BW-2:0] >>> 5}};
+	AluOpLUT[i] =  $signed(tmp_result[i][TDBW:0]);
+`DefineAluComputeBodyEnd(AluOpLUT)
+
 
 `DefineAluBodyBegin(AluLogic)
 `DefineAluComputeBegin
@@ -280,7 +313,7 @@ always_comb begin
 		3'b010: result = AluOp2Norm(sel_a, sel_b, sel_c, i_shamt, i_opcode == 3'b010);
 		3'b011: result = AluOp1Norm(sel_a, sel_b, sel_c, i_shamt, i_opcode == 3'b011);
 		3'b100: result = AluOpMac(sel_a, sel_b, sel_c, i_shamt, i_opcode == 3'b100);
-		// 3'b110: result = AluOpNull();
+		3'b101: result = AluOpLUT(sel_a, sel_b, sel_c, i_shamt, i_opcode == 3'b101);
 		3'b110: result = AluLogic(sel_a, sel_b, sel_c, i_shamt, i_opcode == 3'b110);
 		3'b111: result = AluIdx(i_aofs, vector_blockofs, i_shamt);
 	endcase

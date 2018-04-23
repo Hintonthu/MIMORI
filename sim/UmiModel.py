@@ -81,7 +81,7 @@ class UmiModel(object):
 	# please check define.sv
 	limits = {
 		"const": 4,
-		"texture": 4,
+		"texture": (4,17),
 		"stencil0": 31,
 		"stencil1": 31,
 	}
@@ -312,7 +312,8 @@ class UmiModel(object):
 		limit = UmiModel.limits[name]
 		a = npi.array(a)
 		l = a.shape[0]
-		assert len(a.shape) == 1 and l <= limit
+		assert len(a.shape) == len(limit)
+		assert all(_a <= _l for _a, _l in a.shape, limit)
 		self.luts[name] = (l, a)
 
 	def AllocSram(self, which, beg, end):
