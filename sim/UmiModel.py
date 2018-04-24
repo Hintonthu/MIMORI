@@ -911,8 +911,8 @@ um_i0 = npd.empty(1, UmiModel.UMCFG_DTYPE)
 um_i1 = npd.empty(0, UmiModel.UMCFG_DTYPE)
 um_o = npd.empty(1, UmiModel.UMCFG_DTYPE)
 
-H, W = 32, 64
-p['total'] = [1,1,1,1,H-2,W-2]
+H_grad, W_grad = 32, 64
+p['total'] = [1,1,1,1,H_grad-2,W_grad-2]
 p['local'] = [1,1,1,1,16,32]
 p['vsize'] = [1,1,1,1,1,32]
 p['vshuf'] = [1,1,1,1,1,1]
@@ -925,7 +925,7 @@ um_i0['ustride'] = [[0,0,0,0,1,1,0,0,0,0,1,1],]
 um_i0['udim'] = [[0,0,0,0,2,3,0,0,0,0,2,3],]
 um_i0['lmwidth'] = [[1,1,18,34],]
 um_i0['lmalign'] = [[640,640,640,34],]
-um_i0['mwidth'] = [[1,1,H,W],]
+um_i0['mwidth'] = [[1,1,H_grad,W_grad],]
 um_i0['xor_mask'] = 0
 um_i0['xor_config'] = 0
 um_o['mwrap'].fill(UmiModel.MEM_WRAP)
@@ -933,16 +933,17 @@ um_o['mlinear'] = [300000]
 um_o['ustart'] = [[0,0,0,0,0,0,0,0,0,0,0,0],]
 um_o['ustride'] = [[0,0,0,0,0,0,0,0,0,0,1,1],]
 um_o['udim'] = [[0,0,0,0,0,0,0,0,0,0,2,3],]
-um_o['mwidth'] = [[1,1,H,W],]
+um_o['mwidth'] = [[1,1,H_grad,W_grad],]
 
 cfg5 = UmiModel(p, a, um_i0, um_i1, um_o, insts, n_i0, n_i1, n_o, n_inst)
 cfg5.add_lut("stencil0", [1,69,34,36])
 def VerfFunc5(CSIZE):
 	# init
-	img_flat = npd.random.randint(10, size=W*H, dtype=i16)
-	gradm_flat = npd.zeros(W*H, i16)
-	img = npd.reshape(img_flat, (H,W))
-	gradm = npd.reshape(gradm_flat, (H,W))
+	img_flat = npi.arange(W_grad*H_grad, dtype=i16)
+	# img_flat = npd.random.randint(10, size=W_grad*H_grad, dtype=i16)
+	gradm_flat = npd.zeros(W_grad*H_grad, i16)
+	img = npd.reshape(img_flat, (H_grad,W_grad))
+	gradm = npd.reshape(gradm_flat, (H_grad,W_grad))
 	gradm_gold = npd.square(img[1:-1,2:]-img[1:-1,:-2]) + npd.square(img[2:,1:-1]-img[:-2,1:-1])
 	yield MemorySpace([
 		(10000, img_flat),
@@ -950,10 +951,10 @@ def VerfFunc5(CSIZE):
 	], CSIZE)
 	# check
 	npd.savetxt("grad_img.txt", img, fmt="%4d")
-	npd.savetxt("grad_result.txt", gradm[:H-2,:W-2], fmt="%4d")
+	npd.savetxt("grad_result.txt", gradm[:H_grad-2,:W_grad-2], fmt="%4d")
 	npd.savetxt("grad_gold.txt", gradm_gold, fmt="%4d")
-	assert npd.all(gradm_gold == gradm[:H-2,:W-2])
-	gradm[:H-2,:W-2] = 0
+	assert npd.all(gradm_gold == gradm[:H_grad-2,:W_grad-2])
+	gradm[:H_grad-2,:W_grad-2] = 0
 	assert not npd.any(gradm)
 	print("Gradient test result successes")
 
@@ -977,9 +978,9 @@ um_i0 = npd.empty(1, UmiModel.UMCFG_DTYPE)
 um_i1 = npd.empty(0, UmiModel.UMCFG_DTYPE)
 um_o = npd.empty(1, UmiModel.UMCFG_DTYPE)
 
-H, W = 33, 121
-H4, W4 = (H+3)//4, (W+3)//4
-p['total'] = [1,1,1,1,H4,W4]
+H_ds, W_ds = 33, 121
+H_ds4, W_ds4 = (H_ds+3)//4, (W_ds+3)//4
+p['total'] = [1,1,1,1,H_ds4,W_ds4]
 p['local'] = [1,1,1,1,4,32]
 p['vsize'] = [1,1,1,1,1,32]
 p['vshuf'] = [1,1,1,1,1,1]
@@ -992,7 +993,7 @@ um_i0['ustride'] = [[0,0,0,0,0,0,0,0,0,0,1,4],]
 um_i0['udim'] = [[0,0,0,0,0,0,0,0,0,0,1,3],]
 um_i0['lmwidth'] = [[1,4,1,125],]
 um_i0['lmalign'] = [[512,512,125,125],]
-um_i0['mwidth'] = [[1,H4,4,W],]
+um_i0['mwidth'] = [[1,H_ds4,4,W_ds],]
 um_i0['xor_mask'] = 0b11000
 um_i0['xor_src'] = [[-1,-1,-1,0,1],]
 um_i0['xor_config'] = 2
@@ -1001,15 +1002,15 @@ um_o['mlinear'] = [300000]
 um_o['ustart'] = [[0,0,0,0,0,0,0,0,0,0,0,0],]
 um_o['ustride'] = [[0,0,0,0,0,0,0,0,0,0,1,1],]
 um_o['udim'] = [[0,0,0,0,0,0,0,0,0,0,2,3],]
-um_o['mwidth'] = [[1,1,H4,W4],]
+um_o['mwidth'] = [[1,1,H_ds4,W_ds4],]
 
 cfg6 = UmiModel(p, a, um_i0, um_i1, um_o, insts, n_i0, n_i1, n_o, n_inst)
 def VerfFunc6(CSIZE):
 	# init
 	hi_flat = npd.random.randint(10, size=10000, dtype=i16)
 	lo_flat = npd.zeros(2000, i16)
-	hi = npd.reshape(hi_flat[:H*W], (H,W))
-	lo = npd.reshape(lo_flat[:H4*W4], (H4,W4))
+	hi = npd.reshape(hi_flat[:H_ds*W_ds], (H_ds,W_ds))
+	lo = npd.reshape(lo_flat[:H_ds4*W_ds4], (H_ds4,W_ds4))
 	yield MemorySpace([
 		(10000, hi_flat),
 		(300000, lo_flat),
