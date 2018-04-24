@@ -1,4 +1,4 @@
-// Copyright 2016 Yu Sheng Lin
+// Copyright 2016-2018 Yu Sheng Lin
 
 // This file is part of MIMORI.
 
@@ -23,7 +23,7 @@ module RemapCache(
 	`clk_port,
 	i_xor_masks,
 	i_xor_schemes,
-	i_bit_swaps,
+	i_xor_configs,
 	`rdyack_port(ra),
 	i_rid,
 	i_raddr,
@@ -50,7 +50,6 @@ localparam XOR_BW = TauCfg::XOR_BW;
 localparam ICFG_BW = $clog2(N_ICFG+1);
 localparam CV_BW = $clog2(VSIZE);
 localparam CCV_BW = $clog2(CV_BW+1);
-localparam CX_BW = $clog2(XOR_BW);
 localparam HBW = LBW-CV_BW;
 localparam NDATA = 1<<HBW;
 
@@ -59,8 +58,8 @@ localparam NDATA = 1<<HBW;
 //======================================
 `clk_input;
 input [CV_BW-1:0]   i_xor_masks   [N_ICFG];
-input [CX_BW-1:0]   i_xor_schemes [N_ICFG][CV_BW];
-input [CCV_BW-1:0]  i_bit_swaps   [N_ICFG];
+input [CCV_BW-1:0]  i_xor_schemes [N_ICFG][CV_BW];
+input [XOR_BW-1:0]  i_xor_configs [N_ICFG];
 `rdyack_input(ra);
 input [ICFG_BW-1:0] i_rid;
 input [LBW-1:0]     i_raddr [VSIZE];
@@ -89,16 +88,15 @@ BankSramReadIf #(
 	.BW(DBW),
 	.NDATA(NDATA),
 	.NBANK(VSIZE),
-	.XOR_BW(XOR_BW),
 	.ID_BW(ICFG_BW)
 ) u_rif (
 	`clk_connect,
 	`rdyack_connect(addrin, ra),
 	.i_xor_mask(i_xor_masks[i_rid]),
 	.i_xor_scheme(i_xor_schemes[i_rid]),
+	.i_xor_config(i_xor_configs[i_rid]),
 	.i_id(i_rid),
 	.i_raddr(i_raddr),
-	.i_bit_swap(i_bit_swaps[i_rid]),
 	.i_retire(i_retire),
 	`rdyack_connect(dout, rd),
 	.o_rdata(o_rdata),
@@ -112,11 +110,11 @@ BankSramReadIf #(
 BankSramButterflyWriteIf #(
 	.BW(DBW),
 	.NDATA(NDATA),
-	.NBANK(VSIZE),
-	.XOR_BW(XOR_BW)
+	.NBANK(VSIZE)
 ) u_wif (
 	.i_xor_mask(i_xor_masks[i_wid]),
 	.i_xor_scheme(i_xor_schemes[i_wid]),
+	.i_xor_config(i_xor_configs[i_wid]),
 	.i_hiaddr(i_whiaddr),
 	.i_data(i_wdata),
 	.o_data(sram_wd)

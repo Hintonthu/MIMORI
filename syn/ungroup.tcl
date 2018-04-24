@@ -32,7 +32,7 @@ foreach_in_collection d [get_designs { \
 	BroadcastInorder BroadcastInorder_* \
 	Broadcast Broadcast_* \
 	ForwardMulti ForwardMulti_* \
-	SRAMDualPort SRAMDualPort_* \
+	SRAMTwoPort SRAMTwoPort_* \
 	IdSelect IdSelect_* \
 	OneCycleInit Forward ForwardSlow
 }] {

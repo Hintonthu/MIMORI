@@ -105,17 +105,17 @@ class UmiModel(object):
 		'end'
 	], [VDIM,VDIM,VDIM])
 	UMCFG_DTYPE = ToIntTypes.__func__([
-		'mwidth', 'mlinear', 'ustart', 'ustride', 'udim', 'lmwidth', 'lmalign', 'xor_scheme', # user filled
-		'mwrap', 'pad_value', # user filled NOTE: padding not implemented
+		'mwidth', 'mlinear', 'ustart', 'ustride', 'udim', 'lmwidth', 'lmalign',
+		'mwrap', 'pad_value', # user filled
 		'ustride_frac', 'ustride_shamt', # derived from ustride
 		'mboundary', # derived from mwitdth
 		'mboundary_lmwidth', # derived from mboundary and lmdiwth
 		'mstart', # precomuted offsets
 		'lmpad', 'lmsize', # derived from lmwidth, lmalign
 		'vlinear', # precomputed vector addresses local/global for I/O
-		'xor_src', 'xor_dst', 'xor_swap', # XOR scheme: TODO document
+		'xor_mask', 'xor_src', 'xor_config', # XOR scheme: TODO document
 	], [
-		DIM,1,2*VDIM,2*VDIM,2*VDIM,DIM,DIM,LG_VSIZE,
+		DIM,1,2*VDIM,2*VDIM,2*VDIM,DIM,DIM,
 		1,1,
 		2*VDIM,2*VDIM,
 		DIM,
@@ -123,7 +123,7 @@ class UmiModel(object):
 		DIM,
 		DIM,1,
 		VSIZE,
-		LG_VSIZE,LG_VSIZE,1,
+		1,LG_VSIZE,1,
 	])
 	# cmd_type 0: fill addr[ofs:ofs+len] to SRAM
 	# cmd_type 1: repeat addr[ofs] len times to SRAM
@@ -197,32 +197,6 @@ class UmiModel(object):
 		)
 
 	@staticmethod
-	def _XorPosToSrc(pos):
-		return (1 << npd.fmax(0, pos+1)) >> 1 << UmiModel.LG_VSIZE
-
-	@staticmethod
-	def _XorPosToDst(pos):
-		b = 1 << npi.arange(pos.shape[1])
-		b = b[newaxis, :]
-		b[pos < 0] = 0
-		return b
-
-	@staticmethod
-	def _XorPosToSwap(strides):
-		ret = npi.zeros(strides.shape[0])
-		hi = 1 << npi.arange(UmiModel.LG_VSIZE)
-		hi = hi[newaxis,:]
-		lo = hi-1
-		for i in range(UmiModel.LG_VSIZE):
-			has_match = npd.bitwise_and(hi, strides) != 0
-			no_extra_match = npd.bitwise_and(lo, strides) == 0
-			exact_match = npd.logical_and(has_match, no_extra_match)
-			ret[npd.any(exact_match, axis=1)] = i
-			hi = npd.roll(hi, 1, axis=1)
-			lo = npd.roll(lo, 1, axis=1)
-		return ret
-
-	@staticmethod
 	def _CountBlockRoutine(ref_local, ref_end=None):
 		"""
 			Input:
@@ -239,19 +213,6 @@ class UmiModel(object):
 			ref_ofs *= ref_local
 		n_ref = ref_ofs.shape[0]
 		return n_ref, ref_ofs
-
-	def _ValidateXorScheme(self, umcfg):
-		# which bit do you flip?
-		st = umcfg['vlinear'][:,(1<<npi.arange(self.LG_VSIZE))]
-		xors = st & (st^(st-1))
-		or_xors = npd.bitwise_xor.reduce(xors, axis=1)
-		# check
-		lo_dst = npd.bitwise_or.reduce(umcfg['xor_dst'], axis=1)
-		hi_src = npd.bitwise_or.reduce(umcfg['xor_src'], axis=1)
-		masked_xors = (or_xors & ~hi_src)
-		assert npd.all(or_xors == npd.sum(xors))
-		assert npd.all((or_xors & lo_dst) == 0)
-		assert npd.all((masked_xors & self.VSIZE_MASK) == masked_xors)
 
 	def _InitUmcfg(self, umcfg, n, is_local):
 		# layout of umcfg
@@ -272,10 +233,6 @@ class UmiModel(object):
 		# Calculate vector related
 		if is_local:
 			umcfg['vlinear'] = npd.dot(self._CalStride(umcfg, True), self.v_nd.T)
-			umcfg['xor_dst'] = self._XorPosToDst(umcfg['xor_scheme'])
-			umcfg['xor_src'] = self._XorPosToSrc(umcfg['xor_scheme'])
-			umcfg['xor_swap'] = self._XorPosToSwap(umcfg['vlinear'][:,(1<<npi.arange(self.LG_VSIZE))])
-			self._ValidateXorScheme(umcfg)
 		else:
 			umcfg['vlinear'] = npd.dot(self._CalStride(umcfg, False), self.v_nd.T)
 		for i in range(n_total):
@@ -354,7 +311,7 @@ class UmiModel(object):
 	def add_lut(self, name, a):
 		limit = UmiModel.limits[name]
 		a = npi.array(a)
-		l = a.size
+		l = a.shape[0]
 		assert len(a.shape) == 1 and l <= limit
 		self.luts[name] = (l, a)
 
@@ -592,7 +549,8 @@ um_i0['udim'] = [[0,0,0,0,2,3,0,0,0,0,2,3],]
 um_i0['lmwidth'] = [[1,1,17,9],]
 um_i0['lmalign'] = [[192,192,192,10],]
 um_i0['mwidth'] = [[1,1,100,301],]
-um_i0['xor_scheme'] = -1
+um_i0['xor_mask'] = 0
+um_i0['xor_config'] = 0
 um_i0['pad_value'] = 0 if PAD is None else PAD
 
 um_i1['mwrap'].fill(UmiModel.MEM_WRAP)
@@ -603,7 +561,8 @@ um_i1['udim'] = [[0,0,0,0,2,3,0,0,0,0,0,0],]
 um_i1['lmwidth'] = [[1,1,2,2],]
 um_i1['lmalign'] = [[32,32,32,2],]
 um_i1['mwidth'] = [[1,1,3,3],]
-um_i1['xor_scheme'] = -1
+um_i1['xor_mask'] = 0
+um_i1['xor_config'] = 0
 
 um_o['mwrap'].fill(UmiModel.MEM_WRAP)
 um_o['mlinear'] = [300000]
@@ -685,7 +644,9 @@ um_i0['udim'] = [[0,0,0,0,0,3,0,0,0,0,0,2],]
 um_i0['lmwidth'] = [[1,1,32,32],]
 um_i0['lmalign'] = [[1024,1024,1024,32],]
 um_i0['mwidth'] = [[1,1,100,100],]
-um_i0['xor_scheme'] = [[0,1,2,3,4],]
+um_i0['xor_mask'] = 0b11111
+um_i0['xor_src'] = [[0,1,2,3,4],]
+um_i0['xor_config'] = 0
 um_o['mwrap'].fill(UmiModel.MEM_WRAP)
 um_o['mlinear'] = [300000]
 um_o['ustart'] = [[0,0,0,0,0,0,0,0,0,0,0,0],]
@@ -748,7 +709,8 @@ um_i0['udim'] = [[0,0,0,0,0,3,0,0,0,0,2,0],]
 um_i0['lmwidth'] = [[1,1,64,16],]
 um_i0['lmalign'] = [[1024,1024,1024,16],]
 um_i0['mwidth'] = [[1,1,128,64],]
-um_i0['xor_scheme'] = -1
+um_i0['xor_mask'] = 0
+um_i0['xor_config'] = 0
 um_i1['mlinear'] = [100000]
 um_i1['ustart'] = [[0,0,0,0,0,0,0,0,0,0,0,0],]
 um_i1['ustride'] = [[0,0,0,0,0,1,0,0,0,0,0,1],]
@@ -756,7 +718,8 @@ um_i1['udim'] = [[0,0,0,0,0,2,0,0,0,0,0,3],]
 um_i1['lmwidth'] = [[1,1,16,32],]
 um_i1['lmalign'] = [[512,512,512,32],]
 um_i1['mwidth'] = [[1,1,64,64],]
-um_i1['xor_scheme'] = -1
+um_i1['xor_mask'] = 0
+um_i1['xor_config'] = 0
 um_o['mwrap'].fill(UmiModel.MEM_WRAP)
 um_o['mlinear'] = [300000]
 um_o['ustart'] = [[0,0,0,0,0,0,0,0,0,0,0,0],]
@@ -821,7 +784,9 @@ um_i0['udim'] = [[0,0,0,0,2,3,0,0,2,3,2,3],]
 um_i0['lmwidth'] = [[1,1,15,15],]
 um_i0['lmalign'] = [[256,256,256,16],]
 um_i0['mwidth'] = [[1,1,50,50],]
-um_i0['xor_scheme'] = [[-1,-1,-1,0,1],]
+um_i0['xor_mask'] = 0b11000
+um_i0['xor_src'] = [[-1,-1,-1,0,1],]
+um_i0['xor_config'] = 0
 um_i1['mlinear'] = [100000]
 um_i1['ustart'] = [[0,0,0,0,0,0,0,0,0,0,0,0],]
 um_i1['ustride'] = [[0,0,0,0,1,1,0,0,8,8,0,0],]
@@ -829,7 +794,8 @@ um_i1['udim'] = [[0,0,0,0,2,3,0,0,2,3,0,0],]
 um_i1['lmwidth'] = [[1,1,8,8],]
 um_i1['lmalign'] = [[64,64,64,8],]
 um_i1['mwidth'] = [[1,1,32,32],]
-um_i1['xor_scheme'] = -1
+um_i1['xor_mask'] = 0
+um_i1['xor_config'] = 0
 um_o['mwrap'].fill(UmiModel.MEM_WRAP)
 um_o['mlinear'] = [300000]
 um_o['ustart'] = [[0,0,0,0,0,0,0,0,0,0,0,0],]
@@ -945,8 +911,8 @@ um_i0 = npd.empty(1, UmiModel.UMCFG_DTYPE)
 um_i1 = npd.empty(0, UmiModel.UMCFG_DTYPE)
 um_o = npd.empty(1, UmiModel.UMCFG_DTYPE)
 
-H, W = 32, 64
-p['total'] = [1,1,1,1,H-2,W-2]
+H_grad, W_grad = 32, 64
+p['total'] = [1,1,1,1,H_grad-2,W_grad-2]
 p['local'] = [1,1,1,1,16,32]
 p['vsize'] = [1,1,1,1,1,32]
 p['vshuf'] = [1,1,1,1,1,1]
@@ -959,23 +925,25 @@ um_i0['ustride'] = [[0,0,0,0,1,1,0,0,0,0,1,1],]
 um_i0['udim'] = [[0,0,0,0,2,3,0,0,0,0,2,3],]
 um_i0['lmwidth'] = [[1,1,18,34],]
 um_i0['lmalign'] = [[640,640,640,34],]
-um_i0['mwidth'] = [[1,1,H,W],]
-um_i0['xor_scheme'] = -1
+um_i0['mwidth'] = [[1,1,H_grad,W_grad],]
+um_i0['xor_mask'] = 0
+um_i0['xor_config'] = 0
 um_o['mwrap'].fill(UmiModel.MEM_WRAP)
 um_o['mlinear'] = [300000]
 um_o['ustart'] = [[0,0,0,0,0,0,0,0,0,0,0,0],]
 um_o['ustride'] = [[0,0,0,0,0,0,0,0,0,0,1,1],]
 um_o['udim'] = [[0,0,0,0,0,0,0,0,0,0,2,3],]
-um_o['mwidth'] = [[1,1,H,W],]
+um_o['mwidth'] = [[1,1,H_grad,W_grad],]
 
 cfg5 = UmiModel(p, a, um_i0, um_i1, um_o, insts, n_i0, n_i1, n_o, n_inst)
 cfg5.add_lut("stencil0", [1,69,34,36])
 def VerfFunc5(CSIZE):
 	# init
-	img_flat = npd.random.randint(10, size=W*H, dtype=i16)
-	gradm_flat = npd.zeros(W*H, i16)
-	img = npd.reshape(img_flat, (H,W))
-	gradm = npd.reshape(gradm_flat, (H,W))
+	img_flat = npi.arange(W_grad*H_grad, dtype=i16)
+	# img_flat = npd.random.randint(10, size=W_grad*H_grad, dtype=i16)
+	gradm_flat = npd.zeros(W_grad*H_grad, i16)
+	img = npd.reshape(img_flat, (H_grad,W_grad))
+	gradm = npd.reshape(gradm_flat, (H_grad,W_grad))
 	gradm_gold = npd.square(img[1:-1,2:]-img[1:-1,:-2]) + npd.square(img[2:,1:-1]-img[:-2,1:-1])
 	yield MemorySpace([
 		(10000, img_flat),
@@ -983,15 +951,79 @@ def VerfFunc5(CSIZE):
 	], CSIZE)
 	# check
 	npd.savetxt("grad_img.txt", img, fmt="%4d")
-	npd.savetxt("grad_result.txt", gradm[:H-2,:W-2], fmt="%4d")
+	npd.savetxt("grad_result.txt", gradm[:H_grad-2,:W_grad-2], fmt="%4d")
 	npd.savetxt("grad_gold.txt", gradm_gold, fmt="%4d")
-	assert npd.all(gradm_gold == gradm[:H-2,:W-2])
-	gradm[:H-2,:W-2] = 0
+	assert npd.all(gradm_gold == gradm[:H_grad-2,:W_grad-2])
+	gradm[:H_grad-2,:W_grad-2] = 0
 	assert not npd.any(gradm)
 	print("Gradient test result successes")
 
 sample_conf.append(cfg5)
 verf_func.append(VerfFunc5)
+
+##########
+## TEST 6
+##########
+n_i0 = ([0,0,0,0,0,0,0], [1,1,1,1,1,1,1])
+n_i1 = ([0,0,0,0,0,0,0], [0,0,0,0,0,0,0])
+n_o = ([0,0,0,0,0,0,0], [0,0,0,0,0,0,1])
+n_inst = ([0,0,0,0,0,0,0], [1,1,1,1,1,1,1])
+insts = npd.array([
+	# OOOSSSSSRDDTWWWAAAAABBBBBCCCCC
+	0b000000000000000000001000000000, # DRAM = I0+0 (DRAM)
+], dtype=npd.uint32)
+p = npd.empty(1, UmiModel.PCFG_DTYPE)
+a = npd.empty(1, UmiModel.ACFG_DTYPE)
+um_i0 = npd.empty(1, UmiModel.UMCFG_DTYPE)
+um_i1 = npd.empty(0, UmiModel.UMCFG_DTYPE)
+um_o = npd.empty(1, UmiModel.UMCFG_DTYPE)
+
+H_ds, W_ds = 33, 121
+H_ds4, W_ds4 = (H_ds+3)//4, (W_ds+3)//4
+p['total'] = [1,1,1,1,H_ds4,W_ds4]
+p['local'] = [1,1,1,1,4,32]
+p['vsize'] = [1,1,1,1,1,32]
+p['vshuf'] = [1,1,1,1,1,1]
+a['total'] = [1,1,1,1,1,1]
+a['local'] = [1,1,1,1,1,1]
+um_i0['mwrap'].fill(UmiModel.MEM_WRAP)
+um_i0['mlinear'] = [10000]
+um_i0['ustart'] = [[0,0,0,0,0,0,0,0,0,0,0,0],]
+um_i0['ustride'] = [[0,0,0,0,0,0,0,0,0,0,1,4],]
+um_i0['udim'] = [[0,0,0,0,0,0,0,0,0,0,1,3],]
+um_i0['lmwidth'] = [[1,4,1,125],]
+um_i0['lmalign'] = [[512,512,125,125],]
+um_i0['mwidth'] = [[1,H_ds4,4,W_ds],]
+um_i0['xor_mask'] = 0b11000
+um_i0['xor_src'] = [[-1,-1,-1,0,1],]
+um_i0['xor_config'] = 2
+um_o['mwrap'].fill(UmiModel.MEM_WRAP)
+um_o['mlinear'] = [300000]
+um_o['ustart'] = [[0,0,0,0,0,0,0,0,0,0,0,0],]
+um_o['ustride'] = [[0,0,0,0,0,0,0,0,0,0,1,1],]
+um_o['udim'] = [[0,0,0,0,0,0,0,0,0,0,2,3],]
+um_o['mwidth'] = [[1,1,H_ds4,W_ds4],]
+
+cfg6 = UmiModel(p, a, um_i0, um_i1, um_o, insts, n_i0, n_i1, n_o, n_inst)
+def VerfFunc6(CSIZE):
+	# init
+	hi_flat = npd.random.randint(10, size=10000, dtype=i16)
+	lo_flat = npd.zeros(2000, i16)
+	hi = npd.reshape(hi_flat[:H_ds*W_ds], (H_ds,W_ds))
+	lo = npd.reshape(lo_flat[:H_ds4*W_ds4], (H_ds4,W_ds4))
+	yield MemorySpace([
+		(10000, hi_flat),
+		(300000, lo_flat),
+	], CSIZE)
+	npd.savetxt("hi.txt", hi, "%d")
+	npd.savetxt("lo_gold.txt", hi[::4,::4], "%d")
+	npd.savetxt("lo.txt", lo, "%d")
+	# check
+	assert npd.all(lo == hi[::4,::4])
+	print("Downsample test result successes")
+
+sample_conf.append(cfg6)
+verf_func.append(VerfFunc6)
 
 try:
 	WHAT = int(environ["TEST_CFG"])

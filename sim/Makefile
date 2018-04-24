@@ -34,6 +34,7 @@ rmc:
 	-RMC_CONF=2 make COVERAGE=$(COV) RemapCache
 	-RMC_CONF=3 make COVERAGE=$(COV) RemapCache
 	-RMC_CONF=4 make COVERAGE=$(COV) RemapCache
+	-RMC_CONF=5 make COVERAGE=$(COV) RemapCache
 
 pbl:
 	make COVERAGE=$(COV) ParallelBlockLooper

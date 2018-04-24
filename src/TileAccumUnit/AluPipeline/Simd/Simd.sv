@@ -56,6 +56,7 @@ localparam MAX_WARP = TauCfg::MAX_WARP;
 localparam REG_ADDR = TauCfg::WARP_REG_ADDR_SPACE;
 localparam CONST_LUT = TauCfg::CONST_LUT;
 localparam CONST_TEX_LUT = TauCfg::CONST_TEX_LUT;
+localparam N_INST = TauCfg::N_INST;
 localparam TBUF_SIZE = TauCfg::ALU_DELAY_BUF_SIZE;
 // derived
 localparam INST_BW = $clog2(N_INST+1);

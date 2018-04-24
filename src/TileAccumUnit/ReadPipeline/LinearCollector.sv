@@ -37,6 +37,7 @@ module LinearCollector(
 //======================================
 parameter LBW = TauCfg::LOCAL_ADDR_BW0;
 localparam WBW = TauCfg::WORK_BW;
+localparam VDIM = TauCfg::VDIM;
 localparam N_ICFG = TauCfg::N_ICFG;
 // derived
 localparam ICFG_BW = $clog2(N_ICFG+1);

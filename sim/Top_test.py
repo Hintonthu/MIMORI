@@ -143,9 +143,9 @@ def main():
 	npd.copyto(i_data.i_agrid_step,    cfg.acfg['local'][0])
 	npd.copyto(i_data.i_agrid_end,     cfg.acfg['end'][0])
 	npd.copyto(i_data.i_aboundary,     cfg.acfg['total'][0])
-	npd.copyto(i_data.i_i0_local_xor_masks,    npd.bitwise_or.reduce(cfg.umcfg_i0['xor_dst'], axis=1))
-	npd.copyto(i_data.i_i0_local_xor_schemes,  cfg.umcfg_i0['xor_scheme'])
-	npd.copyto(i_data.i_i0_local_bit_swaps,    cfg.umcfg_i0['xor_swap'])
+	npd.copyto(i_data.i_i0_local_xor_masks,    cfg.umcfg_i0['xor_mask'])
+	npd.copyto(i_data.i_i0_local_xor_schemes,  cfg.umcfg_i0['xor_src'])
+	npd.copyto(i_data.i_i0_local_xor_configs,  cfg.umcfg_i0['xor_config'])
 	npd.copyto(i_data.i_i0_local_boundaries,   cfg.umcfg_i0['lmalign'])
 	npd.copyto(i_data.i_i0_local_bsubsteps,    cfg.umcfg_i0['vlinear'][VL_IDX])
 	npd.copyto(i_data.i_i0_local_pads,         cfg.umcfg_i0['lmpad'])
@@ -171,9 +171,9 @@ def main():
 		i_data.i_i0_stencil_ends[0] = N_SLUT0
 	npd.copyto(i_data.i_i0_stencil_lut, slut0)
 	# TODO (end)
-	npd.copyto(i_data.i_i1_local_xor_masks,    npd.bitwise_or.reduce(cfg.umcfg_i1['xor_dst'], axis=1))
-	npd.copyto(i_data.i_i1_local_xor_schemes,  cfg.umcfg_i1['xor_scheme'])
-	npd.copyto(i_data.i_i1_local_bit_swaps,    cfg.umcfg_i1['xor_swap'])
+	npd.copyto(i_data.i_i1_local_xor_masks,    cfg.umcfg_i1['xor_mask'])
+	npd.copyto(i_data.i_i1_local_xor_schemes,  cfg.umcfg_i1['xor_src'])
+	npd.copyto(i_data.i_i1_local_xor_configs,  cfg.umcfg_i1['xor_config'])
 	npd.copyto(i_data.i_i1_local_boundaries,   cfg.umcfg_i1['lmalign'])
 	npd.copyto(i_data.i_i1_local_bsubsteps,    cfg.umcfg_i1['vlinear'][VL_IDX])
 	npd.copyto(i_data.i_i1_local_pads,         cfg.umcfg_i1['lmpad'])
@@ -282,7 +282,7 @@ w_bus, ra_bus, rd_bus, cfg_bus = CreateBuses([
 		(None   , "i_aboundary"              , (VDIM,)),
 		(None   , "i_i0_local_xor_masks"     , (N_I0CFG,)),
 		(None   , "i_i0_local_xor_schemes"   , (N_I0CFG,CV_BW,)),
-		(None   , "i_i0_local_bit_swaps"     , (N_I0CFG,)),
+		(None   , "i_i0_local_xor_configs"   , (N_I0CFG,)),
 		(None   , "i_i0_local_boundaries"    , (N_I0CFG, DIM,)),
 		(None   , "i_i0_local_bsubsteps"     , (N_I0CFG, CV_BW,)),
 		(None   , "i_i0_local_pads"          , (N_I0CFG, DIM,)),
@@ -306,7 +306,7 @@ w_bus, ra_bus, rd_bus, cfg_bus = CreateBuses([
 		(None   , "i_i0_stencil_lut"         , (N_SLUT0,)),
 		(None   , "i_i1_local_xor_masks"     , (N_I1CFG,)),
 		(None   , "i_i1_local_xor_schemes"   , (N_I1CFG,CV_BW,)),
-		(None   , "i_i1_local_bit_swaps"     , (N_I1CFG,)),
+		(None   , "i_i1_local_xor_configs"   , (N_I1CFG,)),
 		(None   , "i_i1_local_boundaries"    , (N_I1CFG, DIM,)),
 		(None   , "i_i1_local_bsubsteps"     , (N_I1CFG, CV_BW,)),
 		(None   , "i_i1_local_pads"          , (N_I1CFG, DIM,)),

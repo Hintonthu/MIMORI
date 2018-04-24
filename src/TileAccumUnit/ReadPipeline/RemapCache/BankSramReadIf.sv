@@ -1,4 +1,4 @@
-// Copyright 2016 Yu Sheng Lin
+// Copyright 2016-2018 Yu Sheng Lin
 
 // This file is part of MIMORI.
 
@@ -23,9 +23,9 @@ module BankSramReadIf(
 	`rdyack_port(addrin),
 	i_xor_mask,
 	i_xor_scheme,
+	i_xor_config,
 	i_id,
 	i_raddr,
-	i_bit_swap,
 	i_retire,
 	`rdyack_port(dout),
 	o_rdata,
@@ -43,14 +43,14 @@ module BankSramReadIf(
 parameter BW = 8;
 parameter NDATA = 32;
 parameter NBANK = 16;
-parameter XOR_BW = 4;
 parameter ID_BW = 2;
+parameter XOR_BW = TauCfg::XOR_BW;
 localparam CLOG2_NDATA = $clog2(NDATA);
 localparam CLOG2_NBANK = $clog2(NBANK);
 localparam CCLOG2_NBANK = $clog2(CLOG2_NBANK+1);
 localparam ABW = CLOG2_NDATA+CLOG2_NBANK;
-localparam CLOG2_XOR_BW = $clog2(XOR_BW);
 localparam BANK_MASK = NBANK-1;
+localparam NBANK2 = NBANK/2;
 
 //======================================
 // I/O
@@ -58,12 +58,12 @@ localparam BANK_MASK = NBANK-1;
 input i_clk;
 input i_rst;
 `rdyack_input(addrin);
-input [CLOG2_NBANK-1:0]      i_xor_mask;
-input [CLOG2_XOR_BW-1:0]     i_xor_scheme [CLOG2_NBANK];
-input [ID_BW-1:0]            i_id;
-input [ABW-1:0]              i_raddr      [NBANK];
-input [CCLOG2_NBANK-1:0]     i_bit_swap;
-input                        i_retire;
+input [CLOG2_NBANK-1:0]  i_xor_mask;
+input [CCLOG2_NBANK-1:0] i_xor_scheme [CLOG2_NBANK];
+input [XOR_BW-1:0]       i_xor_config;
+input [ID_BW-1:0]        i_id;
+input [ABW-1:0]          i_raddr [NBANK];
+input                    i_retire;
 `rdyack_output(dout);
 output logic [BW-1:0] o_rdata [NBANK];
 `dval_output(free);
@@ -75,64 +75,74 @@ input        [BW         -1:0] i_sram_rdata [NBANK];
 //======================================
 // Internal
 //======================================
-logic s1_rdy_r;
-logic s1_rdy_w;
-logic [CLOG2_NBANK-1:0] butterfly [NBANK];
-logic [CLOG2_NBANK-1:0] lower     [NBANK];
-logic [CLOG2_NDATA-1:0] higher    [CLOG2_NBANK+1][NBANK];
-logic [CCLOG2_NBANK-1:0] s1_bit_swap_r;
-logic [CLOG2_NBANK-1:0] s1_lower_r [NBANK];
-logic [NBANK-1:0] ren [CLOG2_NBANK+1];
-logic [BW-1:0] rdata_w [CLOG2_NBANK+CCLOG2_NBANK+1][NBANK];
+logic [CLOG2_NBANK-1:0] i_bf_loaddr_rot [NBANK];
+logic [CLOG2_NDATA-1:0] i_bf_hiaddr [CLOG2_NBANK+1][NBANK];
+logic [CLOG2_NBANK-1:0] i_bf_loaddr [CLOG2_NBANK+1][NBANK];
+logic [NBANK-1:0] i_ren [CLOG2_NBANK+1];
+logic [NBANK-1:0] i_bf [CLOG2_NBANK];
 `rdyack_logic(s1);
-logic          s1_retire;
-logic          dout_retire;
+logic [NBANK-1:0] s1_bf [CLOG2_NBANK];
+logic [BW-1:0]    s1_bf_data [CLOG2_NBANK+1][NBANK];
+logic [ID_BW-1:0] s1_free_id;
+logic             s1_retire;
+logic dout_retire;
 
 //======================================
 // Combinational
 //======================================
+`include "TileAccumUnit/ReadPipeline/RemapCache/rmc_common_include.sv"
+`include "TileAccumUnit/ReadPipeline/RemapCache/codegen/RemapCacheLowRotate5.sv"
 assign free_dval = dout_retire && dout_ack;
-assign o_sram_re = addrin_ack ? ren[0] : '0;
-always_comb begin
-	for (int i = 0; i < NBANK; ++i) begin
-		for (int j = 0; j < CLOG2_NBANK; ++j) begin
-			butterfly[i][j] = i_raddr[i][CLOG2_NBANK+i_xor_scheme[j]];
+assign o_sram_re = addrin_ack ? i_ren[0] : '0;
+// I give up. Let the code generator do it.
+generate if (CLOG2_NBANK == 5) begin: rmc_read_5
+	always_comb begin
+		for (int i = 0; i < NBANK; ++i) begin
+			i_bf_loaddr_rot[i] = RemapCacheLowRotate5(i_raddr[i][CLOG2_NBANK-1:0], i_xor_config);
 		end
-		lower[i] = i_raddr[i][CLOG2_NBANK-1:0] ^ (i_xor_mask & butterfly[i]);
 	end
-end
+end else begin: rmc_read_error
+	initial begin
+		$display("Only support 32-way SIMD now.");
+		$finish;
+	end
+end endgenerate
 
 always_comb begin
 	for (int i = 0; i < NBANK; ++i) begin
-		higher[CLOG2_NBANK][i] = i_raddr[i][ABW-1 -: CLOG2_NDATA];
+		i_bf_hiaddr[CLOG2_NBANK][i] = i_raddr[i][ABW-1:CLOG2_NBANK];
+		i_bf_loaddr[CLOG2_NBANK][i] =
+			XMask(i_bf_hiaddr[CLOG2_NBANK][i], i_xor_mask, i_xor_scheme) ^
+			i_bf_loaddr_rot[i];
 	end
-	ren[CLOG2_NBANK] = '1;
+	// Butterfly (MSB -> LSB)
+	i_ren[CLOG2_NBANK] = '1;
 	for (int i = CLOG2_NBANK-1, m = 1<<i; i >= 0; --i, m >>= 1) begin
-		for (int j = 0, mj = 0; j < NBANK; ++j, mj = (j>>i)&1) begin
-			ren[i][j] =
-				lower[j  ][i] == mj && ren[i+1][j  ] ||
-				lower[j^m][i] == mj && ren[i+1][j^m];
-			higher[i][j] =
-				(lower[j  ][i] == mj ? higher[i+1][j  ] : '0) |
-				(lower[j^m][i] == mj ? higher[i+1][j^m] : '0);
+		for (int j = 0; j < NBANK; ++j) begin
+			 i_bf[i][j] = i_bf_loaddr[i+1][j][CLOG2_NBANK-1] ^ ((j>>i)&1);
+		end
+		for (int j = 0; j < NBANK; ++j) begin
+			i_ren[i][j] =
+				~i_bf[i][j  ] && i_ren[i+1][j  ] ||
+				 i_bf[i][j^m] && i_ren[i+1][j^m];
+			i_bf_hiaddr[i][j] =
+				(~i_bf[i][j  ] ? i_bf_hiaddr[i+1][j  ] : '0) |
+				( i_bf[i][j^m] ? i_bf_hiaddr[i+1][j^m] : '0);
+			i_bf_loaddr[i][j] = (
+				(~i_bf[i][j  ] ? i_bf_loaddr[i+1][j  ] : '0) |
+				( i_bf[i][j^m] ? i_bf_loaddr[i+1][j^m] : '0)
+			) << 1;
 		end
 	end
-	o_sram_raddr = higher[0];
+	o_sram_raddr = i_bf_hiaddr[0];
 end
 
 always_comb begin
-	rdata_w[0] = i_sram_rdata;
+	// Butterfly (LSB -> MSB)
+	s1_bf_data[0] = i_sram_rdata;
 	for (int i = 0, m = 1; i < CLOG2_NBANK; ++i, m <<= 1) begin
-		for (int j = 0, mj = 0; j < NBANK; ++j, mj = (j>>i)&1) begin
-			rdata_w[i+1][j] = s1_lower_r[j][i] == mj ? rdata_w[i][j] : rdata_w[i][j^m];
-		end
-	end
-	for (int ofs = 0, i = CLOG2_NBANK, s = 1; ofs < CCLOG2_NBANK; ++ofs, ++i, s <<= 1) begin
 		for (int j = 0; j < NBANK; ++j) begin
-			rdata_w[i+1][j] =
-				s1_bit_swap_r[ofs] ?
-				rdata_w[i][((j<<s)|(j>>CLOG2_NBANK-s)) & BANK_MASK] :
-				rdata_w[i][j];
+			s1_bf_data[i+1][j] = s1_bf[i][j] ? s1_bf_data[i][j^m] : s1_bf_data[i][j];
 		end
 	end
 end
@@ -155,27 +165,27 @@ Forward u_fwd_dat(
 // Sequential
 //======================================
 `ff_rst
-	for (int i = 0; i < NBANK; i++) begin
-		s1_lower_r[i] <= '0;
+	for (int i = 0; i < CLOG2_NBANK; i++) begin
+		s1_bf[i] <= '0;
 	end
-	s1_bit_swap_r <= '0;
-	o_free_id <= '0;
+	s1_free_id <= '0;
 	s1_retire <= 1'b0;
 `ff_cg(addrin_ack)
-	s1_lower_r <= lower;
-	s1_bit_swap_r <= i_bit_swap;
-	o_free_id <= i_id;
+	s1_bf <= i_bf;
+	s1_free_id <= i_id;
 	s1_retire <= i_retire;
 `ff_end
 
 `ff_rst
+	dout_retire <= 1'b0;
 	for (int i = 0; i < NBANK; i++) begin
 		o_rdata[i] <= '0;
 	end
-	dout_retire <= 1'b0;
+	o_free_id <= '0;
 `ff_cg(s1_ack)
-	o_rdata <= rdata_w[CLOG2_NBANK+CCLOG2_NBANK];
 	dout_retire <= s1_retire;
+	o_rdata <= s1_bf_data[CLOG2_NBANK];
+	o_free_id <= s1_free_id;
 `ff_end
 
 endmodule
