@@ -978,7 +978,7 @@ um_i1 = npd.empty(0, UmiModel.UMCFG_DTYPE)
 um_o = npd.empty(1, UmiModel.UMCFG_DTYPE)
 
 H, W = 33, 121
-H4, W4 = H//4, W//4
+H4, W4 = (H+3)//4, (W+3)//4
 p['total'] = [1,1,1,1,H4,W4]
 p['local'] = [1,1,1,1,4,32]
 p['vsize'] = [1,1,1,1,1,32]
@@ -1015,6 +1015,7 @@ def VerfFunc6(CSIZE):
 		(300000, lo_flat),
 	], CSIZE)
 	npd.savetxt("hi.txt", hi, "%d")
+	npd.savetxt("lo_gold.txt", hi[::4,::4], "%d")
 	npd.savetxt("lo.txt", lo, "%d")
 	# check
 	assert npd.all(lo == hi[::4,::4])
