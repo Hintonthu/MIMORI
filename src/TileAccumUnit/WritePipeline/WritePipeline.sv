@@ -57,6 +57,7 @@ localparam WBW = TauCfg::WORK_BW;
 localparam GBW = TauCfg::GLOBAL_ADDR_BW;
 localparam DBW = TauCfg::DATA_BW;
 localparam DIM = TauCfg::DIM;
+localparam VDIM = TauCfg::VDIM;
 localparam N_OCFG = TauCfg::N_OCFG;
 localparam VSIZE = TauCfg::VSIZE;
 localparam CSIZE = TauCfg::CACHE_SIZE;
