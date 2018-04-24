@@ -16,7 +16,7 @@
 // along with MIMORI.  If not, see <http://www.gnu.org/licenses/>.
 
 `include "common/define.sv"
-`include "ParallelBlockLooper"
+`include "ParallelBlockLooper.sv"
 `include "TileAccumUnit/TileAccumUnit.sv"
 
 module Top(

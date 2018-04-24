@@ -194,7 +194,7 @@ always_comb begin
 		reach_boundary = step_exceed;
 	end
 	len = cur_w - cur_r;
-	o_cmd_len = work_selected_r[3] ? i_row_pad : len[V_BW1-1:0];
+	o_cmd_len = work_selected_r[3] ? {1'b0, i_row_pad} : len[V_BW1-1:0];
 	advance_state = work_selected_r[3] || reach_boundary;
 	work_fin = advance_state && work_sel[4];
 	o_cmd_islast = work_fin && i_row_islast;

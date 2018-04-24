@@ -17,11 +17,11 @@
 
 `include "common/define.sv"
 `include "common/Controllers.sv"
-`include "DramArbiter/DramArbiter.sv"
 `include "TileAccumUnit/AccumBlockLooper.sv"
-`include "AluPipeline/AluPipeline.sv"
-`include "ReadPipeline/ReadPipeline.sv"
-`include "WritePipeline/WritePipeline.sv"
+`include "TileAccumUnit/DramArbiter.sv"
+`include "TileAccumUnit/AluPipeline/AluPipeline.sv"
+`include "TileAccumUnit/ReadPipeline/ReadPipeline.sv"
+`include "TileAccumUnit/WritePipeline/WritePipeline.sv"
 
 module TileAccumUnit(
 	`clk_port,

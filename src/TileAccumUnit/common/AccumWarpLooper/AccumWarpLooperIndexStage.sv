@@ -1,3 +1,5 @@
+`ifndef __ACCUM_WARP_LOOPER_INDEX_STAGE__
+`define __ACCUM_WARP_LOOPER_INDEX_STAGE__
 // Copyright 2016 Yu Sheng Lin
 
 // This file is part of MIMORI.
@@ -243,3 +245,4 @@ NDAdder#(.BW(WBW), .DIM(VDIM), .FROM_ZERO(0), .UNIT_STRIDE(1)) u_adder(
 `ff_end
 
 endmodule
+`endif
