@@ -17,6 +17,7 @@ all_sub:
 	-make COVERAGE=$(COV) wc
 	-make COVERAGE=$(COV) cal
 	-make COVERAGE=$(COV) alloc
+	-make COVERAGE=$(COV) rmc
 	-make COVERAGE=$(COV) chal
 
 wc:

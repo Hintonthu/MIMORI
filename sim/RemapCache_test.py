@@ -1,4 +1,4 @@
-# Copyright 2016-2017 Yu Sheng Lin
+# Copyright 2016-2018 Yu Sheng Lin
 
 # This file is part of MIMORI.
 
@@ -15,7 +15,7 @@
 # You should have received a copy of the GNU General Public License
 # along with MIMORI.  If not, see <http://www.gnu.org/licenses/>.
 from nicotb import *
-from nicotb.utils import Scoreboard, Stacker
+from nicotb.utils import Scoreboard, BusGetter, Stacker
 from nicotb.protocol import OneWire, TwoWire
 from itertools import repeat
 from UmiModel import npi, npd, newaxis
@@ -23,10 +23,11 @@ from UmiModel import npi, npd, newaxis
 def main():
 	scb = Scoreboard("RemapCache")
 	test = scb.GetTest(f"test{RMC_CONF}")
-	st = Stacker(0, [lambda mat: npd.savetxt("rmc_got.txt", mat[0], fmt="%d"), test.Get])
+	st = Stacker(0, callbacks=[lambda mat: npd.savetxt("rmc_got.txt", mat[0], fmt="%d"), test.Get])
+	bg = BusGetter(callbacks=[st.Get])
 	wad_master = OneWire.Master(wad_dval_bus, wad_bus, ck_ev)
 	ra_master = TwoWire.Master(ra_rdy_bus, ra_ack_bus, ra_bus, ck_ev)
-	rd_slave = TwoWire.Slave(rd_rdy_bus, rd_ack_bus, rd_bus, ck_ev, callbacks=[st.Get])
+	rd_slave = TwoWire.Slave(rd_rdy_bus, rd_ack_bus, rd_bus, ck_ev, callbacks=[bg.Get])
 	wad_data = wad_master.values
 	ra_data = ra_master.values
 	yield rst_out_ev

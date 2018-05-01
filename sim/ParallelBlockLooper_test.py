@@ -1,6 +1,6 @@
-# Copyright 2016 Yu Sheng Lin
+# Copyright 2016,2018 Yu Sheng Lin
 
-# This file is part of Ocean.
+# This file is part of MIMORI.
 
 # MIMORI is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -13,10 +13,10 @@
 # GNU General Public License for more details.
 
 # You should have received a copy of the GNU General Public License
-# along with Ocean.  If not, see <http://www.gnu.org/licenses/>.
+# along with MIMORI.  If not, see <http://www.gnu.org/licenses/>.
 
 from nicotb import *
-from nicotb.utils import Scoreboard, Stacker
+from nicotb.utils import Scoreboard, BusGetter, Stacker
 from nicotb.protocol import OneWire, TwoWire
 from Response import Response
 from UmiModel import UmiModel, default_sample_conf, npi, npd, newaxis
@@ -25,12 +25,13 @@ def main():
 	n_golden, bofs = cfg.CreateBlockTransaction()
 	scb = Scoreboard("ParallelBlockLooper")
 	test_b = scb.GetTest("bofs")
-	st_b = Stacker(n_golden, [test_b.Get])
+	st_b = Stacker(n_golden, callbacks=[test_b.Get])
+	bg_b = BusGetter(callbacks=[st_b.Get])
 	master = TwoWire.Master(rdy_bus_s, ack_bus_s, bus_s, ck_ev)
 	master_bdone = OneWire.Master(dval_bus, tuple(), ck_ev)
 	resp = Response(master_bdone.SendIter, ck_ev, B=100)
 	i_data = master.values
-	slave_b = TwoWire.Slave(rdy_bus_b, ack_bus_b, bus_b, ck_ev, callbacks=[st_b.Get, lambda x: resp.Append(tuple())])
+	slave_b = TwoWire.Slave(rdy_bus_b, ack_bus_b, bus_b, ck_ev, callbacks=[bg_b.Get, lambda x: resp.Append(tuple())])
 	yield rst_out_ev
 	yield ck_ev
 

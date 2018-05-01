@@ -1,4 +1,4 @@
-# Copyright 2016-2017 Yu Sheng Lin
+# Copyright 2016-2018 Yu Sheng Lin
 
 # This file is part of MIMORI.
 
@@ -15,7 +15,7 @@
 # You should have received a copy of the GNU General Public License
 # along with MIMORI.  If not, see <http://www.gnu.org/licenses/>.
 from nicotb import *
-from nicotb.utils import Scoreboard, Stacker
+from nicotb.utils import Scoreboard, BusGetter, Stacker
 from nicotb.protocol import OneWire, TwoWire
 from itertools import repeat
 from UmiModel import UmiModel, default_sample_conf, npi, npd, newaxis
@@ -30,7 +30,7 @@ def main():
 	master = TwoWire.Master(src_rdy, src_ack, src_bus, ck_ev)
 	inst_commit = OneWire.Master(inst_commit_dval, tuple(), ck_ev)
 	resp = Response(inst_commit.SendIter, ck_ev)
-	slave = TwoWire.Slave(inst_rdy, inst_ack, inst_bus, ck_ev, callbacks=[col.Get, lambda _:resp.Append(tuple())])
+	slave = TwoWire.Slave(inst_rdy, inst_ack, inst_bus, ck_ev, callbacks=[bg.Get, lambda _:resp.Append(tuple())])
 	data_bus = master.values
 
 	# start simulation
@@ -97,6 +97,7 @@ src_bus, inst_bus = CreateBuses([
 scb = Scoreboard("SimdDriver")
 tst = scb.GetTest("test", 10)
 col = Stacker(callbacks=[tst.Get])
+bg = BusGetter(callbacks=[col.Get])
 RegisterCoroutines([
 	main(),
 ])

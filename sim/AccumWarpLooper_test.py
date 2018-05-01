@@ -1,4 +1,4 @@
-# Copyright 2016-2017 Yu Sheng Lin
+# Copyright 2016-2018 Yu Sheng Lin
 
 # This file is part of MIMORI.
 
@@ -15,7 +15,7 @@
 # You should have received a copy of the GNU General Public License
 # along with MIMORI.  If not, see <http://www.gnu.org/licenses/>.
 from nicotb import *
-from nicotb.utils import Scoreboard, Stacker
+from nicotb.utils import Scoreboard, BusGetter, Stacker
 from nicotb.protocol import TwoWire
 from itertools import repeat
 from UmiModel import UmiModel, default_sample_conf, npi, npd, newaxis
@@ -23,7 +23,7 @@ from UmiModel import UmiModel, default_sample_conf, npi, npd, newaxis
 def main():
 	yield rst_out_ev
 	master = TwoWire.Master(bofs_rdy, bofs_ack, bofs_bus, ck_ev)
-	slave = TwoWire.Slave(av_rdy, av_ack, av_bus, ck_ev, callbacks=[dc.Get])
+	slave = TwoWire.Slave(av_rdy, av_ack, av_bus, ck_ev, callbacks=[bg.Get])
 	data_bus = master.values
 
 	# simulation
@@ -111,6 +111,7 @@ N_SLUT = 2
 scb = Scoreboard("AccumWarpLooper")
 tst = scb.GetTest("test")
 dc = Stacker(0, callbacks=[tst.Get])
+bg = BusGetter(callbacks=[dc.Get])
 rst_out_ev, ck_ev = CreateEvents(["rst_out", "ck_ev"])
 (
 	bofs_rdy, bofs_ack,

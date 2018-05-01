@@ -48,6 +48,11 @@ package TauCfg;
 	parameter STENCIL_SIZE = 31;
 	parameter MAX_PENDING_BLOCK = 1023;
 	parameter MAX_PENDING_INST = 7;
+	// This only works for multiple TAU version
+	parameter N_TAU = 4;
+	// This only works for systolic version
+	parameter N_TAU_Y = 4;
+	parameter N_TAU_X = 4;
 	// derived
 	localparam XOR_BW = 8; // this is a magic number for N=32
 	localparam ICFG_BW = $clog2(N_ICFG+1);

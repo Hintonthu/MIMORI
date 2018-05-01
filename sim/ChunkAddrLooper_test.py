@@ -17,7 +17,7 @@
 # You should have received a copy of the GNU General Public License
 # along with MIMORI.  If not, see <http://www.gnu.org/licenses/>.
 from nicotb import *
-from nicotb.utils import Scoreboard, Stacker
+from nicotb.utils import Scoreboard, BusGetter, Stacker
 from nicotb.protocol import TwoWire
 from itertools import repeat
 from UmiModel import UmiModel, default_sample_conf, npi, npd, newaxis
@@ -26,10 +26,11 @@ from os import getenv
 def main():
 	scb = Scoreboard("ChunkAddrLooper")
 	test = scb.GetTest("test")
-	st = Stacker(0, [test.Get])
+	st = Stacker(0, callbacks=[test.Get])
+	bg = BusGetter(callbacks=[st.Get])
 	master = TwoWire.Master(mrdy_bus, mack_bus, mofs_bus, ck_ev)
 	i_data = master.values
-	slave = TwoWire.Slave(crdy_bus, cack_bus, cmd_bus, ck_ev, callbacks=[st.Get])
+	slave = TwoWire.Slave(crdy_bus, cack_bus, cmd_bus, ck_ev, callbacks=[bg.Get])
 	yield rst_out_ev
 
 	# simulation

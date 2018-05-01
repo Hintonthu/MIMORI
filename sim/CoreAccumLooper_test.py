@@ -1,4 +1,4 @@
-# Copyright 2016-2017 Yu Sheng Lin
+# Copyright 2016-2018 Yu Sheng Lin
 
 # This file is part of MIMORI.
 
@@ -15,7 +15,7 @@
 # You should have received a copy of the GNU General Public License
 # along with MIMORI.  If not, see <http://www.gnu.org/licenses/>.
 from nicotb import *
-from nicotb.utils import Scoreboard, Stacker
+from nicotb.utils import Scoreboard, BusGetter, Stacker
 from nicotb.protocol import OneWire, TwoWire
 from itertools import repeat
 from UmiModel import UmiModel, default_sample_conf, npi, npd, newaxis
@@ -30,14 +30,17 @@ def main():
 		a_range_i0, a_range_i1, a_range_o,
 		abmofs_i0, abmofs_i1, abmofs_o
 	) = cfg.CreateAccumBlockTransaction(mofs_i0[0], mofs_i1[0], mofs_o[0])
-	col0 = Stacker(n_abofs, [test0.Get])
-	col1 = Stacker(n_abofs, [test1.Get])
-	cola = Stacker(n_abofs, [testa.Get])
+	col0 = Stacker(n_abofs, callbacks=[test0.Get])
+	col1 = Stacker(n_abofs, callbacks=[test1.Get])
+	cola = Stacker(n_abofs, callbacks=[testa.Get])
+	bg0 = BusGetter(callbacks=[col0.Get])
+	bg1 = BusGetter(callbacks=[col1.Get])
+	bga = BusGetter(callbacks=[cola.Get])
 	master = TwoWire.Master(src_rdy, src_ack, src_bus, ck_ev)
 	data_bus = master.values
-	slave0 = TwoWire.Slave(i0_rdy, i0_ack, i0_bus, ck_ev, callbacks=[col0.Get])
-	slave1 = TwoWire.Slave(i1_rdy, i1_ack, i1_bus, ck_ev, callbacks=[col1.Get])
-	slavea = TwoWire.Slave(a_rdy, a_ack, a_bus, ck_ev, callbacks=[cola.Get])
+	slave0 = TwoWire.Slave(i0_rdy, i0_ack, i0_bus, ck_ev, callbacks=[bg0.Get])
+	slave1 = TwoWire.Slave(i1_rdy, i1_ack, i1_bus, ck_ev, callbacks=[bg1.Get])
+	slavea = TwoWire.Slave(a_rdy, a_ack, a_bus, ck_ev, callbacks=[bga.Get])
 	slaved = OneWire.Slave(done_dval, tuple(), ck_ev, callbacks=[lambda x: testdone.Get(tuple())])
 
 	# start simulation
