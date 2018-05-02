@@ -264,7 +264,7 @@ TileAccumUnit u_tau(
 	`clk_connect,
 	.bofs_rdy(blk_tau_bofs_rdys[i]),
 	.bofs_ack(blk_tau_bofs_acks[i]),
-	.i_bofs(blk_tau_bofs[i]),
+	.i_bofs(blk_tau_bofss[i]),
 	.i_bboundary(i_bboundary),
 	.i_bsubofs(i_bsubofs),
 	.i_bsub_up_order(i_bsub_up_order),

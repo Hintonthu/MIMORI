@@ -6,6 +6,9 @@ SYN=syn
 top:
 	make COVERAGE=$(COV) Top
 
+top_mc:
+	make COVERAGE=$(COV) Top_mc
+
 tops:
 	make ARGS="+define+SDF=\\\"../$(SYN)/Top.sdf\\\" +define+GATE_LEVEL +define+SRAM_GEN_MODE=SYNOPSYS32 +incdir+../$(SYN)/SAED32_EDK/lib/sram/verilog/ +incdir+../$(SYN)/SAED32_EDK/lib/stdcell_rvt/verilog/ +incdir+../$(SYN)/ +nowarn+SDFNCAP:SDFNDP:MACRDF:CUVWSP:SDFNSB:SDFNL1" Top
 
@@ -71,7 +74,7 @@ dump_scoreboard:
 %: %_test.sv $(NICOTB)/cpp/nicotb.so
 	$(eval TOP=$(if $(TOPMODULE),$(TOPMODULE),$@)_test)
 	GLOG_logtostderr=1 \
-	GLOG_minloglevel=1 \
+	GLOG_minloglevel=0 \
 	TEST=$(if $(TEST),$(TEST),$@)_test \
 	TOPMODULE=$(TOP) \
 	PYTHONPATH=$(NICOTB)/python:. \
