@@ -1,0 +1,140 @@
+// Copyright 2018 Yu Sheng Lin
+
+// This file is part of MIMORI.
+
+// MIMORI is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+
+// MIMORI is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+
+// You should have received a copy of the GNU General Public License
+// along with MIMORI.  If not, see <http://www.gnu.org/licenses/>.
+
+`include "common/define.sv"
+`include "common/Controllers.sv"
+`include "common/OffsetStage.sv"
+`include "common/BitOperation.sv"
+
+module ParallelBlockLooper_mc(
+	`clk_port,
+	`rdyack_port(src),
+	i_bgrid_step,
+	i_bgrid_end,
+	bofs_rdys,
+	bofs_acks,
+	o_bofss,
+	blkdone_dvals
+);
+//======================================
+// Parameter
+//======================================
+localparam WBW = TauCfg::WORK_BW;
+localparam VDIM = TauCfg::VDIM;
+localparam N_PENDING = TauCfg::MAX_PENDING_BLOCK;
+localparam N_TAU = TauCfg::N_TAU;
+
+//======================================
+// I/O
+//======================================
+`clk_input;
+`rdyack_input(src);
+input [WBW-1:0] i_bgrid_step [VDIM];
+input [WBW-1:0] i_bgrid_end  [VDIM];
+output logic [N_TAU-1:0] bofs_rdys;
+input        [N_TAU-1:0] bofs_acks;
+output logic [WBW-1:0]   o_bofss [N_TAU][VDIM];
+input [N_TAU-1:0] blkdone_dvals;
+
+//======================================
+// Internal
+//======================================
+`rdyack_logic(s0_src);
+`rdyack_logic(s0_dst);
+`rdyack_logic(wait_fin);
+logic [N_TAU-1:0] s0_dst_rdys;
+logic [N_TAU-1:0] s0_dst_acks;
+logic [WBW-1:0]   s0_dst_bofs [VDIM];
+logic [N_TAU-1:0] s1_rdys;
+logic [N_TAU-1:0] s1_acks;
+logic [N_TAU-1:0] can_send;
+logic [N_TAU  :0] select_send;
+logic [N_TAU-1:0] block_fulls;
+logic [N_TAU-1:0] block_emptys;
+
+//======================================
+// Combinational
+//======================================
+assign wait_fin_ack = wait_fin_rdy && (&block_emptys) && !(|bofs_rdys);
+always_comb begin
+	s0_dst_rdys = {N_TAU{s0_dst_rdy}} & select_send[N_TAU:1];
+	s0_dst_ack = |s0_dst_acks;
+end
+
+//======================================
+// Submodule
+//======================================
+BroadcastInorder#(2) u_brd(
+	`clk_connect,
+	`rdyack_connect(src, src),
+	.dst_rdys({wait_fin_rdy, s0_src_rdy}),
+	.dst_acks({wait_fin_ack, s0_src_ack})
+);
+OffsetStage#(.BW(WBW), .DIM(VDIM), .FROM_ZERO(1), .UNIT_STRIDE(0)) u_s0(
+	`clk_connect,
+	`rdyack_connect(src, s0_src),
+	.i_ofs_beg(),
+	.i_ofs_end(i_bgrid_end),
+	.i_ofs_gend(),
+	.i_stride(i_bgrid_step),
+	`rdyack_connect(dst, s0_dst),
+	.o_ofs(s0_dst_bofs),
+	.o_lofs(),
+	.o_sel_beg(),
+	.o_sel_end(),
+	.o_sel_ret(),
+	.o_islast()
+);
+FindFromMsb#(N_TAU,1) u_arbiter(
+	.i(can_send),
+	.prefix(),
+	.detect(select_send)
+);
+genvar i;
+generate for (i = 0; i < N_TAU; i++) begin: ctrl
+	assign can_send[i] = !s1_rdys[i];
+	Forward u_fwd(
+		`clk_connect,
+		.src_rdy(s0_dst_rdys[i]),
+		.src_ack(s0_dst_acks[i]),
+		.dst_rdy(s1_rdys[i]),
+		.dst_ack(s1_acks[i])
+	);
+	ForwardIf#(0) u_fwd_if_not_full(
+		.cond(block_fulls[i]),
+		.src_rdy(s1_rdys[i]),
+		.src_ack(s1_acks[i]),
+		.dst_rdy(bofs_rdys[i]),
+		.dst_ack(bofs_acks[i])
+	);
+	Semaphore#(N_PENDING) u_sem_done(
+		`clk_connect,
+		.i_inc(bofs_acks[i]),
+		.i_dec(blkdone_dvals[i]),
+		.o_full(block_fulls[i]),
+		.o_empty(block_emptys[i])
+	);
+	`ff_rst
+		for (int j = 0; j < VDIM; j++) begin
+			o_bofss[i][j] <= '0;
+		end
+	`ff_cg(s0_dst_acks[i])
+		o_bofss[i] <= s0_dst_bofs;
+	`ff_end
+end endgenerate
+
+endmodule

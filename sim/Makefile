@@ -40,6 +40,9 @@ rmc:
 pbl:
 	make COVERAGE=$(COV) ParallelBlockLooper
 
+pbl_mc:
+	make COVERAGE=$(COV) ParallelBlockLooper_mc
+
 alloc:
 	make COVERAGE=$(COV) Allocator
 
