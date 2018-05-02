@@ -15,7 +15,6 @@
 // You should have received a copy of the GNU General Public License
 // along with MIMORI.  If not, see <http://www.gnu.org/licenses/>.
 
-`include "Scheduler_mc.sv"
 `include "common/define.sv"
 `include "ParallelBlockLooper_mc.sv"
 `include "TileAccumUnit/TileAccumUnit.sv"
@@ -228,22 +227,22 @@ input [TDBW-1:0]    i_const_texs [CONST_TEX_LUT];
 input [REG_ABW-1:0] i_reg_per_warp;
 output [N_TAU-1:0] dramra_rdys;
 input  [N_TAU-1:0] dramra_acks;
-output [GBW-1:0] o_dramra [N_TAU];
+output [GBW-1:0] o_dramras [N_TAU];
 input  [N_TAU-1:0] dramrd_rdys;
 output [N_TAU-1:0] dramrd_acks;
-input  [DBW-1:0] i_dramrd [CSIZE][N_TAU];
+input  [DBW-1:0] i_dramrds [N_TAU][CSIZE];
 output [N_TAU-1:0] dramw_rdys;
 input  [N_TAU-1:0] dramw_acks;
-output [GBW-1:0]   o_dramwa;
-output [DBW-1:0]   o_dramwd [CSIZE][N_TAU];
-output [CSIZE-1:0] o_dramw_mask;
+output [GBW-1:0]   o_dramwas [N_TAU];
+output [DBW-1:0]   o_dramwds [N_TAU][CSIZE];
+output [CSIZE-1:0] o_dramw_masks [N_TAU];
 
 //======================================
 // Internal
 //======================================
 logic [N_TAU-1:0] blk_tau_bofs_rdys;
 logic [N_TAU-1:0] blk_tau_bofs_acks;
-logic [WBW-1:0] blk_tau_bofs [VDIM];
+logic [WBW-1:0] blk_tau_bofss [N_TAU][VDIM];
 logic [N_TAU-1:0] tau_blk_dones;
 
 //======================================
@@ -256,7 +255,7 @@ ParallelBlockLooper_mc u_pbl(
 	.i_bgrid_end(i_bgrid_end),
 	.bofs_rdys(blk_tau_bofs_rdys),
 	.bofs_acks(blk_tau_bofs_acks),
-	.o_bofs(blk_tau_bofs),
+	.o_bofss(blk_tau_bofss),
 	.blkdone_dvals(tau_blk_dones)
 );
 genvar i;
@@ -265,7 +264,7 @@ TileAccumUnit u_tau(
 	`clk_connect,
 	.bofs_rdy(blk_tau_bofs_rdys[i]),
 	.bofs_ack(blk_tau_bofs_acks[i]),
-	.i_bofs(blk_tau_bofs),
+	.i_bofs(blk_tau_bofs[i]),
 	.i_bboundary(i_bboundary),
 	.i_bsubofs(i_bsubofs),
 	.i_bsub_up_order(i_bsub_up_order),
