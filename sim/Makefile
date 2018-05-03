@@ -74,7 +74,7 @@ dump_scoreboard:
 %: %_test.sv $(NICOTB)/cpp/nicotb.so
 	$(eval TOP=$(if $(TOPMODULE),$(TOPMODULE),$@)_test)
 	GLOG_logtostderr=1 \
-	GLOG_minloglevel=0 \
+	GLOG_minloglevel=1 \
 	TEST=$(if $(TEST),$(TEST),$@)_test \
 	TOPMODULE=$(TOP) \
 	PYTHONPATH=$(NICOTB)/python:. \

@@ -256,7 +256,7 @@ def main():
 		next(verf_func_gen)
 	except StopIteration:
 		pass
-	resp_chan.c_RamuReport()
+	# resp_chan.c_RamuReport()
 	FinishSim()
 
 cfg = default_sample_conf

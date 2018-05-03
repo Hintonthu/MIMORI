@@ -496,7 +496,7 @@ DramArbiter u_arb(
 	for (int i = 0; i < VDIM; i++) begin
 		bofs_in_r[i] <= '0;
 	end
-`ff_cg(bofs_in_ack)
+`ff_cg(bofs_ack)
 	bofs_in_r <= i_bofs;
 `ff_end
 
