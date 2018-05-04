@@ -9,6 +9,7 @@
 #include <cassert>
 #include <functional>
 #include <memory>
+#include "CircBuf.h"
 
 using namespace std;
 using namespace ramulator;
@@ -28,50 +29,6 @@ class Wrapper {
 	shared_ptr<CacheSystem> csys_;
 	unique_ptr<Cache> cache_;
 	vector<Controller<DDR>*> ctrls_;
-	template <typename T, size_t N>
-	class CircBuf {
-		array<T, N> buf_;
-		size_t head_, n_;
-		inline size_t Wrap(size_t x) { return x >= N ? x-N : x; }
-		inline size_t Idx(size_t i) { return Wrap(head_+i); }
-	public:
-		CircBuf(): head_(0), n_(0) {}
-		T& Head() {
-			assert(not Empty());
-			return buf_[head_];
-			printf("%p HEAD %zu\n", this, head_);
-		}
-		void Push(T req) {
-			assert(not Full());
-			buf_[Idx(n_)] = req;
-			++n_;
-		}
-		void Pop() {
-			assert(not Empty());
-			head_ = Idx(1);
-			--n_;
-		}
-		bool Empty() {
-			return n_ == 0;
-		}
-		bool Full() {
-			return n_ >= N;
-		}
-		pair<size_t, size_t> begin() {
-			return pair<size_t, size_t>(head_, 0);
-		}
-		bool end(pair<size_t, size_t> &p) {
-			return p.second < N;
-		}
-		void next(pair<size_t, size_t> &p) {
-			++p.first;
-			++p.second;
-			p.first = Wrap(p.first);
-		}
-		T& deref(pair<size_t, size_t> &p) {
-			return buf_[p.first];
-		}
-	};
 	CircBuf<Request, CMD_BUF_SIZE> rq_, wq_;
 	CircBuf<long, RESP_BUF_SIZE> respq_;
 public:
@@ -106,29 +63,26 @@ public:
 		// send from queue
 		bool rsuc = not rq_.Empty() and cache_->send(rq_.Head());
 		bool wsuc = not wq_.Empty() and cache_->send(wq_.Head());
-		auto GenCallback = [this](bool is_read) {
-			return [this, is_read](Request req) {
-				// cache may convert write to read request
-				if (is_read) {
-					for (auto it = respq_.begin(); respq_.end(it); respq_.next(it)) {
-						auto &resp = respq_.deref(it);
-						if (resp == req.addr) {
-							resp = DONE;
-						}
-					}
-				}
-				cache_->callback(req);
-			};
-		};
 		// push to queue
 		if (has_r) {
 			long a = r & ~(CACHE_LINE_SIZE-1);
-			rq_.Push(Request(a, Request::Type::READ, GenCallback(true)));
+			rq_.Push(Request(a, Request::Type::READ, [this](Request req) {
+				// cache may convert write to read request
+				for (auto it = respq_.begin(); respq_.end(it); respq_.next(it)) {
+					auto &resp = respq_.deref(it);
+					if (resp == req.addr) {
+						resp = DONE;
+					}
+				}
+				cache_->callback(req);
+			}));
 			respq_.Push(a);
 		}
 		if (has_w) {
 			long a = w & ~(CACHE_LINE_SIZE-1);
-			wq_.Push(Request(a, Request::Type::WRITE, GenCallback(false)));
+			wq_.Push(Request(a, Request::Type::WRITE, [this](Request req) {
+				cache_->callback(req);
+			}));
 		}
 		mem_->tick();
 		csys_->tick();
@@ -153,9 +107,9 @@ public:
 extern "C" {
 
 typedef Wrapper<DDR3> WrapperType;
-WrapperType *wrapper = nullptr;
+static WrapperType *wrapper = nullptr;
 
-WrapperType *GetRamulatorWrapper()
+static WrapperType *GetRamulatorWrapper()
 {
 	if (wrapper == nullptr) {
 		wrapper = new WrapperType(new DDR3("DDR3_2Gb_x8", "DDR3_1600K"));

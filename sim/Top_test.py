@@ -51,12 +51,19 @@ class DramRespChan(object):
 		self.w_rdy.Write()
 		self.dram_counter = 0.
 		self.dram_speed_inc = 1 / dram_speed
+		self.InitDLL()
 		Fork(self.MainLoop())
 
+	def InitDLL(self):
+		# init
+		ramu = CDLL("./ramulator_wrap.so")
+		c_bool_p = POINTER(c_bool)
+		ramu.RamulatorTick.argtypes = (c_bool, c_bool, c_bool, c_long, c_long, c_bool_p, c_bool_p, c_bool_p)
+		ramu.RamulatorReport.argtypes = ()
+		self.RamuTick = ramu.RamulatorTick
+		self.RamuReport = ramu.RamulatorReport
+
 	def MainLoop(self):
-		ramu = CDLL("ramulator_wrap.so")
-		c_RamuTick = ramu.RamulatorTick
-		self.c_RamuReport = ramu.RamulatorReport
 		c_r = c_long()
 		c_w = c_long()
 		c_has_r = c_bool()
@@ -88,7 +95,7 @@ class DramRespChan(object):
 					self.w.value[0] &= CSIZE_MASK
 					c_w.value = self.w.value[0]
 					self.mspace.WriteScalarMask(*self.w.values)
-				c_RamuTick(
+				self.RamuTick(
 					c_has_r, c_has_w, c_resp_got, c_r, c_w,
 					c_r_full_ptr, c_w_full_ptr, c_has_resp_ptr
 				)
@@ -108,7 +115,7 @@ class DramRespChan(object):
 				c_resp_got.value = 0
 				c_r.value = 0
 				c_w.value = 0
-				c_RamuTick(
+				self.RamuTick(
 					c_has_r, c_has_w, c_resp_got, c_r, c_w,
 					c_r_full_ptr, c_w_full_ptr, c_has_resp_ptr
 				)
@@ -225,7 +232,7 @@ def main():
 		next(verf_func_gen)
 	except StopIteration:
 		pass
-	resp_chan.c_RamuReport()
+	resp_chan.RamuReport()
 	FinishSim()
 
 cfg = default_sample_conf
