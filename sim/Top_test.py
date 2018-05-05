@@ -48,14 +48,13 @@ class DramRespChan(object):
 		self.ra_ack.Write()
 		self.rd_rdy.Write()
 		self.rd.Write()
-		self.w_rdy.Write()
+		self.w_ack.Write()
 		self.dram_counter = 0.
 		self.dram_speed_inc = 1 / dram_speed
 		self.InitDLL()
 		Fork(self.MainLoop())
 
 	def InitDLL(self):
-		# init
 		ramu = CDLL("./ramulator_wrap.so")
 		c_bool_p = POINTER(c_bool)
 		ramu.RamulatorTick.argtypes = (c_bool, c_bool, c_bool, c_long, c_long, c_bool_p, c_bool_p, c_bool_p)
