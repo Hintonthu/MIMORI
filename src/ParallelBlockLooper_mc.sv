@@ -37,6 +37,7 @@ localparam WBW = TauCfg::WORK_BW;
 localparam VDIM = TauCfg::VDIM;
 localparam N_PENDING = TauCfg::MAX_PENDING_BLOCK;
 localparam N_TAU = TauCfg::N_TAU;
+localparam CN_TAU = $clog2(N_TAU);
 
 //======================================
 // I/O
@@ -61,8 +62,12 @@ logic [N_TAU-1:0] s0_dst_acks;
 logic [WBW-1:0]   s0_dst_bofs [VDIM];
 logic [N_TAU-1:0] s1_rdys;
 logic [N_TAU-1:0] s1_acks;
-logic [N_TAU-1:0] can_send;
-logic [N_TAU  :0] select_send;
+logic [CN_TAU-1:0] select_shamt_r;
+logic [CN_TAU-1:0] select_shamt_w;
+logic [  N_TAU-1:0] can_send;
+logic [2*N_TAU-1:0] can_send_rot;
+logic [  N_TAU  :0] select_send_rot;
+logic [2*N_TAU-1:0] select_send;
 logic [N_TAU-1:0] block_fulls;
 logic [N_TAU-1:0] block_emptys;
 
@@ -70,8 +75,17 @@ logic [N_TAU-1:0] block_emptys;
 // Combinational
 //======================================
 assign wait_fin_ack = wait_fin_rdy && (&block_emptys) && !(|bofs_rdys);
+assign select_shamt_w = select_shamt_r == (N_TAU-1) ? '0 : (select_shamt_r + 'b1);
+
 always_comb begin
-	s0_dst_rdys = {N_TAU{s0_dst_rdy}} & select_send[N_TAU:1];
+	// Use higher half
+	can_send_rot = {2{can_send}} << select_shamt_r;
+	// Use lower half
+	select_send = {2{select_send_rot[N_TAU:1]}} >> select_shamt_r;
+end
+
+always_comb begin
+	s0_dst_rdys = {N_TAU{s0_dst_rdy}} & select_send[N_TAU-1:0];
 	s0_dst_ack = |s0_dst_acks;
 end
 
@@ -100,9 +114,9 @@ OffsetStage#(.BW(WBW), .DIM(VDIM), .FROM_ZERO(1), .UNIT_STRIDE(0)) u_s0(
 	.o_islast()
 );
 FindFromMsb#(N_TAU,1) u_arbiter(
-	.i(can_send),
+	.i(can_send_rot[2*N_TAU-1:N_TAU]),
 	.prefix(),
-	.detect(select_send)
+	.detect(select_send_rot)
 );
 genvar i;
 generate for (i = 0; i < N_TAU; i++) begin: ctrl
@@ -136,5 +150,11 @@ generate for (i = 0; i < N_TAU; i++) begin: ctrl
 		o_bofss[i] <= s0_dst_bofs;
 	`ff_end
 end endgenerate
+
+`ff_rst
+	select_shamt_r <= '0;
+`ff_cg(s0_dst_ack)
+	select_shamt_r <= select_shamt_w;
+`ff_end
 
 endmodule

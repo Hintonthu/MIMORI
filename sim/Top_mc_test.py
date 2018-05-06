@@ -148,7 +148,7 @@ def main():
 		w_rdy_buss, w_ack_buss, w_buss,
 		ck_ev, ms,
 		# Simulation configuration: 1600MHz/200MHz, 4 TAUs
-		2.0, N_TAU,
+		8.0, N_TAU,
 	)
 
 	i_data = cfg_master.values
