@@ -1,4 +1,4 @@
-# Copyright 2016-2017 Yu Sheng Lin
+# Copyright 2016-2018 Yu Sheng Lin
 
 # This file is part of MIMORI.
 
@@ -15,7 +15,7 @@
 # You should have received a copy of the GNU General Public License
 # along with MIMORI.  If not, see <http://www.gnu.org/licenses/>.
 from nicotb import *
-from nicotb.utils import Scoreboard, Stacker
+from nicotb.utils import Scoreboard, BusGetter, Stacker
 from nicotb.protocol import TwoWire
 from itertools import repeat
 from UmiModel import UmiModel, default_sample_conf, npi, npd, newaxis
@@ -26,16 +26,20 @@ def main():
 	test_i1 = scb.GetTest("test_i1")
 	test_o = scb.GetTest("test_o")
 	test_alu = scb.GetTest("test_alu")
-	st_i0 = Stacker(0, [test_i0.Get])
-	st_i1 = Stacker(0, [test_i1.Get])
-	st_o = Stacker(0, [test_o.Get])
-	st_alu = Stacker(0, [test_alu.Get])
+	st_i0 = Stacker(0, callbacks=[test_i0.Get])
+	st_i1 = Stacker(0, callbacks=[test_i1.Get])
+	st_o = Stacker(0, callbacks=[test_o.Get])
+	st_alu = Stacker(0, callbacks=[test_alu.Get])
+	bg_i0 = BusGetter(callbacks=[st_i0.Get])
+	bg_i1 = BusGetter(callbacks=[st_i1.Get])
+	bg_o = BusGetter(callbacks=[st_o.Get])
+	bg_alu = BusGetter(callbacks=[st_alu.Get])
 	master = TwoWire.Master(s_rdy_bus, s_ack_bus, s_bus, ck_ev)
 	i_data = master.values
-	slave_i0 = TwoWire.Slave(i0_rdy_bus, i0_ack_bus, i0_bus, ck_ev, callbacks=[st_i0.Get])
-	slave_i1 = TwoWire.Slave(i1_rdy_bus, i1_ack_bus, i1_bus, ck_ev, callbacks=[st_i1.Get])
-	slave_o = TwoWire.Slave(o_rdy_bus, o_ack_bus, o_bus, ck_ev, callbacks=[st_o.Get])
-	slave_alu = TwoWire.Slave(alu_rdy_bus, alu_ack_bus, alu_bus, ck_ev, callbacks=[st_alu.Get])
+	slave_i0 = TwoWire.Slave(i0_rdy_bus, i0_ack_bus, i0_bus, ck_ev, callbacks=[bg_i0.Get])
+	slave_i1 = TwoWire.Slave(i1_rdy_bus, i1_ack_bus, i1_bus, ck_ev, callbacks=[bg_i1.Get])
+	slave_o = TwoWire.Slave(o_rdy_bus, o_ack_bus, o_bus, ck_ev, callbacks=[bg_o.Get])
+	slave_alu = TwoWire.Slave(alu_rdy_bus, alu_ack_bus, alu_bus, ck_ev, callbacks=[bg_alu.Get])
 	yield rst_out_ev
 	yield ck_ev
 

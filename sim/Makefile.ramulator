@@ -13,10 +13,10 @@ CXXFLAGS := -O3 -std=c++11 -g -Wall -fPIC -c -I../ramulator
 
 .PHONY: all clean depend
 
-all: depend ramulator_wrap
+all: depend ramulator_wrap ramulator_mc_wrap
 
 clean:
-	rm -f ramulator_wrap.so
+	rm -f ramulator_wrap.so ramulator_mc_wrap.so
 	rm -rf $(OBJDIR)
 
 depend: $(OBJDIR)/.depend
@@ -35,8 +35,11 @@ endif
 ramulator: $(MAIN) $(OBJS) $(SRCDIR)/*.h | depend
 	$(CXX) $(CXXFLAGS) -DRAMULATOR -o $@ $(MAIN) $(OBJS)
 
-ramulator_wrap: wrapper.cpp $(OBJS) $(SRCDIR)/*.h | depend
+ramulator_wrap: wrapper.cpp $(OBJS) $(SRCDIR)/*.h CircBuf.h | depend
 	$(CXX) --std=c++11 -g -DRAMULATOR -I../ramulator -fPIC -shared $< $(OBJS) -o ramulator_wrap.so
+
+ramulator_mc_wrap: wrapper_mc.cpp $(OBJS) $(SRCDIR)/*.h CircBuf.h | depend
+	$(CXX) --std=c++11 -g -DRAMULATOR -I../ramulator -fPIC -shared $< $(OBJS) -o ramulator_mc_wrap.so
 
 libramulator.a: $(OBJS) $(OBJDIR)/Gem5Wrapper.o
 	libtool -static -o $@ $(OBJS) $(OBJDIR)/Gem5Wrapper.o

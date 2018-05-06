@@ -20,8 +20,9 @@ from itertools import repeat
 from UmiModel import UmiModel, default_sample_conf, default_verf_func, npi, npd, newaxis
 from collections import deque
 from ctypes import *
+from Response import Response
 
-class DramRespChan(object):
+class DramRespChanMC(object):
 	def __init__(
 		self,
 		ra_rdy_bus, ra_ack_bus, ra_bus,
@@ -30,7 +31,9 @@ class DramRespChan(object):
 		ck_ev, mspace,
 		# dram freq / clk freq
 		dram_speed,
+		n_cores,
 	):
+		self.n_cores = n_cores
 		self.sending = list()
 		self.pending = list()
 		self.ra_rdy = ra_rdy_bus
@@ -44,79 +47,89 @@ class DramRespChan(object):
 		self.w = w_bus
 		self.ck_ev = ck_ev
 		self.mspace = mspace
-		self.q = deque()
-		self.ra_ack.Write()
-		self.rd_rdy.Write()
-		self.rd.Write()
-		self.w_ack.Write()
+		self.q = [deque() for _ in range(self.n_cores)]
+		for i in range(self.n_cores):
+			self.ra_ack[i].Write()
+			self.rd_rdy[i].Write()
+			self.rd[i].Write()
+			self.w_ack[i].Write()
 		self.dram_counter = 0.
 		self.dram_speed_inc = 1 / dram_speed
 		self.InitDLL()
+		self.InitSim()
 		Fork(self.MainLoop())
 
 	def InitDLL(self):
-		ramu = CDLL("./ramulator_wrap.so")
+		ramu = CDLL("./ramulator_mc_wrap.so")
+		c_long_p = POINTER(c_long)
 		c_bool_p = POINTER(c_bool)
-		ramu.RamulatorTick.argtypes = (c_bool, c_bool, c_bool, c_long, c_long, c_bool_p, c_bool_p, c_bool_p)
+		ramu.ConfigureSimulation.argtypes = (c_int,)
+		ramu.RamulatorTick.argtypes = (c_bool_p, c_bool_p, c_bool_p, c_long_p, c_long_p, c_bool_p, c_bool_p, c_bool_p)
 		ramu.RamulatorReport.argtypes = ()
+		self.RamuInit = ramu.ConfigureSimulation
 		self.RamuTick = ramu.RamulatorTick
 		self.RamuReport = ramu.RamulatorReport
 
+	def InitSim(self):
+		self.RamuInit(self.n_cores)
+
 	def MainLoop(self):
-		c_r = c_long()
-		c_w = c_long()
-		c_has_r = c_bool()
-		c_has_w = c_bool()
-		c_resp_got = c_bool()
-		c_r_full = c_bool()
-		c_w_full = c_bool()
-		c_has_resp = c_bool()
-		c_r_full_ptr = byref(c_r_full)
-		c_w_full_ptr = byref(c_w_full)
-		c_has_resp_ptr = byref(c_has_resp)
+		c_longs = c_long * self.n_cores
+		c_bools = c_bool * self.n_cores
+		ZERO = (0,) * self.n_cores
+		c_rs = c_longs()
+		c_ws = c_longs()
+		c_has_rs = c_bools()
+		c_has_ws = c_bools()
+		c_resp_gots = c_bools()
+		c_r_fulls = c_bools()
+		c_w_fulls = c_bools()
+		c_has_resps = c_bools()
 		while True:
 			if self.dram_counter >= 1.:
 				self.dram_counter -= 1.
 				yield self.ck_ev
-				self.rd_ack.Read()
-				self.ra_rdy.Read()
-				self.w_rdy.Read()
-				c_has_r.value = not self.ra_rdy.x[0] and self.ra_rdy.value[0] and self.ra_ack.value[0]
-				c_has_w.value = not self.w_rdy.x[0] and self.w_rdy.value[0] and self.w_ack.value[0]
-				c_resp_got.value = self.rd_rdy.value[0] and self.rd_ack.value[0]
-				if c_has_r.value:
-					self.ra.Read()
-					self.ra.value[0] &= CSIZE_MASK
-					c_r.value = self.ra.value[0]
-					self.q.append(self.mspace.Read(self.ra.value))
-				if c_has_w.value:
-					self.w.Read()
-					self.w.value[0] &= CSIZE_MASK
-					c_w.value = self.w.value[0]
-					self.mspace.WriteScalarMask(*self.w.values)
+				for i in range(self.n_cores):
+					self.rd_ack[i].Read()
+					self.ra_rdy[i].Read()
+					self.w_rdy[i].Read()
+					c_has_rs[i] = not self.ra_rdy[i].x[0] and self.ra_rdy[i].value[0] and self.ra_ack[i].value[0]
+					c_has_ws[i] = not self.w_rdy[i].x[0] and self.w_rdy[i].value[0] and self.w_ack[i].value[0]
+					c_resp_gots[i] = self.rd_rdy[i].value[0] and self.rd_ack[i].value[0]
+					if c_has_rs[i]:
+						self.ra[i].Read()
+						self.ra[i].value[0] &= CSIZE_MASK
+						c_rs[i] = self.ra[i].value[0]
+						self.q[i].append(self.mspace.Read(self.ra[i].value))
+					if c_has_ws[i]:
+						self.w[i].Read()
+						self.w[i].value[0] &= CSIZE_MASK
+						c_ws[i] = self.w[i].value[0]
+						self.mspace.WriteScalarMask(*self.w[i].values)
 				self.RamuTick(
-					c_has_r, c_has_w, c_resp_got, c_r, c_w,
-					c_r_full_ptr, c_w_full_ptr, c_has_resp_ptr
+					c_has_rs, c_has_ws, c_resp_gots, c_rs, c_ws,
+					c_r_fulls, c_w_fulls, c_has_resps
 				)
-				update_resp = not self.rd_rdy.value[0] or self.rd_ack.value[0]
-				self.ra_ack.value[0] = not c_r_full.value
-				self.w_ack.value[0] = not c_w_full.value
-				self.rd_rdy.value[0] = c_has_resp.value
-				if update_resp and self.rd_rdy.value[0]:
-					self.rd.value = self.q.popleft()
-					self.rd.Write()
-				self.ra_ack.Write()
-				self.w_ack.Write()
-				self.rd_rdy.Write()
+				for i in range(self.n_cores):
+					update_resp = not self.rd_rdy[i].value[0] or self.rd_ack[i].value[0]
+					self.ra_ack[i].value[0] = not c_r_fulls[i]
+					self.w_ack[i].value[0] = not c_w_fulls[i]
+					self.rd_rdy[i].value[0] = c_has_resps[i]
+					if update_resp and self.rd_rdy[i].value[0]:
+						self.rd[i].value = self.q[i].popleft()
+						self.rd[i].Write()
+					self.ra_ack[i].Write()
+					self.w_ack[i].Write()
+					self.rd_rdy[i].Write()
 			else:
-				c_has_r.value = 0
-				c_has_w.value = 0
-				c_resp_got.value = 0
-				c_r.value = 0
-				c_w.value = 0
+				c_has_rs[:] = ZERO
+				c_has_ws[:] = ZERO
+				c_resp_gots[:] = ZERO
+				c_rs[:] = ZERO
+				c_ws[:] = ZERO
 				self.RamuTick(
-					c_has_r, c_has_w, c_resp_got, c_r, c_w,
-					c_r_full_ptr, c_w_full_ptr, c_has_resp_ptr
+					c_has_rs, c_has_ws, c_resp_gots, c_rs, c_ws,
+					c_r_fulls, c_w_fulls, c_has_resps
 				)
 			self.dram_counter += self.dram_speed_inc
 
@@ -128,13 +141,14 @@ def main():
 	yield ck_ev
 	yield ck_ev
 	yield ck_ev
-	resp_chan = DramRespChan(
-		ra_rdy_bus, ra_ack_bus, ra_bus,
-		rd_rdy_bus, rd_ack_bus, rd_bus,
-		w_rdy_bus, w_ack_bus, w_bus,
+
+	resp_chan = DramRespChanMC(
+		ra_rdy_buss, ra_ack_buss, ra_buss,
+		rd_rdy_buss, rd_ack_buss, rd_buss,
+		w_rdy_buss, w_ack_buss, w_buss,
 		ck_ev, ms,
-		# Simulation configuration: 1600MHz/200MHz
-		8.0,
+		# Simulation configuration: 1600MHz/200MHz, 4 TAUs
+		8.0, N_TAU,
 	)
 
 	i_data = cfg_master.values
@@ -242,6 +256,7 @@ VSIZE = cfg.VSIZE
 CV_BW = cfg.LG_VSIZE
 DIM = cfg.DIM
 VDIM = cfg.VDIM
+N_TAU = 4
 N_I0CFG = cfg.n_i0[1][-1]
 N_I1CFG = cfg.n_i1[1][-1]
 N_OCFG = cfg.n_o[1][-1]
@@ -254,28 +269,41 @@ sim_cfg = CreateBus(("GATE_LEVEL",))
 sim_cfg.Read()
 strict = False if sim_cfg.GATE_LEVEL.value[0] else True
 (
-	w_rdy_bus, w_ack_bus,
-	ra_rdy_bus, ra_ack_bus,
-	rd_rdy_bus, rd_ack_bus,
-	cfg_rdy_bus, cfg_ack_bus,
-) = CreateBuses([
-	(("w_rdy",),),
-	(("w_canack",),),
-	(("ra_rdy",),),
-	(("ra_canack",),),
-	(("rd_rdy",),),
-	(("rd_ack",),),
-	(("cfg_rdy",),),
-	(("cfg_ack",),),
-])
-w_bus, ra_bus, rd_bus, cfg_bus = CreateBuses([
+	w_rdy_buss, w_ack_buss, w_buss,
+	ra_rdy_buss, ra_ack_buss, ra_buss,
+	rd_rdy_buss, rd_ack_buss, rd_buss,
+) = [list() for _ in range(9)]
+for i in range(N_TAU):
 	(
-		("u_top", "o_dramwa"),
-		(None   , "o_dramwd", (CSIZE,)),
-		(None   , "o_dramw_mask"),
-	),
-	(("u_top", "o_dramra"),),
-	(("u_top", "i_dramrd", (CSIZE,)),),
+		w_bus, ra_bus, rd_bus,
+		w_rdy_bus, w_ack_bus,
+		ra_rdy_bus, ra_ack_bus,
+		rd_rdy_bus, rd_ack_bus,
+	) = CreateBuses([
+		(
+			(""  , f"o_dramwa{i}",),
+			(None, f"o_dramwd{i}", (CSIZE,)),
+			(None, f"o_dramw_mask{i}",),
+		),
+		((f"o_dramra{i}",),),
+		(("", f"i_dramrd{i}", (CSIZE,)),),
+		((f"w{i}_rdy",),),
+		((f"w{i}_canack",),),
+		((f"ra{i}_rdy",),),
+		((f"ra{i}_canack",),),
+		((f"rd{i}_rdy",),),
+		((f"rd{i}_ack",),),
+	])
+	w_rdy_buss.append(w_rdy_bus)
+	w_ack_buss.append(w_ack_bus)
+	w_buss.append(w_bus)
+	ra_rdy_buss.append(ra_rdy_bus)
+	ra_ack_buss.append(ra_ack_bus)
+	ra_buss.append(ra_bus)
+	rd_rdy_buss.append(rd_rdy_bus)
+	rd_ack_buss.append(rd_ack_bus)
+	rd_buss.append(rd_bus)
+cfg_bus, cfg_rdy_bus, cfg_ack_bus, = CreateBuses([
 	(
 		("u_top", "i_bgrid_step"             , (VDIM,)),
 		(None   , "i_bgrid_end"              , (VDIM,)),
@@ -352,6 +380,8 @@ w_bus, ra_bus, rd_bus, cfg_bus = CreateBuses([
 		(None   , "i_const_texs"             , (N_TLUT,)),
 		(None   , "i_reg_per_warp"),
 	),
+	(("cfg_rdy",),),
+	(("cfg_ack",),),
 ])
 rst_out_ev, ck_ev = CreateEvents(["rst_out", "ck_ev"])
 npd.random.seed(12345)

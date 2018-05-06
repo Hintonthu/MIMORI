@@ -6,6 +6,9 @@ SYN=syn
 top:
 	make COVERAGE=$(COV) Top
 
+top_mc:
+	make COVERAGE=$(COV) Top_mc
+
 tops:
 	make ARGS="+define+SDF=\\\"../$(SYN)/Top.sdf\\\" +define+GATE_LEVEL +define+SRAM_GEN_MODE=SYNOPSYS32 +incdir+../$(SYN)/SAED32_EDK/lib/sram/verilog/ +incdir+../$(SYN)/SAED32_EDK/lib/stdcell_rvt/verilog/ +incdir+../$(SYN)/ +nowarn+SDFNCAP:SDFNDP:MACRDF:CUVWSP:SDFNSB:SDFNL1" Top
 
@@ -17,6 +20,7 @@ all_sub:
 	-make COVERAGE=$(COV) wc
 	-make COVERAGE=$(COV) cal
 	-make COVERAGE=$(COV) alloc
+	-make COVERAGE=$(COV) rmc
 	-make COVERAGE=$(COV) chal
 
 wc:
@@ -38,6 +42,9 @@ rmc:
 
 pbl:
 	make COVERAGE=$(COV) ParallelBlockLooper
+
+pbl_mc:
+	make COVERAGE=$(COV) ParallelBlockLooper_mc
 
 alloc:
 	make COVERAGE=$(COV) Allocator

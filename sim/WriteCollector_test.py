@@ -1,4 +1,4 @@
-# Copyright 2016-2017 Yu Sheng Lin
+# Copyright 2016-2018 Yu Sheng Lin
 
 # This file is part of MIMORI.
 
@@ -16,7 +16,7 @@
 # along with MIMORI.  If not, see <http://www.gnu.org/licenses/>.
 
 from nicotb import *
-from nicotb.utils import Scoreboard, Stacker
+from nicotb.utils import Scoreboard, BusGetter, Stacker
 from nicotb.protocol import TwoWire
 from itertools import repeat
 from UmiModel import UmiModel, default_sample_conf, npi, npd, newaxis
@@ -24,10 +24,11 @@ from UmiModel import UmiModel, default_sample_conf, npi, npd, newaxis
 def main():
 	scb = Scoreboard("WriteCollector")
 	test = scb.GetTest("test")
-	st = Stacker(0, [test.Get])
+	st = Stacker(callbacks=[test.Get])
+	bg = BusGetter(callbacks=[st.Get])
 	master_a = TwoWire.Master(a_rdy_bus, a_ack_bus, a_bus, ck_ev)
 	master_d = TwoWire.Master(d_rdy_bus, d_ack_bus, d_bus, ck_ev)
-	slave = TwoWire.Slave(w_rdy_bus, w_ack_bus, w_bus, ck_ev, callbacks=[st.Get])
+	slave = TwoWire.Slave(w_rdy_bus, w_ack_bus, w_bus, ck_ev, callbacks=[bg.Get])
 	yield rst_out_ev
 
 	# global

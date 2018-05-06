@@ -1,4 +1,4 @@
-# Copyright 2016-2017 Yu Sheng Lin
+# Copyright 2016-2018 Yu Sheng Lin
 
 # This file is part of MIMORI.
 
@@ -16,7 +16,7 @@
 # along with MIMORI.  If not, see <http://www.gnu.org/licenses/>.
 
 from nicotb import *
-from nicotb.utils import Scoreboard, Stacker
+from nicotb.utils import Scoreboard, BusGetter, Stacker
 from nicotb.primitives import Semaphore
 from nicotb.protocol import OneWire, TwoWire
 from itertools import repeat
@@ -74,11 +74,12 @@ def main():
 	yield ck_ev
 	f_master = OneWire.Master(free_dval, free_bus, ck_ev, callbacks=[lambda x: sem.ReleaseNB()])
 	resp = Response(f_master.SendIter, ck_ev, B=10)
-	lc = Stacker(N_TEST, [test.Get])
+	lc = Stacker(N_TEST, callbacks=[test.Get])
+	bg = BusGetter(callbacks=[lc.Get])
 	a_master = TwoWire.Master(alloc_rdy, alloc_ack, alloc_bus, ck_ev)
 	a_slave = TwoWire.Slave(
 		linear_rdy, linear_ack, linear_bus, ck_ev,
-		callbacks=[lc.Get, lambda d: resp.Append((d.values[1].copy(),))]
+		callbacks=[bg.Get, lambda d: resp.Append((d.values[1].copy(),))]
 	)
 	test.Expect((linears[:,newaxis], ids[:,newaxis]))
 
