@@ -149,52 +149,8 @@ end
 localparam GATE_LEVEL = 0;
 `endif
 logic i_clk, i_rst;
-logic ra0_canack;
-logic ra1_canack;
-logic ra2_canack;
-logic ra3_canack;
-logic w0_canack;
-logic w1_canack;
-logic w2_canack;
-logic w3_canack;
 `rdyack_logic(cfg);
-`rdyack_logic(w0);
-`rdyack_logic(w1);
-`rdyack_logic(w2);
-`rdyack_logic(w3);
-`rdyack_logic(ra0);
-`rdyack_logic(ra1);
-`rdyack_logic(ra2);
-`rdyack_logic(ra3);
-`rdyack_logic(rd0);
-`rdyack_logic(rd1);
-`rdyack_logic(rd2);
-`rdyack_logic(rd3);
-logic [GBW-1:0] o_dramras [N_TAU];
-logic [DBW-1:0] i_dramrds [N_TAU][CSIZE];
-logic [GBW-1:0] o_dramwas [N_TAU];
-logic [DBW-1:0] o_dramwds [N_TAU][CSIZE];
-logic [CSIZE-1:0] o_dramw_masks [N_TAU];
-logic [GBW-1:0] o_dramra0;
-logic [GBW-1:0] o_dramra1;
-logic [GBW-1:0] o_dramra2;
-logic [GBW-1:0] o_dramra3;
-logic [DBW-1:0] i_dramrd0 [CSIZE];
-logic [DBW-1:0] i_dramrd1 [CSIZE];
-logic [DBW-1:0] i_dramrd2 [CSIZE];
-logic [DBW-1:0] i_dramrd3 [CSIZE];
-logic [GBW-1:0] o_dramwa0;
-logic [GBW-1:0] o_dramwa1;
-logic [GBW-1:0] o_dramwa2;
-logic [GBW-1:0] o_dramwa3;
-logic [DBW-1:0] o_dramwd0 [CSIZE];
-logic [DBW-1:0] o_dramwd1 [CSIZE];
-logic [DBW-1:0] o_dramwd2 [CSIZE];
-logic [DBW-1:0] o_dramwd3 [CSIZE];
-logic [CSIZE-1:0] o_dramw_mask0;
-logic [CSIZE-1:0] o_dramw_mask1;
-logic [CSIZE-1:0] o_dramw_mask2;
-logic [CSIZE-1:0] o_dramw_mask3;
+logic [N_TAU-1:0] rd_rdys, rd_acks, w_rdys, w_acks, w_canacks, ra_rdys, ra_acks, ra_canacks;
 `Pos(rst_out, i_rst)
 `ifdef GATE_LEVEL
 `PosIfDelayed(ck_ev, i_clk, i_rst, `INPUT_DELAY)
@@ -215,10 +171,7 @@ initial begin
 `endif
 	i_clk = 0;
 	i_rst = 1;
-	rd0_rdy = 0;
-	rd1_rdy = 0;
-	rd2_rdy = 0;
-	rd3_rdy = 0;
+	rd_rdys = 0;
 	#0.1 $NicotbInit();
 	#(`CLK*2) i_rst = 0;
 	#(`CLK*2) i_rst = 1;
@@ -227,34 +180,8 @@ initial begin
 	$finish;
 end
 
-assign ra0_ack = ra0_canack && ra0_rdy;
-assign ra1_ack = ra1_canack && ra1_rdy;
-assign ra2_ack = ra2_canack && ra2_rdy;
-assign ra3_ack = ra3_canack && ra3_rdy;
-assign w0_ack = w0_canack && w0_rdy;
-assign w1_ack = w1_canack && w1_rdy;
-assign w2_ack = w2_canack && w2_rdy;
-assign w3_ack = w3_canack && w3_rdy;
-assign o_dramra0 = o_dramras[0];
-assign o_dramra1 = o_dramras[1];
-assign o_dramra2 = o_dramras[2];
-assign o_dramra3 = o_dramras[3];
-assign i_dramrds[0] = i_dramrd0;
-assign i_dramrds[1] = i_dramrd1;
-assign i_dramrds[2] = i_dramrd2;
-assign i_dramrds[3] = i_dramrd3;
-assign o_dramwa0 = o_dramwas[0];
-assign o_dramwa1 = o_dramwas[1];
-assign o_dramwa2 = o_dramwas[2];
-assign o_dramwa3 = o_dramwas[3];
-assign o_dramwd0 = o_dramwds[0];
-assign o_dramwd1 = o_dramwds[1];
-assign o_dramwd2 = o_dramwds[2];
-assign o_dramwd3 = o_dramwds[3];
-assign o_dramw_mask0 = o_dramw_masks[0];
-assign o_dramw_mask1 = o_dramw_masks[1];
-assign o_dramw_mask2 = o_dramw_masks[2];
-assign o_dramw_mask3 = o_dramw_masks[3];
+assign w_acks = w_canacks & w_rdys;
+assign ra_acks = ra_canacks & ra_rdys;
 `ifdef GATE_LEVEL
 TopGateWrap
 `else
@@ -263,17 +190,12 @@ Top_mc
 u_top(
 	`clk_connect,
 	`rdyack_connect(src, cfg),
-	.dramra_rdys({ra3_rdy,ra2_rdy,ra1_rdy,ra0_rdy}),
-	.dramra_acks({ra3_ack,ra2_ack,ra1_ack,ra0_ack}),
-	.o_dramras(o_dramras),
-	.dramrd_rdys({rd3_rdy,rd2_rdy,rd1_rdy,rd0_rdy}),
-	.dramrd_acks({rd3_ack,rd2_ack,rd1_ack,rd0_ack}),
-	.i_dramrds(i_dramrds),
-	.dramw_rdys({w3_rdy,w2_rdy,w1_rdy,w0_rdy}),
-	.dramw_acks({w3_ack,w2_ack,w1_ack,w0_ack}),
-	.o_dramwas(o_dramwas),
-	.o_dramwds(o_dramwds),
-	.o_dramw_masks(o_dramw_masks)
+	.dramra_rdys(ra_rdys),
+	.dramra_acks(ra_acks),
+	.dramrd_rdys(rd_rdys),
+	.dramrd_acks(rd_acks),
+	.dramw_rdys(w_rdys),
+	.dramw_acks(w_acks)
 );
 
 endmodule
