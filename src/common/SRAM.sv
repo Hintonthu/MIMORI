@@ -30,7 +30,6 @@ package SramCfg;
 	parameter ConcurrentRW CON_RW = `SRAM_CON_RW;
 endpackage
 
-
 module SRAMTwoPort(
 	i_clk,
 	i_we,
@@ -111,6 +110,50 @@ end else if (SramCfg::GEN_MODE == SramCfg::SYNOPSYS32) begin: synopsys32
 		SRAM2RW64x32 s19(.A1(i_raddr),.A2(i_waddr),.CE1(i_clk),.CE2(i_clk),.WEB1(1'b1),.WEB2(1'b0),.OEB1(1'b0),.OEB2(1'b1),.CSB1(i_re_inv),.CSB2(i_we_inv),.I1(),.I2(i_wdata[639:608]),.O1(o_rdata[639:608]),.O2());
 	end else begin: syn_fail
 		initial ErrorSram;
+	end
+end else begin: fail
+	initial ErrorSram;
+end endgenerate
+
+endmodule
+
+module SRAMOnePort(
+	i_clk,
+	i_ce,
+	i_r0w1, // r = 0, w = 1
+	i_rwaddr,
+	i_wdata,
+	o_rdata
+);
+
+parameter BW = 8;
+parameter NDATA = 16;
+localparam CLOG2_NDATA = $clog2(NDATA);
+
+input i_clk;
+input i_ce;
+input i_r0w1;
+input        [CLOG2_NDATA-1:0] i_rwaddr;
+input        [BW-1:0]          i_wdata;
+output logic [BW-1:0]          o_rdata;
+
+task ErrorSram;
+begin
+	$display("SRAM configuration (%d, %dx%db) wrong!", SramCfg::GEN_MODE, NDATA, BW);
+	$finish();
+end
+endtask
+
+generate if (SramCfg::GEN_MODE == SramCfg::BEHAVIOUR) begin: sim_mode
+	logic [BW-1:0] data_r [NDATA];
+	always @(posedge i_clk) begin
+		if (i_ce) begin
+			if (i_r0w1) begin
+				data_r[i_rwaddr] <= i_wdata;
+			end else begin
+				o_rdata <= data_r[i_rwaddr];
+			end
+		end
 	end
 end else begin: fail
 	initial ErrorSram;

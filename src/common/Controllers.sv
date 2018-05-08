@@ -308,68 +308,6 @@ end
 
 endmodule
 
-module SFifoCtrl(
-	`clk_port,
-	`rdyack_port(src),
-	`rdyack_port(dst),
-	o_load_nxt,
-	o_load_new
-);
-
-parameter NDATA = 2;
-
-`clk_input;
-`rdyack_input(src);
-`rdyack_output(dst);
-output logic [NDATA-2:0] o_load_nxt;
-output logic [NDATA-1:0] o_load_new;
-
-logic [NDATA-1:0] rdy_r;
-logic [NDATA-1:0] rdy_w;
-logic [NDATA  :0] is_last;
-
-//======================================
-// Combinational
-//======================================
-assign dst_rdy = rdy_r[0];
-assign is_last = {rdy_r, 1'b1} & {1'b1, ~rdy_r};
-assign src_ack = src_rdy & !is_last[NDATA];
-
-always_comb begin
-	o_load_nxt = dst_ack ? rdy_r[NDATA-1:1] : '0;
-	case ({src_ack,dst_ack})
-		2'b00: begin
-			rdy_w = rdy_r;
-			o_load_new = '0;
-		end
-		2'b01: begin
-			rdy_w = rdy_r >> 1;
-			o_load_new = '0;
-		end
-		2'b10: begin
-			rdy_w = (rdy_r << 1) | 'b1;
-			o_load_new = is_last[NDATA-1:0];
-		end
-		2'b11: begin
-			rdy_w = rdy_r;
-			o_load_new = is_last[NDATA:1];
-		end
-	endcase
-end
-
-//======================================
-// Sequential
-//======================================
-always_ff @(posedge i_clk or negedge i_rst) begin
-	if (!i_rst) begin
-		rdy_r <= '0;
-	end else if (src_ack^dst_ack) begin
-		rdy_r <= rdy_w;
-	end
-end
-
-endmodule
-
 module Semaphore(
 	`clk_port,
 	i_inc,
