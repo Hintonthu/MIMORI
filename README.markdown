@@ -31,7 +31,8 @@ making MERIT Processor more suitable for low-end embedded CPUs.
 Many DNN accelerators utilize per-core local buffers and a large global buffer.
 *UMI Operator* identifies the data reuse clearly and provide a methodology to aggregate local buffers as a global buffer.
 Besides, while MERIT is a vector processor architecture,
-we use *UMI Operator* to also identify a data reuse pattern similar to systolic array.
+we use *UMI Operator* to also identify a data reuse pattern similar to systolic array,
+which we call SysTolic ARray Tensor DAta SHaring (STARTDASH) methodology.
 
 In short, programmers can exploit these optimization with only defining a few integers easily:
 * tiling,
@@ -57,34 +58,6 @@ The simulation requires 2 git submodules to work, and INCISIV (ncverilog/irun) i
   I made Nicotb since it works with numpy better and it's enough for me.
 * *Ramulator* (CAL 2015): https://github.com/CMU-SAFARI/ramulator, a extensible DRAM simulator based on C++11. I use a simple C++ wrapper to connect it with Nicotb.
 
-
-```bash
-git clone https://github.com/johnjohnlin/MIMORI
-cd MIMORI
-git submodule update --init --recursive
-make -j -C nicotb/lib/cpp
-make -j -C sim/UmiModel
-```
-
-For Nicotb, you need a C++11 enabled compiler, Python 3.6, numpy development library, and Google-glog.
-You can find more instruction in https://github.com/johnjohnlin/nicotb.
-
-### Simulate
-
-We need a better document here about running the simulation and adding testcases.
-By default, the simulation runs a toy convolution example.
-
-```bash
-cd sim
-make top
-make TEST_CFG=2 top
-# If you want a multi-core version
-# make top_mc
-# If you want a multi-core systolic version (not merged to dev yet)
-# make top_sd
-```
-
-### References and Publications
 
 ```latex
 @article{ramulator,
