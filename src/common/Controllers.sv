@@ -313,7 +313,10 @@ module Semaphore(
 	i_inc,
 	i_dec,
 	o_full,
-	o_empty
+	o_empty,
+	o_will_full,
+	o_will_empty,
+	o_n
 );
 
 //======================================
@@ -331,23 +334,27 @@ input i_inc;
 input i_dec;
 output logic o_full;
 output logic o_empty;
+output logic o_will_full;
+output logic o_will_empty;
+output logic [BW-1:0] o_n;
 
 //======================================
 // Internal
 //======================================
-logic [BW-1:0] pending_r;
-logic [BW-1:0] pending_w;
+logic [BW-1:0] o_n_w;
 
 //======================================
 // Combinational
 //======================================
-assign o_full = pending_r == N_MAX;
-assign o_empty = pending_r == '0;
+assign o_full = o_n == N_MAX;
+assign o_empty = o_n == '0;
+assign o_will_full = o_n_w == N_MAX;
+assign o_will_empty = o_n_w == '0;
 always_comb begin
 	case ({i_inc,i_dec})
-		2'b10:        pending_w = pending_r + 'b1;
-		2'b01:        pending_w = pending_r - 'b1;
-		2'b11, 2'b00: pending_w = pending_r;
+		2'b10:        o_n_w = o_n + 'b1;
+		2'b01:        o_n_w = o_n - 'b1;
+		2'b11, 2'b00: o_n_w = o_n;
 	endcase
 end
 
@@ -355,9 +362,9 @@ end
 // Sequential
 //======================================
 `ff_rst
-	pending_r <= '0;
+	o_n <= '0;
 `ff_cg(i_inc ^ i_dec)
-	pending_r <= pending_w;
+	o_n <= o_n_w;
 `ff_end
 
 endmodule

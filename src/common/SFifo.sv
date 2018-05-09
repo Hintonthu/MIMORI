@@ -143,36 +143,43 @@ generate if (IMPL_REG && NDATA >= 2) begin: fifo_reg
 		data_r[NDATA-1] <= i_data;
 	`ff_end
 end else if (IMPL_TP && NDATA >= 2) begin: fifo_2p
-	logic dst_rdy_w, we, sfull, sempty;
+	logic dst_rdy_w, sfull, sempty;
 	logic [CL_N-1:0]  ra_r, ra_w, wa_r, wa_w;
 	assign src_ack = src_rdy && !sfull;
-	assign re = dst_ack || (!sempty && !dst_rdy);
+	// rdy -> if ack and empty, then stop; if ack but not empty, then read next;
+	// !rdy -> if not empty, then read and change to ready.
+	assign re = (dst_ack || !dst_rdy) && !sempty;
+	assign dst_rdy_w = dst_rdy ? !(dst_ack && sempty) : !sempty;
+	// if we -> n+1; if re -> n-1
 	Semaphore#(NDATA) u_sem(
 		`clk_connect,
 		.i_inc(src_ack),
-		.i_dec(dst_ack),
+		.i_dec(re),
 		.o_full(sfull),
-		.o_empty(sempty)
+		.o_empty(sempty),
+		.o_will_empty(),
+		.o_will_full(),
+		.o_n()
 	);
 	SRAMTwoPort#(BW,NDATA) u_sram(
 		.i_clk(i_clk),
 		.i_we(src_ack),
 		.i_re(re),
-		.i_waddr(wa),
+		.i_waddr(wa_r),
 		.i_wdata(i_data),
-		.i_raddr(ra),
+		.i_raddr(ra_r),
 		.o_rdata(o_data)
 	);
 	`ff_rst
 		ra_r <= '0;
-	`ff_cg(dst_ack)
-		ra_r <= (ra_w == NDATA-1) ? 'b0 : ra_r + 'b1;
+	`ff_cg(re)
+		ra_r <= (ra_r == NDATA-1) ? 'b0 : ra_r + 'b1;
 	`ff_end
 
 	`ff_rst
 		wa_r <= '0;
 	`ff_cg(src_ack)
-		wa_r <= (wa_w == NDATA-1) ? 'b0 : wa_r + 'b1;
+		wa_r <= (wa_r == NDATA-1) ? 'b0 : wa_r + 'b1;
 	`ff_end
 
 	`ff_rst

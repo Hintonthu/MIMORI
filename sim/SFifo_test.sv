@@ -17,7 +17,7 @@
 `timescale 1ns/1ns
 `include "SFifo_include.sv"
 
-`define IMPL IMPL_REG
+`define IMPL IMPL_TP
 
 module SFifo_test;
 

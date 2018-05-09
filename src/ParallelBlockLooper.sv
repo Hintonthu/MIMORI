@@ -95,7 +95,10 @@ Semaphore#(N_PENDING) u_sem_done(
 	.i_inc(bofs_ack),
 	.i_dec(blkdone_dval),
 	.o_full(block_full),
-	.o_empty(block_empty)
+	.o_empty(block_empty),
+	.o_will_full(),
+	.o_will_empty(),
+	.o_n()
 );
 
 endmodule

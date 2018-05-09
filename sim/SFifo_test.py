@@ -20,6 +20,9 @@ from nicotb.protocol import TwoWire
 import numpy as np
 
 def main():
+	seed = np.random.randint(10000)
+	print(f"Seed for this run is {seed}")
+	np.random.seed(seed)
 	N = 1000
 	scb = Scoreboard("Fifo")
 	test = scb.GetTest("test")
