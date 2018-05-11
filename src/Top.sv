@@ -16,6 +16,7 @@
 // along with MIMORI.  If not, see <http://www.gnu.org/licenses/>.
 
 `include "common/define.sv"
+`include "common/TauCfg.sv"
 `include "ParallelBlockLooper.sv"
 `include "TileAccumUnit/TileAccumUnit.sv"
 

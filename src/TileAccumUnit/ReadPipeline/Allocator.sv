@@ -16,17 +16,21 @@
 // along with MIMORI.  If not, see <http://www.gnu.org/licenses/>.
 
 `include "common/define.sv"
+`include "common/TauCfg.sv"
 
 module Allocator(
 	`clk_port,
 	i_sizes,
 	`rdyack_port(alloc),
 	i_alloc_id,
+	i_false_alloc,
 	`rdyack_port(linear),
 	o_linear,
 	o_linear_id,
+	o_false_alloc,
 	`dval_port(free),
 	i_free_id,
+	i_false_free,
 	`dval_port(blkdone)
 );
 
@@ -34,6 +38,7 @@ module Allocator(
 // Parameter
 //======================================
 parameter LBW = TauCfg::LOCAL_ADDR_BW0;
+parameter SYST = 0;
 localparam N_ICFG = TauCfg::N_ICFG;
 // derived
 localparam ICFG_BW = $clog2(N_ICFG+1);
@@ -46,11 +51,14 @@ localparam [LBW:0] CAPACITY = 1<<LBW;
 input [LBW:0] i_sizes [N_ICFG];
 `rdyack_input(alloc);
 input [ICFG_BW-1:0] i_alloc_id;
+input               i_false_alloc;
 `rdyack_output(linear);
 output logic [LBW-1:0]     o_linear;
 output logic [ICFG_BW-1:0] o_linear_id;
+output logic               o_false_alloc;
 `dval_input(free);
 input [ICFG_BW-1:0] i_free_id;
+input               i_false_free;
 `dval_input(blkdone);
 
 //======================================
@@ -69,8 +77,8 @@ logic [LBW:0] fsize;
 //======================================
 // Combinational
 //======================================
-assign asize = i_sizes[i_alloc_id];
-assign fsize = i_sizes[i_free_id];
+assign asize = ((SYST != 0) && i_false_alloc) ? '0 : i_sizes[i_alloc_id];
+assign fsize = ((SYST != 0) && i_false_free ) ? '0 : i_sizes[i_free_id];
 always_comb begin
 	linear_rdy_w = linear_rdy;
 	cur_w = cur_r;
@@ -113,10 +121,12 @@ end
 	cur_r <= '0;
 	o_linear <= '0;
 	o_linear_id <= '0;
+	o_false_alloc <= 1'b0;
 `ff_cg(alloc_ack)
 	cur_r <= cur_w;
 	o_linear <= cur_r;
 	o_linear_id <= i_alloc_id;
+	o_false_alloc <= i_false_alloc;
 `ff_end
 
 endmodule

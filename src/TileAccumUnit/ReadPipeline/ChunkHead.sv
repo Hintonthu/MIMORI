@@ -1,4 +1,4 @@
-// Copyright 2016 Yu Sheng Lin
+// Copyright 2016,2018 Yu Sheng Lin
 
 // This file is part of MIMORI.
 
@@ -23,6 +23,7 @@ module ChunkHead(
 	i_aofs,
 	i_beg,
 	i_end,
+	i_syst_type,
 	i_global_mofs,
 	i_global_bshufs,
 	i_bstrides_frac,
@@ -30,9 +31,11 @@ module ChunkHead(
 	i_global_ashufs,
 	i_astrides_frac,
 	i_astrides_shamt,
+	i_systolic_skip,
 	`rdyack_port(o_mofs),
 	o_mofs,
-	o_id
+	o_id,
+	o_skip
 );
 //======================================
 // Parameter
@@ -53,6 +56,7 @@ input [WBW-1:0]     i_bofs [VDIM];
 input [WBW-1:0]     i_aofs [VDIM];
 input [ICFG_BW-1:0] i_beg;
 input [ICFG_BW-1:0] i_end;
+input [1:0]         i_syst_type;
 input [WBW-1:0]     i_global_mofs    [N_ICFG][DIM];
 input [DIM_BW-1:0]  i_global_bshufs  [N_ICFG][VDIM];
 input [SF_BW-1:0]   i_bstrides_frac  [N_ICFG][VDIM];
@@ -60,9 +64,11 @@ input [SS_BW-1:0]   i_bstrides_shamt [N_ICFG][VDIM];
 input [DIM_BW-1:0]  i_global_ashufs  [N_ICFG][VDIM];
 input [SF_BW-1:0]   i_astrides_frac  [N_ICFG][VDIM];
 input [SS_BW-1:0]   i_astrides_shamt [N_ICFG][VDIM];
+input [N_ICFG-1:0]  i_systolic_skip;
 `rdyack_output(o_mofs);
 output logic [WBW-1:0]     o_mofs   [DIM];
 output logic [ICFG_BW-1:0] o_id;
+output logic               o_skip;
 
 //======================================
 // Internal
@@ -118,9 +124,11 @@ NDShufAccum#(.BW(WBW), .DIM_IN(VDIM), .DIM_OUT(DIM), .ZERO_AUG(0)) u_saccum(
 	for (int i = 0; i < DIM; i++) begin
 		o_mofs[i] <= '0;
 	end
+	o_skip <= 1'b0;
 `ff_cg(o_mofs_ack || i_init_dval)
 	o_id <= o_id_w;
 	o_mofs <= o_mofs_w;
+	o_skip <= i_systolic_skip[o_id_w] && i_syst_type[1];
 `ff_end
 
 endmodule

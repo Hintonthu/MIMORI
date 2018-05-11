@@ -1,6 +1,6 @@
 `ifndef __OFFSET_STAGE__
 `define __OFFSET_STAGE__
-// Copyright 2016 Yu Sheng Lin
+// Copyright 2016,2018 Yu Sheng Lin
 
 // This file is part of MIMORI.
 
@@ -34,7 +34,8 @@ module OffsetStage(
 	o_sel_beg,
 	o_sel_end,
 	o_sel_ret,
-	o_islast
+	o_islast,
+	`dval_port(init)
 );
 
 //======================================
@@ -61,6 +62,8 @@ output logic [DIM :0] o_sel_beg;
 output logic [DIM :0] o_sel_end;
 output logic [DIM :0] o_sel_ret;
 output logic          o_islast;
+// It's convinient in systolic mode.
+`dval_output(init);
 
 //======================================
 // Internal
@@ -68,7 +71,6 @@ output logic          o_islast;
 logic [BW-1:0] ofs_nxt [DIM];
 logic [BW-1:0] lofs_nxt [DIM];
 `rdyack_logic(dst_raw);
-`dval_logic(init);
 
 //======================================
 // Submodule

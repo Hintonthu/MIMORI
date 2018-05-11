@@ -31,8 +31,9 @@ package TauCfg;
 	// This only works for multiple TAU version
 	parameter N_TAU = 4;
 	// This only works for systolic version
-	parameter N_TAU_Y = 4;
-	parameter N_TAU_X = 4;
+	parameter N_TAU_Y = 2;
+	parameter N_TAU_X = 2;
+	parameter SYSTOLIC_FIFO_DEPTH = 4;
 	// derived
 	localparam XOR_BW = 8; // this is a magic number for N=32
 	localparam ICFG_BW = $clog2(N_ICFG+1);

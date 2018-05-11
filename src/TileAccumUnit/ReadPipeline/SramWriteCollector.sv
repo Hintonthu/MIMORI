@@ -22,6 +22,7 @@ module SramWriteCollector(
 	i_linear,
 	i_linear_id,
 	i_size,
+	i_skip,
 	i_padv,
 	`rdyack_port(cmd),
 	i_cmd_type,
@@ -68,6 +69,7 @@ localparam [READ_DIFF_BW-1:0] READ_PAD_ZERO = 0;
 input [LBW-1:0]     i_linear;
 input [ICFG_BW-1:0] i_linear_id;
 input [LBW:0]       i_size;
+input               i_skip;
 input [DBW-1:0]     i_padv;
 `rdyack_input(cmd);
 input [1:0]        i_cmd_type;
@@ -137,10 +139,14 @@ always_comb begin
 	unique case(1'b1)
 		fsm_r[FREE]: begin
 			if (alloc_linear_rdy) begin
-				fsm_w[RUN] = 1'b1;
 				alloc_linear_ack = 1'b1;
 				cur_w = i_linear;
 				filled_w = '0;
+				if (i_skip) begin
+					fsm_w[COMMIT] = 1'b1;
+				end else begin
+					fsm_w[RUN] = 1'b1;
+				end
 			end else begin
 				fsm_w[FREE] = 1'b1;
 			end

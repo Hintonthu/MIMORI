@@ -18,6 +18,7 @@
 // along with MIMORI.  If not, see <http://www.gnu.org/licenses/>.
 
 `include "common/define.sv"
+`include "common/SFifo.sv"
 `include "TileAccumUnit/ReadPipeline/ChunkAddrLooper/ChunkRowStart.sv"
 `include "TileAccumUnit/ReadPipeline/ChunkAddrLooper/ChunkRow.sv"
 

@@ -28,9 +28,12 @@ module RemapCache(
 	i_rid,
 	i_raddr,
 	i_retire,
+	i_syst_type,
 	`rdyack_port(rd),
+	o_syst_type,
 	o_rdata,
 	`dval_port(free),
+	o_false_alloc,
 	o_free_id,
 	`dval_port(wad),
 	i_wid,
@@ -64,9 +67,12 @@ input [XOR_BW-1:0]  i_xor_configs [N_ICFG];
 input [ICFG_BW-1:0] i_rid;
 input [LBW-1:0]     i_raddr [VSIZE];
 input               i_retire;
+input [1:0]         i_syst_type;
 `rdyack_output(rd);
+output [1:0]     o_syst_type;
 output [DBW-1:0] o_rdata [VSIZE];
 `dval_output(free);
+output               o_false_alloc;
 output [ICFG_BW-1:0] o_free_id;
 `dval_input(wad);
 input [ICFG_BW-1:0] i_wid;
@@ -98,9 +104,12 @@ BankSramReadIf #(
 	.i_id(i_rid),
 	.i_raddr(i_raddr),
 	.i_retire(i_retire),
+	.i_syst_type(i_syst_type),
 	`rdyack_connect(dout, rd),
+	.o_syst_type(o_syst_type),
 	.o_rdata(o_rdata),
 	`dval_connect(free, free),
+	.o_false_alloc(o_false_alloc),
 	.o_free_id(o_free_id),
 	.o_sram_re(sram_re),
 	.o_sram_raddr(sram_ra),

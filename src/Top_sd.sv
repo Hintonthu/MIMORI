@@ -17,10 +17,11 @@
 
 `include "common/define.sv"
 `include "common/TauCfg.sv"
-`include "ParallelBlockLooper_mc.sv"
-`include "TileAccumUnit/TileAccumUnit.sv"
+`include "BidirFifo.sv"
+`include "ParallelBlockLooper_sd.sv"
+`include "TileAccumUnit/TileAccumUnit_sd.sv"
 
-module Top_mc(
+module Top_sd(
 	`clk_port,
 	`rdyack_port(src),
 	i_bgrid_step,    // block shape
@@ -56,6 +57,8 @@ module Top_mc(
 	i_i0_stencil_begs,
 	i_i0_stencil_ends,
 	i_i0_stencil_lut,
+	i_i0_systolic_skip,      // Can we skip the data load and obtain from neighbors
+	i_i0_systolic_axis,      // How to schedule blocks
 	i_i1_local_xor_masks,
 	i_i1_local_xor_schemes,
 	i_i1_local_xor_configs,
@@ -80,6 +83,8 @@ module Top_mc(
 	i_i1_stencil_begs,
 	i_i1_stencil_ends,
 	i_i1_stencil_lut,
+	i_i1_systolic_skip,
+	i_i1_systolic_axis,
 	// TODO [0] is not used
 	i_o_global_boundaries,
 	i_o_global_bsubsteps,
@@ -135,17 +140,24 @@ localparam REG_ADDR = TauCfg::WARP_REG_ADDR_SPACE;
 localparam CONST_LUT = TauCfg::CONST_LUT;
 localparam CONST_TEX_LUT = TauCfg::CONST_TEX_LUT;
 localparam STSIZE = TauCfg::STENCIL_SIZE;
-localparam N_TAU = TauCfg::N_TAU;
+localparam N_TAU_X = TauCfg::N_TAU_X;
+localparam N_TAU_Y = TauCfg::N_TAU_Y;
 // derived
 localparam ICFG_BW = $clog2(N_ICFG+1);
 localparam OCFG_BW = $clog2(N_OCFG+1);
 localparam INST_BW = $clog2(N_INST+1);
 localparam DIM_BW = $clog2(DIM);
+localparam VDIM_BW1 = $clog2(VDIM+1);
 localparam CV_BW = $clog2(VSIZE);
 localparam CCV_BW = $clog2(CV_BW+1);
 localparam CX_BW = $clog2(XOR_BW);
 localparam REG_ABW = $clog2(REG_ADDR);
 localparam ST_BW = $clog2(STSIZE+1);
+localparam N_TAU_XY = N_TAU_X * N_TAU_Y;
+localparam CN_TAU_X = $clog2(N_TAU_X);
+localparam CN_TAU_Y = $clog2(N_TAU_Y);
+localparam CN_TAU_X1 = $clog2(N_TAU_X+1);
+localparam CN_TAU_Y1 = $clog2(N_TAU_Y+1);
 
 //======================================
 // I/O
@@ -185,6 +197,8 @@ input               i_i0_stencil;
 input [ST_BW-1:0]   i_i0_stencil_begs [N_ICFG];
 input [ST_BW-1:0]   i_i0_stencil_ends [N_ICFG];
 input [LBW0-1:0]    i_i0_stencil_lut [STSIZE];
+input [N_ICFG-1:0]  i_i0_systolic_skip;
+input [VDIM_BW1-1:0] i_i0_systolic_axis;
 input [CV_BW-1:0]   i_i1_local_xor_masks      [N_ICFG];
 input [CCV_BW-1:0]  i_i1_local_xor_schemes    [N_ICFG][CV_BW];
 input [XOR_BW-1:0]  i_i1_local_xor_configs    [N_ICFG];
@@ -209,6 +223,8 @@ input               i_i1_stencil;
 input [ST_BW-1:0]   i_i1_stencil_begs [N_ICFG];
 input [ST_BW-1:0]   i_i1_stencil_ends [N_ICFG];
 input [LBW1-1:0]    i_i1_stencil_lut [STSIZE];
+input [N_ICFG-1:0]  i_i1_systolic_skip;
+input [VDIM_BW1-1:0] i_i1_systolic_axis;
 input [GBW-1:0]     i_o_global_boundaries    [N_OCFG][DIM];
 input [GBW-1:0]     i_o_global_bsubsteps     [N_OCFG][CV_BW];
 input [GBW-1:0]     i_o_global_linears       [N_OCFG];
@@ -226,46 +242,116 @@ input [ISA_BW-1:0]  i_insts [N_INST];
 input [TDBW-1:0]    i_consts [CONST_LUT];
 input [TDBW-1:0]    i_const_texs [CONST_TEX_LUT];
 input [REG_ABW-1:0] i_reg_per_warp;
-output [N_TAU-1:0] dramra_rdys;
-input  [N_TAU-1:0] dramra_acks;
-output [GBW-1:0] o_dramras [N_TAU];
-input  [N_TAU-1:0] dramrd_rdys;
-output [N_TAU-1:0] dramrd_acks;
-input  [DBW-1:0] i_dramrds [N_TAU][CSIZE];
-output [N_TAU-1:0] dramw_rdys;
-input  [N_TAU-1:0] dramw_acks;
-output [GBW-1:0]   o_dramwas [N_TAU];
-output [DBW-1:0]   o_dramwds [N_TAU][CSIZE];
-output [CSIZE-1:0] o_dramw_masks [N_TAU];
+output [N_TAU_XY-1:0] dramra_rdys;
+input  [N_TAU_XY-1:0] dramra_acks;
+output [GBW-1:0]      o_dramras     [N_TAU_XY];
+input  [N_TAU_XY-1:0] dramrd_rdys;
+output [N_TAU_XY-1:0] dramrd_acks;
+input  [DBW-1:0]      i_dramrds     [N_TAU_XY][CSIZE];
+output [N_TAU_XY-1:0] dramw_rdys;
+input  [N_TAU_XY-1:0] dramw_acks;
+output [GBW-1:0]      o_dramwas     [N_TAU_XY];
+output [DBW-1:0]      o_dramwds     [N_TAU_XY][CSIZE];
+output [CSIZE-1:0]    o_dramw_masks [N_TAU_XY];
 
 //======================================
 // Internal
 //======================================
-logic [N_TAU-1:0] blk_tau_bofs_rdys;
-logic [N_TAU-1:0] blk_tau_bofs_acks;
-logic [WBW-1:0] blk_tau_bofss [N_TAU][VDIM];
-logic [N_TAU-1:0] tau_blk_dones;
+logic                 blk_tau_bofs_rdys         [N_TAU_X][N_TAU_Y];
+logic                 blk_tau_bofs_acks         [N_TAU_X][N_TAU_Y];
+logic [WBW-1:0]       blk_tau_bofss             [N_TAU_X][N_TAU_Y][VDIM];
+logic [CN_TAU_X1-1:0] blk_tau_i0_systolic_gsize [N_TAU_X][N_TAU_Y];
+logic [CN_TAU_Y -1:0] blk_tau_i0_systolic_idx   [N_TAU_X][N_TAU_Y];
+logic [CN_TAU_X1-1:0] blk_tau_i1_systolic_gsize [N_TAU_X][N_TAU_Y];
+logic [CN_TAU_Y -1:0] blk_tau_i1_systolic_idx   [N_TAU_X][N_TAU_Y];
+logic                 tau_blk_dones             [N_TAU_X][N_TAU_Y];
+logic
+	tau_i0_dir0_syst_in_rdy  [N_TAU_X][N_TAU_Y],
+	tau_i0_dir0_syst_in_ack  [N_TAU_X][N_TAU_Y],
+	tau_i0_dir1_syst_in_rdy  [N_TAU_X][N_TAU_Y],
+	tau_i0_dir1_syst_in_ack  [N_TAU_X][N_TAU_Y],
+	tau_i0_dir0_syst_out_rdy [N_TAU_X][N_TAU_Y],
+	tau_i0_dir0_syst_out_ack [N_TAU_X][N_TAU_Y],
+	tau_i0_dir1_syst_out_rdy [N_TAU_X][N_TAU_Y],
+	tau_i0_dir1_syst_out_ack [N_TAU_X][N_TAU_Y],
+	tau_i1_dir0_syst_in_rdy  [N_TAU_X][N_TAU_Y],
+	tau_i1_dir0_syst_in_ack  [N_TAU_X][N_TAU_Y],
+	tau_i1_dir1_syst_in_rdy  [N_TAU_X][N_TAU_Y],
+	tau_i1_dir1_syst_in_ack  [N_TAU_X][N_TAU_Y],
+	tau_i1_dir0_syst_out_rdy [N_TAU_X][N_TAU_Y],
+	tau_i1_dir0_syst_out_ack [N_TAU_X][N_TAU_Y],
+	tau_i1_dir1_syst_out_rdy [N_TAU_X][N_TAU_Y],
+	tau_i1_dir1_syst_out_ack [N_TAU_X][N_TAU_Y];
+logic [DBW-1:0] tau_i0_syst_data_out [N_TAU_X][N_TAU_Y][VSIZE];
+logic [DBW-1:0] tau_i1_syst_data_out [N_TAU_X][N_TAU_Y][VSIZE];
+logic [DBW-1:0] tau_i0_syst_data_in  [N_TAU_X+1][N_TAU_Y][VSIZE];
+logic [DBW-1:0] tau_i1_syst_data_in  [N_TAU_X][N_TAU_Y+1][VSIZE];
+
+//======================================
+// Combinational
+//======================================
+always_comb begin
+	for (int k = 0; k < N_TAU_X; k++) begin
+		tau_i1_dir0_syst_in_rdy [k][0        ] = 1'b0;
+		tau_i1_dir1_syst_in_rdy [k][N_TAU_Y-1] = 1'b0;
+		tau_i1_dir1_syst_out_ack[k][0        ] = tau_i1_dir1_syst_out_rdy[k][0        ];
+		tau_i1_dir0_syst_out_ack[k][N_TAU_Y-1] = tau_i1_dir0_syst_out_rdy[k][N_TAU_Y-1];
+	end
+	for (int k = 0; k < N_TAU_Y; k++) begin
+		tau_i0_dir0_syst_in_rdy [0        ][k] = 1'b0;
+		tau_i0_dir1_syst_in_rdy [N_TAU_X-1][k] = 1'b0;
+		tau_i0_dir1_syst_out_ack[0        ][k] = tau_i0_dir1_syst_out_rdy[0        ][k];
+		tau_i0_dir0_syst_out_ack[N_TAU_X-1][k] = tau_i0_dir0_syst_out_rdy[N_TAU_X-1][k];
+	end
+end
+
+always_comb begin
+	for (int k = 0; k < N_TAU_X; k++) begin
+		for (int l = 0; l < VSIZE; l++) begin
+			tau_i1_syst_data_in[k][0      ][l] = '0;
+			tau_i1_syst_data_in[k][N_TAU_Y][l] = '0;
+		end
+	end
+	for (int k = 0; k < N_TAU_Y; k++) begin
+		for (int l = 0; l < VSIZE; l++) begin
+			tau_i0_syst_data_in[0      ][k][l] = '0;
+			tau_i0_syst_data_in[N_TAU_X][k][l] = '0;
+		end
+	end
+end
 
 //======================================
 // Submodule
 //======================================
-ParallelBlockLooper_mc u_pbl(
+ParallelBlockLooper_sd u_pbl(
 	`clk_connect,
 	`rdyack_connect(src, src),
 	.i_bgrid_step(i_bgrid_step),
 	.i_bgrid_end(i_bgrid_end),
+	.i_bboundary(i_bboundary),
+	.i_i0_systolic_axis(i_i0_systolic_axis),
+	.i_i1_systolic_axis(i_i1_systolic_axis),
 	.bofs_rdys(blk_tau_bofs_rdys),
 	.bofs_acks(blk_tau_bofs_acks),
 	.o_bofss(blk_tau_bofss),
+	.o_i0_systolic_gsize(blk_tau_i0_systolic_gsize),
+	.o_i0_systolic_idx(blk_tau_i0_systolic_idx),
+	.o_i1_systolic_gsize(blk_tau_i1_systolic_gsize),
+	.o_i1_systolic_idx(blk_tau_i1_systolic_idx),
 	.blkdone_dvals(tau_blk_dones)
 );
-genvar i;
-generate for (i = 0; i < N_TAU; i++) begin: taus
-TileAccumUnit u_tau(
+genvar i, j;
+generate for (i = 0; i < N_TAU_X; i++) begin: tausx
+	for (j = 0; j < N_TAU_Y; j++) begin: tausy
+TileAccumUnit_sd u_tau(
 	`clk_connect,
-	.bofs_rdy(blk_tau_bofs_rdys[i]),
-	.bofs_ack(blk_tau_bofs_acks[i]),
-	.i_bofs(blk_tau_bofss[i]),
+	.bofs_rdy(blk_tau_bofs_rdys[i][j]),
+	.bofs_ack(blk_tau_bofs_acks[i][j]),
+	.i_bofs(blk_tau_bofss[i][j]),
+	.i_i0_systolic_gsize(blk_tau_i0_systolic_gsize[i][j]),
+	.i_i0_systolic_idx(blk_tau_i0_systolic_idx[i][j]),
+	.i_i1_systolic_gsize(blk_tau_i1_systolic_gsize[i][j]),
+	.i_i1_systolic_idx(blk_tau_i1_systolic_idx[i][j]),
 	.i_bboundary(i_bboundary),
 	.i_bsubofs(i_bsubofs),
 	.i_bsub_up_order(i_bsub_up_order),
@@ -298,6 +384,7 @@ TileAccumUnit u_tau(
 	.i_i0_stencil_begs(i_i0_stencil_begs),
 	.i_i0_stencil_ends(i_i0_stencil_ends),
 	.i_i0_stencil_lut(i_i0_stencil_lut),
+	.i_i0_systolic_skip(i_i0_systolic_skip),
 	.i_i1_local_xor_masks(i_i1_local_xor_masks),
 	.i_i1_local_xor_schemes(i_i1_local_xor_schemes),
 	.i_i1_local_xor_configs(i_i1_local_xor_configs),
@@ -322,6 +409,7 @@ TileAccumUnit u_tau(
 	.i_i1_stencil_begs(i_i1_stencil_begs),
 	.i_i1_stencil_ends(i_i1_stencil_ends),
 	.i_i1_stencil_lut(i_i1_stencil_lut),
+	.i_i1_systolic_skip(i_i1_systolic_skip),
 	.i_o_global_boundaries(i_o_global_boundaries),
 	.i_o_global_bsubsteps(i_o_global_bsubsteps),
 	.i_o_global_linears(i_o_global_linears),
@@ -339,19 +427,80 @@ TileAccumUnit u_tau(
 	.i_consts(i_consts),
 	.i_const_texs(i_const_texs),
 	.i_reg_per_warp(i_reg_per_warp),
-	.blkdone_dval(tau_blk_dones[i]),
-	.dramra_rdy(dramra_rdys[i]),
-	.dramra_ack(dramra_acks[i]),
-	.o_dramra(o_dramras[i]),
-	.dramrd_rdy(dramrd_rdys[i]),
-	.dramrd_ack(dramrd_acks[i]),
-	.i_dramrd(i_dramrds[i]),
-	.dramw_rdy(dramw_rdys[i]),
-	.dramw_ack(dramw_acks[i]),
-	.o_dramwa(o_dramwas[i]),
-	.o_dramwd(o_dramwds[i]),
-	.o_dramw_mask(o_dramw_masks[i])
+	.blkdone_dval(tau_blk_dones[i][j]),
+	.dramra_rdy(dramra_rdys[i*N_TAU_Y+j]),
+	.dramra_ack(dramra_acks[i*N_TAU_Y+j]),
+	.o_dramra(o_dramras[i*N_TAU_Y+j]),
+	.dramrd_rdy(dramrd_rdys[i*N_TAU_Y+j]),
+	.dramrd_ack(dramrd_acks[i*N_TAU_Y+j]),
+	.i_dramrd(i_dramrds[i*N_TAU_Y+j]),
+	.dramw_rdy(dramw_rdys[i*N_TAU_Y+j]),
+	.dramw_ack(dramw_acks[i*N_TAU_Y+j]),
+	.o_dramwa(o_dramwas[i*N_TAU_Y+j]),
+	.o_dramwd(o_dramwds[i*N_TAU_Y+j]),
+	.o_dramw_mask(o_dramw_masks[i*N_TAU_Y+j]),
+	.i0_dir0_syst_in_rdy(tau_i0_dir0_syst_in_rdy[i][j]),
+	.i0_dir0_syst_in_ack(tau_i0_dir0_syst_in_ack[i][j]),
+	.i0_dir0_syst_data_in(tau_i0_syst_data_in[i][j]),
+	.i0_dir1_syst_in_rdy(tau_i0_dir1_syst_in_rdy[i][j]),
+	.i0_dir1_syst_in_ack(tau_i0_dir1_syst_in_ack[i][j]),
+	.i0_dir1_syst_data_in(tau_i0_syst_data_in[i+1][j]),
+	.i0_dir0_syst_out_rdy(tau_i0_dir0_syst_out_rdy[i][j]),
+	.i0_dir0_syst_out_ack(tau_i0_dir0_syst_out_ack[i][j]),
+	.i0_dir1_syst_out_rdy(tau_i0_dir1_syst_out_rdy[i][j]),
+	.i0_dir1_syst_out_ack(tau_i0_dir1_syst_out_ack[i][j]),
+	.i0_syst_data_out(tau_i0_syst_data_out[i][j]),
+	.i1_dir0_syst_in_rdy(tau_i1_dir0_syst_in_rdy[i][j]),
+	.i1_dir0_syst_in_ack(tau_i1_dir0_syst_in_ack[i][j]),
+	.i1_dir0_syst_data_in(tau_i1_syst_data_in[i][j]),
+	.i1_dir1_syst_in_rdy(tau_i1_dir1_syst_in_rdy[i][j]),
+	.i1_dir1_syst_in_ack(tau_i1_dir1_syst_in_ack[i][j]),
+	.i1_dir1_syst_data_in(tau_i1_syst_data_in[i][j+1]),
+	.i1_dir0_syst_out_rdy(tau_i1_dir0_syst_out_rdy[i][j]),
+	.i1_dir0_syst_out_ack(tau_i1_dir0_syst_out_ack[i][j]),
+	.i1_dir1_syst_out_rdy(tau_i1_dir1_syst_out_rdy[i][j]),
+	.i1_dir1_syst_out_ack(tau_i1_dir1_syst_out_ack[i][j]),
+	.i1_syst_data_out(tau_i1_syst_data_out[i][j])
 );
+	end
+end endgenerate
+
+generate for (i = 0; i < N_TAU_X-1; i++) begin: syst_i0_conx
+	for (j = 0; j < N_TAU_Y; j++) begin: syst_i0_cony
+BidirFifo u_fifox(
+	`clk_connect,
+	.src0_rdy(tau_i0_dir0_syst_out_rdy[i][j]),
+	.src0_ack(tau_i0_dir0_syst_out_ack[i][j]),
+	.s0_data(tau_i0_syst_data_out[i][j]),
+	.src1_rdy(tau_i0_dir1_syst_out_rdy[i+1][j]),
+	.src1_ack(tau_i0_dir1_syst_out_ack[i+1][j]),
+	.s1_data(tau_i0_syst_data_out[i+1][j]),
+	.dst0_rdy(tau_i0_dir0_syst_in_rdy[i+1][j]),
+	.dst0_ack(tau_i0_dir0_syst_in_ack[i+1][j]),
+	.dst1_rdy(tau_i0_dir1_syst_in_rdy[i][j]),
+	.dst1_ack(tau_i0_dir1_syst_in_ack[i][j]),
+	.d01_data(tau_i0_syst_data_in[i+1][j])
+);
+	end
+end endgenerate
+
+generate for (i = 0; i < N_TAU_X; i++) begin: syst_i1_conx
+	for (j = 0; j < N_TAU_Y-1; j++) begin: syst_i1_cony
+BidirFifo u_fifoy(
+	`clk_connect,
+	.src0_rdy(tau_i1_dir0_syst_out_rdy[i][j]),
+	.src0_ack(tau_i1_dir0_syst_out_ack[i][j]),
+	.s0_data(tau_i1_syst_data_out[i][j]),
+	.src1_rdy(tau_i1_dir1_syst_out_rdy[i][j+1]),
+	.src1_ack(tau_i1_dir1_syst_out_ack[i][j+1]),
+	.s1_data(tau_i1_syst_data_out[i][j+1]),
+	.dst0_rdy(tau_i1_dir0_syst_in_rdy[i][j+1]),
+	.dst0_ack(tau_i1_dir0_syst_in_ack[i][j+1]),
+	.dst1_rdy(tau_i1_dir1_syst_in_rdy[i][j]),
+	.dst1_ack(tau_i1_dir1_syst_in_ack[i][j]),
+	.d01_data(tau_i1_syst_data_in[i][j+1])
+);
+	end
 end endgenerate
 
 endmodule
