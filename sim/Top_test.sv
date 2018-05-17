@@ -29,6 +29,27 @@ import TauCfg::*;
 `define INPUT_DELAY 2
 
 module Top_test;
+localparam GBW = GLOBAL_ADDR_BW;
+localparam DBW = DATA_BW;
+localparam CSIZE = CACHE_SIZE;
+`ifdef SC
+localparam SIM_MODE = 0;
+localparam N_TAU_X = 0;
+localparam N_TAU_Y = 0;
+localparam N_TAU = 1;
+`endif
+`ifdef MC
+localparam SIM_MODE = 1;
+localparam N_TAU_X = 0;
+localparam N_TAU_Y = 0;
+localparam N_TAU = N_TAU;
+`endif
+`ifdef SD
+localparam SIM_MODE = 2;
+localparam N_TAU_X = N_TAU_X;
+localparam N_TAU_Y = N_TAU_Y;
+localparam N_TAU = N_TAU_X * N_TAU_Y;
+`endif
 
 `ifdef GATE_LEVEL
 localparam GATE_LEVEL = 1;
@@ -135,20 +156,18 @@ initial begin
 	for (int i = 0; i < CONST_TEX_LUT; i++) begin
 		u_top.i_const_texs[i] = 0;
 	end
-	for (int i = 0; i < CACHE_SIZE; i++) begin
-		u_top.i_dramrd[i] = 0;
+	for (int i = 0; i < N_TAU; i++) begin
+		for (int j = 0; j < CACHE_SIZE; j++) begin
+			u_top.i_dramrds[i][j] = 0;
+		end
 	end
 end
 `else
 localparam GATE_LEVEL = 0;
 `endif
 logic i_clk, i_rst;
-logic ra_canack;
-logic w_canack;
 `rdyack_logic(cfg);
-`rdyack_logic(w);
-`rdyack_logic(ra);
-`rdyack_logic(rd);
+logic [N_TAU-1:0] rd_rdy, rd_ack, w_rdy, w_ack, w_canack, ra_rdy, ra_ack, ra_canack;
 `Pos(rst_out, i_rst)
 `ifdef GATE_LEVEL
 `PosIfDelayed(ck_ev, i_clk, i_rst, `INPUT_DELAY)
@@ -162,10 +181,18 @@ initial begin
 `ifdef GATE_LEVEL
 	$fsdbDumpfile("Top_syn.fsdb");
 	$sdf_annotate(`SDF , u_top.u_top);
-	$fsdbDumpvars(0, u_top.u_top, "+mda");
+	$fsdbDumpvars(0, Top_test, "+mda");
 `else
+`ifdef SC
 	$fsdbDumpfile("Top.fsdb");
-	$fsdbDumpvars(0, u_top, "+mda");
+`endif
+`ifdef MC
+	$fsdbDumpfile("Top_mc.fsdb");
+`endif
+`ifdef SD
+	$fsdbDumpfile("Top_sd.fsdb");
+`endif
+	$fsdbDumpvars(0, Top_test, "+mda");
 `endif
 	i_clk = 0;
 	i_rst = 1;
@@ -173,13 +200,13 @@ initial begin
 	#0.1 $NicotbInit();
 	#(`CLK*2) i_rst = 0;
 	#(`CLK*2) i_rst = 1;
-	#(`CLK*100000) $display("Timeout");
+	#(`CLK*10000) $display("Timeout");
 	$NicotbFinal();
 	$finish;
 end
 
-assign ra_ack = ra_canack && ra_rdy;
-assign w_ack = w_canack && w_rdy;
+assign w_ack = w_canack & w_rdy;
+assign ra_ack = ra_canack & ra_rdy;
 `ifdef GATE_LEVEL
 TopGateWrap
 `else
@@ -188,9 +215,12 @@ Top
 u_top(
 	`clk_connect,
 	`rdyack_connect(src, cfg),
-	`rdyack_connect(dramra, ra),
-	`rdyack_connect(dramrd, rd),
-	`rdyack_connect(dramw, w)
+	.dramra_rdy(ra_rdy),
+	.dramra_ack(ra_ack),
+	.dramrd_rdy(rd_rdy),
+	.dramrd_ack(rd_ack),
+	.dramw_rdy(w_rdy),
+	.dramw_ack(w_ack)
 );
 
 endmodule

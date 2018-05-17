@@ -1,4 +1,4 @@
-SRCDIR := ../ramulator/src
+SRCDIR := ../../ramulator/src
 OBJDIR := obj
 MAIN := $(SRCDIR)/Main.cpp
 SRCS := $(filter-out $(MAIN) $(SRCDIR)/Gem5Wrapper.cpp, $(wildcard $(SRCDIR)/*.cpp))
@@ -9,14 +9,14 @@ OBJS := $(patsubst $(SRCDIR)/%.cpp, $(OBJDIR)/%.o, $(SRCS))
 #   g++ 4.x due to an internal compiler error when processing lambda functions.
 # CXX := clang++
 CXX := g++
-CXXFLAGS := -O3 -std=c++11 -g -Wall -fPIC -c -I../ramulator
+CXXFLAGS := -g -std=c++11 -Wall -fPIC -I$(SRCDIR)
 
 .PHONY: all clean depend
 
-all: depend ramulator_wrap ramulator_mc_wrap
+all: depend ramulator_wrap.so
 
 clean:
-	rm -f ramulator_wrap.so ramulator_mc_wrap.so
+	rm -f ramulator_wrap.so
 	rm -rf $(OBJDIR)
 
 depend: $(OBJDIR)/.depend
@@ -35,11 +35,8 @@ endif
 ramulator: $(MAIN) $(OBJS) $(SRCDIR)/*.h | depend
 	$(CXX) $(CXXFLAGS) -DRAMULATOR -o $@ $(MAIN) $(OBJS)
 
-ramulator_wrap: wrapper.cpp $(OBJS) $(SRCDIR)/*.h CircBuf.h | depend
-	$(CXX) --std=c++11 -g -DRAMULATOR -I../ramulator -fPIC -shared $< $(OBJS) -o ramulator_wrap.so
-
-ramulator_mc_wrap: wrapper_mc.cpp $(OBJS) $(SRCDIR)/*.h CircBuf.h | depend
-	$(CXX) --std=c++11 -g -DRAMULATOR -I../ramulator -fPIC -shared $< $(OBJS) -o ramulator_mc_wrap.so
+ramulator_wrap.so: wrapper.o $(OBJS) $(SRCDIR)/*.h CircBuf.h | depend
+	$(CXX) $(CXXFLAGS) -DRAMULATOR -shared $< $(OBJS) -o $@
 
 libramulator.a: $(OBJS) $(OBJDIR)/Gem5Wrapper.o
 	libtool -static -o $@ $(OBJS) $(OBJDIR)/Gem5Wrapper.o
@@ -50,4 +47,7 @@ $(OBJDIR):
 	@mkdir -p $@
 
 $(OBJDIR)/%.o: $(SRCDIR)/%.cpp
+	$(CXX) $(CXXFLAGS) -DRAMULATOR -c -o $@ $<
+
+wrapper.o: wrapper.cpp CircBuf.h
 	$(CXX) $(CXXFLAGS) -DRAMULATOR -c -o $@ $<

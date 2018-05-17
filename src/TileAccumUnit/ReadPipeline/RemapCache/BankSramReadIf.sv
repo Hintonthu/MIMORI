@@ -27,12 +27,18 @@ module BankSramReadIf(
 	i_id,
 	i_raddr,
 	i_retire,
+`ifdef SD
 	i_syst_type,
+`endif
 	`rdyack_port(dout),
+`ifdef SD
 	o_syst_type,
+`endif
 	o_rdata,
 	`dval_port(free),
+`ifdef SD
 	o_false_alloc,
+`endif
 	o_free_id,
 	// SRAM
 	o_sram_re,
@@ -67,12 +73,18 @@ input [XOR_BW-1:0]       i_xor_config;
 input [ID_BW-1:0]        i_id;
 input [ABW-1:0]          i_raddr [NBANK];
 input                    i_retire;
+`ifdef SD
 input [1:0]              i_syst_type;
+`endif
 `rdyack_output(dout);
+`ifdef SD
 output logic [1:0]    o_syst_type;
+`endif
 output logic [BW-1:0] o_rdata [NBANK];
 `dval_output(free);
+`ifdef SD
 output logic             o_false_alloc;
+`endif
 output logic [ID_BW-1:0] o_free_id;
 output logic [NBANK-1:0]       o_sram_re;
 output logic [CLOG2_NDATA-1:0] o_sram_raddr [NBANK];
@@ -91,7 +103,6 @@ logic [NBANK-1:0] s1_bf [CLOG2_NBANK];
 logic [BW-1:0]    s1_bf_data [CLOG2_NBANK+1][NBANK];
 logic [ID_BW-1:0] s1_free_id;
 logic             s1_retire;
-logic [1:0]       s1_syst_type;
 logic dout_retire;
 
 //======================================
@@ -101,7 +112,10 @@ logic dout_retire;
 `include "TileAccumUnit/ReadPipeline/RemapCache/codegen/RemapCacheLowRotate5.sv"
 assign free_dval = dout_retire && dout_ack;
 assign o_sram_re = addrin_ack ? i_ren[0] : '0;
+`ifdef SD
+logic [1:0] s1_syst_type;
 assign o_false_alloc = o_syst_type[1];
+`endif
 
 // I give up. Let the code generator do it.
 generate if (CLOG2_NBANK == 5) begin: rmc_read_5
@@ -179,12 +193,16 @@ Forward u_fwd_dat(
 	end
 	s1_free_id <= '0;
 	s1_retire <= 1'b0;
+`ifdef SD
 	s1_syst_type <= 2'b0;
+`endif
 `ff_cg(addrin_ack)
 	s1_bf <= i_bf;
 	s1_free_id <= i_id;
 	s1_retire <= i_retire;
+`ifdef SD
 	s1_syst_type <= i_syst_type;
+`endif
 `ff_end
 
 `ff_rst
@@ -193,12 +211,16 @@ Forward u_fwd_dat(
 		o_rdata[i] <= '0;
 	end
 	o_free_id <= '0;
+`ifdef SD
 	o_syst_type <= 2'b0;
+`endif
 `ff_cg(s1_ack)
 	dout_retire <= s1_retire;
 	o_rdata <= s1_bf_data[CLOG2_NBANK];
 	o_free_id <= s1_free_id;
+`ifdef SD
 	o_syst_type <= s1_syst_type;
+`endif
 `ff_end
 
 endmodule

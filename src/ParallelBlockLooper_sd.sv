@@ -54,6 +54,7 @@ localparam N_ICFG = TauCfg::N_ICFG;
 localparam N_PENDING = TauCfg::MAX_PENDING_BLOCK;
 localparam N_TAU_X = TauCfg::N_TAU_X;
 localparam N_TAU_Y = TauCfg::N_TAU_Y;
+localparam N_TAU = N_TAU_X * N_TAU_Y;
 // derived
 localparam CN_TAU_X = $clog2(N_TAU_X);
 localparam CN_TAU_Y = $clog2(N_TAU_Y);
@@ -77,7 +78,7 @@ output logic [CN_TAU_X1-1:0] o_i0_systolic_gsize [N_TAU_X][N_TAU_Y];
 output logic [CN_TAU_Y -1:0] o_i0_systolic_idx   [N_TAU_X][N_TAU_Y];
 output logic [CN_TAU_X1-1:0] o_i1_systolic_gsize [N_TAU_X][N_TAU_Y];
 output logic [CN_TAU_Y -1:0] o_i1_systolic_idx   [N_TAU_X][N_TAU_Y];
-input blkdone_dvals [N_TAU_X][N_TAU_Y];
+input [N_TAU-1:0] blkdone_dvals;
 
 //======================================
 // Internal
@@ -157,7 +158,8 @@ OffsetStage#(.BW(WBW), .DIM(VDIM), .FROM_ZERO(1), .UNIT_STRIDE(0)) u_s0(
 	.o_sel_beg(),
 	.o_sel_end(),
 	.o_sel_ret(),
-	.o_islast()
+	.o_islast(),
+	.init_dval()
 );
 Broadcast#(N_TAU_X*N_TAU_Y) u_brd_bofs(
 	`clk_connect,
@@ -193,7 +195,7 @@ generate for (gi = 0; gi < N_TAU_X; gi++) begin: ctrlx
 		Semaphore#(N_PENDING) u_sem_done(
 			`clk_connect,
 			.i_inc(bofs_acks[gi][gj]),
-			.i_dec(blkdone_dvals[gi][gj]),
+			.i_dec(blkdone_dvals[gi*N_TAU_Y+gj]),
 			.o_full(block_fulls[gi][gj]),
 			.o_empty(block_emptys[gi][gj]),
 			.o_will_full(),

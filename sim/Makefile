@@ -4,13 +4,13 @@ SYN=syn
 
 # Usage: TEST_CFG=X make top (default X = 0)
 top:
-	make COVERAGE=$(COV) Top
+	make COVERAGE=$(COV) ARGS="+define+SC" Top
 
 top_mc:
-	make COVERAGE=$(COV) Top_mc
+	make COVERAGE=$(COV) ARGS="+define+MC" Top
 
 top_sd:
-	make COVERAGE=$(COV) Top_sd
+	make COVERAGE=$(COV) ARGS="+define+SD" Top
 
 tops:
 	make ARGS="+define+SDF=\\\"../$(SYN)/Top.sdf\\\" +define+GATE_LEVEL +define+SRAM_GEN_MODE=SYNOPSYS32 +incdir+../$(SYN)/SAED32_EDK/lib/sram/verilog/ +incdir+../$(SYN)/SAED32_EDK/lib/stdcell_rvt/verilog/ +incdir+../$(SYN)/ +nowarn+SDFNCAP:SDFNDP:MACRDF:CUVWSP:SDFNSB:SDFNL1" Top

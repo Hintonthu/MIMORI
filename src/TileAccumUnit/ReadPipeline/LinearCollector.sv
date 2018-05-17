@@ -24,14 +24,18 @@ module LinearCollector(
 	i_aend,
 	i_beg,
 	i_end,
+`ifdef SD
 	i_syst_type,
+`endif
 	`rdyack_port(src_linear),
 	i_linear,
 	`rdyack_port(dst_linears),
 	o_bofs,
 	o_abeg,
 	o_aend,
+`ifdef SD
 	o_syst_type,
+`endif
 	o_linears
 );
 //======================================
@@ -51,14 +55,18 @@ input [WBW-1:0]     i_abeg [VDIM];
 input [WBW-1:0]     i_aend [VDIM];
 input [ICFG_BW-1:0] i_beg;
 input [ICFG_BW-1:0] i_end;
+`ifdef SD
 input [1:0]         i_syst_type;
+`endif
 `rdyack_input(src_linear);
 input [LBW-1:0] i_linear;
 `rdyack_output(dst_linears);
 output logic [WBW-1:0] o_bofs    [VDIM];
 output logic [WBW-1:0] o_abeg    [VDIM];
 output logic [WBW-1:0] o_aend    [VDIM];
+`ifdef SD
 output logic [1:0]     o_syst_type;
+`endif
 output logic [LBW-1:0] o_linears [N_ICFG];
 
 //======================================
@@ -108,13 +116,17 @@ BroadcastInorder#(2) u_brd(
 		o_abeg[i] <= '0;
 		o_aend[i] <= '0;
 	end
+`ifdef SD
 	o_syst_type <= 2'b0;
+`endif
 `ff_cg(range_ack)
 	end_r <= i_end;
 	o_bofs <= i_bofs;
 	o_abeg <= i_abeg;
 	o_aend <= i_aend;
+`ifdef SD
 	o_syst_type <= i_syst_type;
+`endif
 `ff_end
 
 `ff_rst

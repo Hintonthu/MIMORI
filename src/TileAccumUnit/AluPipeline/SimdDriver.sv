@@ -133,7 +133,8 @@ OffsetStage#(.BW(WBW), .DIM(VDIM), .FROM_ZERO(0), .UNIT_STRIDE(1)) u_s0_ofs(
 	.o_sel_beg(s01_sel_beg),
 	.o_sel_end(s01_sel_end),
 	.o_sel_ret(),
-	.o_islast(s01_islast)
+	.o_islast(s01_islast),
+	.init_dval()
 );
 IdSelect#(.BW(INST_BW), .DIM(VDIM), .RETIRE(0)) u_s0_sel_beg(
 	.i_sel(s01_sel_beg),

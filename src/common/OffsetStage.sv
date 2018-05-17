@@ -35,7 +35,7 @@ module OffsetStage(
 	o_sel_end,
 	o_sel_ret,
 	o_islast,
-	`dval_port(init)
+	`dval_port(init) // mainly for internal use
 );
 
 //======================================
