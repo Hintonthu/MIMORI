@@ -1,58 +1,114 @@
-# English
+## About MERIT Processor
+We implement *MERIT Processor*,
+an accelerator architecture for deep learning as well as other vision-related tasks with SystemVerilog.
+This work is also based on our *Unrolled Memory Inner-Product Operator (UMI Operator)* in ICCV'17 (see the references below),
+and you can check out the CUDA version at https://github.com/johnjohnlin/UMI.
 
-## Brief
-This project implements an accelerator architecture (with SystemVerilog) for deep learning as well as other vision-related tasks,
-which is based on the paper "Unrolled Memory Inner-Products: An Abstract GPU Operator for Efficient Vision-Related Computations" (ICCV 2017).
-If you are looking for the CUDA version of UMI, then please refer to johnjohnlin/UMI, another project made by me.
+The repo name MIMORI cames from *Multi Input Multiple Output Ranged Inner-Product*,
+is genealized from the *UMI Operator* mentioned above.
+While the architecture name has been changed to *Memory Efficient Ranged Inner-Product (MERIT)*,
+we still preserve the original repo name for convenience.
 
-The project name, MIMORI, stands for *Multi Input Multiple Output Ranged Inner-Product*,
-is genealized from the *Generalized Inner-Product* of the *UMI Operator* discussed in the ICCV paper above.
+## Why MERIT?
+Nowadays the software stack is the most critical part for DNN accelerators.
+Apart from writing drivers,
+software engineers have to optimize memory movement like prefetching, systolic array, and SRAM bank.
+These process is repeatedly performed whenever new algorithms come out,
+and many works reduce the optimization efforts by computation abstraction and custom compilers.
+However, running compilers for every end-devices is not practical,
+and storing and transferring statically-compiled codes might also be a problem.
 
-## Benefit
-Our goal is to build a accelerator for deep learning as well as other scientific computations.
-But it should be easy to use, and this can be mostly done by the generality of UMI.
+Our goal is to build an easy-to-program accelerator for data-regular computations,
+such as deep learning and many other scientific computations.
+Thanks to *UMI Operator*, MERIT processor has these benefits.
 
-## Implmentation Status
-The I/O of this module is bus-like data interfaces and naive configuration interfaces,
-and efforts are required if you want to use it for a real system (e.g.,  AXI, Avalon...).
+**Almost compiler free**:
+A network layer can be describe with only tens of integer parameters.
+This parameters is (almost) directly written to the cofiguration registers without compiler.
+making MERIT Processor more suitable for low-end embedded CPUs.
 
-By default, the design is configured with 1 vector array, which is 32-core and is not very high-performance.
-You could scale up by increasing the number of vector array, but I haven't did any test on that yet.
-We are also working on the systolic extension.
+**Memory efficient**:
+Many DNN accelerators utilize per-core local buffers and a large global buffer.
+*UMI Operator* identifies the data reuse clearly and provide a methodology to aggregate local buffers as a global buffer.
+Besides, while MERIT is a vector processor architecture,
+we use *UMI Operator* to also identify a data reuse pattern similar to systolic array.
 
-## Verilog Simulation
+In short, programmers can exploit these optimization with only defining a few integers easily:
+* tiling,
+* bank-conflict,
+* prefetching,
+* systolic array data sharing, and
+* kernel fusion.
+
+## Hardware Configuration
+
+The interfaces are bus-like data interfaces plus a configuration register interface.
+These interfaces are defined to be similar to common bus protocol such as AXI,
+and can be converted to this bus protocol with standard procedures.
+
+The design is configured with a 32-core vector array, and can be verified with Synopsys 32 nm Educational Design Kit.
+The multiple vector array and its systolic version are also tested under RTL.
+
+## Usage and Verification
+### Setup
 The simulation requires 2 git submodules to work, and INCISIV (ncverilog/irun) is also necessary.
 
-* *Nicotb*: Yet another project made by me, johnjohnlin/nicotb, which is similar to potentialventures/cocotb and is a Python-Verilog Co-simulation framework.
+* *Nicotb*: Yet another project made by me, https://github.com/johnjohnlin/nicotb, which is similar to https://github.com/potentialventures/cocotb and is a Python-Verilog Co-simulation framework.
   I made Nicotb since it works with numpy better and it's enough for me.
-* *Ramulator* (CAL 2015): CMU-SAFARI/ramulator, a extensible DRAM simulator based on C++11. I use a simple C++ wrapper to connect it with Nicotb.
+* *Ramulator* (CAL 2015): https://github.com/CMU-SAFARI/ramulator, a extensible DRAM simulator based on C++11. I use a simple C++ wrapper to connect it with Nicotb.
 
-# 中文版 README
-I made this part since I am a native Mandarin Chinese speaker (zh_TW).
 
-## 概述
-這個專案實做了 "Unrolled Memory Inner-Products: An Abstract GPU Operator for Efficient Vision-Related Computations" (ICCV 2017) 論文中的 UMI Operator。
-此專案是以 SystemVerilog 實作架構，目的是提供一個有效率的深度學習以及一般的科學運算的硬體加速。
-如果你在找的是 CUDA 版本的實作，請看我的另外一個專案 johnjohnlin/UMI。
+```bash
+git clone https://github.com/johnjohnlin/MIMORI
+cd MIMORI
+git submodule update --init --recursive
+make -j -C nicotb/lib/cpp
+make -j -C sim/UmiModel
+```
 
-專案名稱 MIMORI 全名為 *Multi Input Multiple Output Ranged Inner-Product*，
-是由前述論文中的 *UMI Operator* 中的 *Generalized Inner-Product* 延伸得來.
+For Nicotb, you need a C++11 enabled compiler, Python 3.6, numpy development library, and Google-glog.
+You can find more instruction in https://github.com/johnjohnlin/nicotb.
 
-## 好處
-我們希望能提供一個很好用的深度學習加速器，但是同時也能給其他運算使用。
-這主要歸功於 UMI Operator 是很汎用的。
+### Simulate
 
-## 實作狀況
-現在的版本使用了類似 bus 的界面以及簡單的設定界面。
-要用在真實系統的話，你還需要花點功夫（例：AXI, Avalon...）。
+We need a better document here about running the simulation and adding testcases.
+By default, the simulation runs a toy convolution example.
 
-預設設定是一個 vector array，不是算非常頂尖的效能。
-你可以複製很多次 vector array 來提昇效能，不過我還沒測試過會怎樣。
-我們也正在做 systolic 版本。
+```bash
+cd sim
+make top
+make TEST_CFG=2 top
+# If you want a multi-core version
+# make top_mc
+# If you want a multi-core systolic version (not merged to dev yet)
+# make top_sd
+```
 
-## Verilog 模擬
-這個專案需要兩個額外的 git submodules 以及 INCISIV (ncverilog/irun)。
+### References and Publications
 
-* *Nicotb*: 另外一個我的專案 johnjohnlin/nicotb，這跟 potentialventures/cocotb 很像，都是 Python-Verilog Co-simulation 架構。
-  因為是我自己做的，我可以跟 numpy 較好結合，比較符合我的需求。
-* *Ramulator* (CAL 2015): CMU-SAFARI/ramulator 一個很好擴充的 C++11 DRAM 模擬器，我稍微把他包裝了一下，所以可以跟 Python 接起來。
+```latex
+@article{ramulator,
+    author={Y. Kim and W. Yang and O. Mutlu},
+    journal={IEEE Computer Architecture Letters},
+    title={Ramulator: A Fast and Extensible {DRAM} Simulator},
+    year={2016},
+    volume={15},
+    number={1},
+    pages={45-49},
+    keywords={DRAM chips;circuit simulation;digital simulation;standards;DRAM simulator;DRAM standard;Ramulator;software tool;Hardware design languages;Nonvolatile memory;Proposals;Random access memory;Runtime;Standards;Timing;DRAM;Main memory;performance evaluation, experimental methods, emerging technologies, memory systems, memory scaling;simulation},
+    doi={10.1109/LCA.2015.2414456},
+    ISSN={1556-6056},
+    month={Jan},}
+@inproceedings{umi,
+    author={Y. S. Lin and W. C. Chen and S. Y. Chien},
+    booktitle={2017 IEEE International Conference on Computer Vision (ICCV)},
+    title={Unrolled Memory Inner-Products: An Abstract GPU Operator for Efficient Vision-Related Computations},
+    year={2017},
+    volume={},
+    number={},
+    pages={4587-4595},
+    keywords={Algorithm design and analysis;Computational modeling;Convolution;Graphics processing units;Kernel;Matrix converters;Tensile stress},
+    doi={10.1109/ICCV.2017.490},
+    ISSN={},
+    month={Oct},}
+```

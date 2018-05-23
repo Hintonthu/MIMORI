@@ -140,7 +140,10 @@ generate for (i = 0; i < N_TAU; i++) begin: ctrl
 		.i_inc(bofs_acks[i]),
 		.i_dec(blkdone_dvals[i]),
 		.o_full(block_fulls[i]),
-		.o_empty(block_emptys[i])
+		.o_empty(block_emptys[i]),
+		.o_will_full(),
+		.o_will_empty(),
+		.o_n()
 	);
 	`ff_rst
 		for (int j = 0; j < VDIM; j++) begin

@@ -174,7 +174,10 @@ Semaphore#(N_PENDING) u_sem_inst(
 	.i_inc(inst_ack),
 	.i_dec(inst_commit_dval),
 	.o_full(inst_full),
-	.o_empty(inst_empty)
+	.o_empty(inst_empty),
+	.o_will_full(),
+	.o_will_empty(),
+	.o_n()
 );
 IgnoreIf#(1) u_ign_if_noinst(
 	.cond(s01_bypass),

@@ -48,11 +48,10 @@ class DramRespChanMC(object):
 		self.ck_ev = ck_ev
 		self.mspace = mspace
 		self.q = [deque() for _ in range(self.n_cores)]
-		for i in range(self.n_cores):
-			self.ra_ack[i].Write()
-			self.rd_rdy[i].Write()
-			self.rd[i].Write()
-			self.w_ack[i].Write()
+		self.ra_ack.Write()
+		self.rd_rdy.Write()
+		self.rd.Write()
+		self.w_ack.Write()
 		self.dram_counter = 0.
 		self.dram_speed_inc = 1 / dram_speed
 		self.InitDLL()
@@ -89,38 +88,58 @@ class DramRespChanMC(object):
 			if self.dram_counter >= 1.:
 				self.dram_counter -= 1.
 				yield self.ck_ev
+				self.rd_ack.Read()
+				self.ra_rdy.Read()
+				self.w_rdy.Read()
+				if not self.ra_rdy.x[0] and (self.ra_rdy.value[0] or self.ra_ack.value[0]):
+					self.ra.Read()
+					self.ra.value &= CSIZE_MASK
+				if not self.w_rdy.x[0] and (self.w_rdy.value[0] or self.w_ack.value[0]):
+					self.w.Read()
+					self.w.value &= CSIZE_MASK
 				for i in range(self.n_cores):
-					self.rd_ack[i].Read()
-					self.ra_rdy[i].Read()
-					self.w_rdy[i].Read()
-					c_has_rs[i] = not self.ra_rdy[i].x[0] and self.ra_rdy[i].value[0] and self.ra_ack[i].value[0]
-					c_has_ws[i] = not self.w_rdy[i].x[0] and self.w_rdy[i].value[0] and self.w_ack[i].value[0]
-					c_resp_gots[i] = self.rd_rdy[i].value[0] and self.rd_ack[i].value[0]
+					m = 1<<i
+					c_has_rs[i] = not (self.ra_rdy.x[0] & m) and (self.ra_rdy.value[0] & m) and (self.ra_ack.value[0] & m)
+					c_has_ws[i] = not (self.w_rdy.x[0] & m) and (self.w_rdy.value[0] & m) and (self.w_ack.value[0] & m)
+					c_resp_gots[i] = (self.rd_rdy.value[0] & m) and (self.rd_ack.value[0] & m)
+					# We use [i:i+1] instead of [i] for scalar. (for compability)
 					if c_has_rs[i]:
-						self.ra[i].Read()
-						self.ra[i].value[0] &= CSIZE_MASK
-						c_rs[i] = self.ra[i].value[0]
-						self.q[i].append(self.mspace.Read(self.ra[i].value))
+						c_rs[i] = self.ra.value[i]
+						self.q[i].append(self.mspace.Read(self.ra.value[i:i+1]))
 					if c_has_ws[i]:
-						self.w[i].Read()
-						self.w[i].value[0] &= CSIZE_MASK
-						c_ws[i] = self.w[i].value[0]
-						self.mspace.WriteScalarMask(*self.w[i].values)
+						c_ws[i] = self.w.value[i]
+						self.mspace.WriteScalarMask(
+							self.w.values.o_dramwas[i:i+1],
+							self.w.values.o_dramwds[i],
+							self.w.values.o_dramw_masks[i:i+1],
+						)
 				self.RamuTick(
 					c_has_rs, c_has_ws, c_resp_gots, c_rs, c_ws,
 					c_r_fulls, c_w_fulls, c_has_resps
 				)
+				any_update_resp = False
 				for i in range(self.n_cores):
-					update_resp = not self.rd_rdy[i].value[0] or self.rd_ack[i].value[0]
-					self.ra_ack[i].value[0] = not c_r_fulls[i]
-					self.w_ack[i].value[0] = not c_w_fulls[i]
-					self.rd_rdy[i].value[0] = c_has_resps[i]
-					if update_resp and self.rd_rdy[i].value[0]:
-						self.rd[i].value = self.q[i].popleft()
-						self.rd[i].Write()
-					self.ra_ack[i].Write()
-					self.w_ack[i].Write()
-					self.rd_rdy[i].Write()
+					m = 1<<i
+					update_resp = not (self.rd_rdy.value[0] & m) or (self.rd_ack.value[0] & m)
+					# Since I am not sure whether the bit inveted ~m works fine,
+					# I OR the mask first and then XOR the mask if the condition is false.
+					self.ra_ack.value[0] |= m
+					self.w_ack.value[0] |= m
+					self.rd_rdy.value[0] |= m
+					if c_r_fulls[i]:
+						self.ra_ack.value[0] ^= m
+					if c_w_fulls[i]:
+						self.w_ack.value[0] ^= m
+					if not c_has_resps[i]:
+						self.rd_rdy.value[0] ^= m
+					if update_resp and (self.rd_rdy.value[0] & m):
+						self.rd.value[i] = self.q[i].popleft()
+						any_update_resp = True
+				if any_update_resp:
+					self.rd.Write()
+				self.ra_ack.Write()
+				self.w_ack.Write()
+				self.rd_rdy.Write()
 			else:
 				c_has_rs[:] = ZERO
 				c_has_ws[:] = ZERO
@@ -143,9 +162,9 @@ def main():
 	yield ck_ev
 
 	resp_chan = DramRespChanMC(
-		ra_rdy_buss, ra_ack_buss, ra_buss,
-		rd_rdy_buss, rd_ack_buss, rd_buss,
-		w_rdy_buss, w_ack_buss, w_buss,
+		ra_rdy_bus, ra_ack_bus, ra_bus,
+		rd_rdy_bus, rd_ack_bus, rd_bus,
+		w_rdy_bus, w_ack_bus, w_bus,
 		ck_ev, ms,
 		# Simulation configuration: 1600MHz/200MHz, 4 TAUs
 		8.0, N_TAU,
@@ -269,40 +288,25 @@ sim_cfg = CreateBus(("GATE_LEVEL",))
 sim_cfg.Read()
 strict = False if sim_cfg.GATE_LEVEL.value[0] else True
 (
-	w_rdy_buss, w_ack_buss, w_buss,
-	ra_rdy_buss, ra_ack_buss, ra_buss,
-	rd_rdy_buss, rd_ack_buss, rd_buss,
-) = [list() for _ in range(9)]
-for i in range(N_TAU):
+	w_bus, ra_bus, rd_bus,
+	w_rdy_bus, w_ack_bus,
+	ra_rdy_bus, ra_ack_bus,
+	rd_rdy_bus, rd_ack_bus,
+) = CreateBuses([
 	(
-		w_bus, ra_bus, rd_bus,
-		w_rdy_bus, w_ack_bus,
-		ra_rdy_bus, ra_ack_bus,
-		rd_rdy_bus, rd_ack_bus,
-	) = CreateBuses([
-		(
-			(""  , f"o_dramwa{i}",),
-			(None, f"o_dramwd{i}", (CSIZE,)),
-			(None, f"o_dramw_mask{i}",),
-		),
-		((f"o_dramra{i}",),),
-		(("", f"i_dramrd{i}", (CSIZE,)),),
-		((f"w{i}_rdy",),),
-		((f"w{i}_canack",),),
-		((f"ra{i}_rdy",),),
-		((f"ra{i}_canack",),),
-		((f"rd{i}_rdy",),),
-		((f"rd{i}_ack",),),
-	])
-	w_rdy_buss.append(w_rdy_bus)
-	w_ack_buss.append(w_ack_bus)
-	w_buss.append(w_bus)
-	ra_rdy_buss.append(ra_rdy_bus)
-	ra_ack_buss.append(ra_ack_bus)
-	ra_buss.append(ra_bus)
-	rd_rdy_buss.append(rd_rdy_bus)
-	rd_ack_buss.append(rd_ack_bus)
-	rd_buss.append(rd_bus)
+		("u_top", "o_dramwas", (N_TAU,)),
+		(None   , "o_dramwds", (N_TAU,CSIZE,)),
+		(None   , "o_dramw_masks", (N_TAU,)),
+	),
+	(("u_top", "o_dramras", (N_TAU,)),),
+	(("u_top", "i_dramrds", (N_TAU,CSIZE,)),),
+	(("w_rdys",),),
+	(("w_canacks",),),
+	(("ra_rdys",),),
+	(("ra_canacks",),),
+	(("rd_rdys",),),
+	(("rd_acks",),),
+])
 cfg_bus, cfg_rdy_bus, cfg_ack_bus, = CreateBuses([
 	(
 		("u_top", "i_bgrid_step"             , (VDIM,)),

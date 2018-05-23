@@ -55,6 +55,9 @@ simd_drv:
 awl:
 	make COVERAGE=$(COV) AccumWarpLooper
 
+fifo:
+	make COVERAGE=$(COV) SFifo
+
 dump_scoreboard:
 	@echo -e \
 	".open scoreboard.db\n"\

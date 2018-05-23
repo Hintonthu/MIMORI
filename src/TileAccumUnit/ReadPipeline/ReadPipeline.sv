@@ -403,14 +403,20 @@ Semaphore#(LBUF_SIZE) u_sem_linear(
 	.i_inc(ch_mofs_ack),
 	.i_dec(writer_warp_linear_fifo_out_ack),
 	.o_full(linear_full),
-	.o_empty()
+	.o_empty(),
+	.o_will_full(),
+	.o_will_empty(),
+	.o_n()
 );
 Semaphore#(ALLOC_CNT) u_sem_alloc(
 	`clk_connect,
 	.i_inc(ch_alloc_mofs_dst_ack),
 	.i_dec(ch_addr_mofs_dst_ack),
 	.o_full(alloc_full),
-	.o_empty(alloc_empty)
+	.o_empty(alloc_empty),
+	.o_will_full(),
+	.o_will_empty(),
+	.o_n()
 );
 IgnoreIf#(0) u_ign_if_not_last_addr(
 	.cond(cal_addr_islast),
