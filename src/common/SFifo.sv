@@ -91,11 +91,9 @@ module SFifo(
 	o_data
 );
 
-parameter IMPL_REG = 0;
-parameter IMPL_TP = 0;
-// Not supported yet
-// parameter IMPL_TP2 = 0;
-// parameter IMPL_SP = 0;
+// 0: register
+// 1: TP sram
+parameter IMPL = 0;
 parameter NDATA = 2;
 parameter BW = 8;
 localparam CL_N = $clog2(NDATA);
@@ -103,7 +101,7 @@ localparam CL_N1 = $clog2(NDATA+1);
 
 task ErrorFifo;
 begin
-	$display("FIFO configuration (%dx%db) wrong!", NDATA, BW);
+	$display("FIFO (%m) configuration (%dx%db) wrong!", NDATA, BW);
 	$finish();
 end
 endtask
@@ -115,7 +113,7 @@ input [BW-1:0] i_data;
 output logic [BW-1:0] o_data;
 genvar gi;
 
-generate if (IMPL_REG && NDATA >= 2) begin: fifo_reg
+generate if (IMPL == 0 && NDATA >= 2) begin: fifo_reg
 	logic [NDATA-2:0] load_nxt;
 	logic [NDATA-1:0] load_new;
 	logic [BW-1:0] data_r [NDATA];
@@ -142,7 +140,7 @@ generate if (IMPL_REG && NDATA >= 2) begin: fifo_reg
 	`ff_cg(load_new[NDATA-1])
 		data_r[NDATA-1] <= i_data;
 	`ff_end
-end else if (IMPL_TP && NDATA >= 2) begin: fifo_2p
+end else if (IMPL == 1 && NDATA >= 2) begin: fifo_2p
 	logic dst_rdy_w, sfull, sempty;
 	logic [CL_N-1:0]  ra_r, ra_w, wa_r, wa_w;
 	assign src_ack = src_rdy && !sfull;

@@ -17,108 +17,9 @@
 from nicotb import *
 from nicotb.protocol import TwoWire
 from itertools import repeat
-from UmiModel import UmiModel, default_sample_conf, default_verf_func, npi, npd, newaxis
 from collections import deque
-from ctypes import *
-
-class DramRespChan(object):
-	def __init__(
-		self,
-		ra_rdy_bus, ra_ack_bus, ra_bus,
-		rd_rdy_bus, rd_ack_bus, rd_bus,
-		w_rdy_bus, w_ack_bus, w_bus,
-		ck_ev, mspace,
-		# dram freq / clk freq
-		dram_speed,
-	):
-		self.sending = list()
-		self.pending = list()
-		self.ra_rdy = ra_rdy_bus
-		self.ra_ack = ra_ack_bus
-		self.ra = ra_bus
-		self.rd_rdy = rd_rdy_bus
-		self.rd_ack = rd_ack_bus
-		self.rd = rd_bus
-		self.w_rdy = w_rdy_bus
-		self.w_ack = w_ack_bus
-		self.w = w_bus
-		self.ck_ev = ck_ev
-		self.mspace = mspace
-		self.q = deque()
-		self.ra_ack.Write()
-		self.rd_rdy.Write()
-		self.rd.Write()
-		self.w_ack.Write()
-		self.dram_counter = 0.
-		self.dram_speed_inc = 1 / dram_speed
-		self.InitDLL()
-		Fork(self.MainLoop())
-
-	def InitDLL(self):
-		ramu = CDLL("./ramulator_wrap.so")
-		c_bool_p = POINTER(c_bool)
-		ramu.RamulatorTick.argtypes = (c_bool, c_bool, c_bool, c_long, c_long, c_bool_p, c_bool_p, c_bool_p)
-		ramu.RamulatorReport.argtypes = ()
-		self.RamuTick = ramu.RamulatorTick
-		self.RamuReport = ramu.RamulatorReport
-
-	def MainLoop(self):
-		c_r = c_long()
-		c_w = c_long()
-		c_has_r = c_bool()
-		c_has_w = c_bool()
-		c_resp_got = c_bool()
-		c_r_full = c_bool()
-		c_w_full = c_bool()
-		c_has_resp = c_bool()
-		c_r_full_ptr = byref(c_r_full)
-		c_w_full_ptr = byref(c_w_full)
-		c_has_resp_ptr = byref(c_has_resp)
-		while True:
-			if self.dram_counter >= 1.:
-				self.dram_counter -= 1.
-				yield self.ck_ev
-				self.rd_ack.Read()
-				self.ra_rdy.Read()
-				self.w_rdy.Read()
-				c_has_r.value = not self.ra_rdy.x[0] and self.ra_rdy.value[0] and self.ra_ack.value[0]
-				c_has_w.value = not self.w_rdy.x[0] and self.w_rdy.value[0] and self.w_ack.value[0]
-				c_resp_got.value = self.rd_rdy.value[0] and self.rd_ack.value[0]
-				if c_has_r.value:
-					self.ra.Read()
-					self.ra.value[0] &= CSIZE_MASK
-					c_r.value = self.ra.value[0]
-					self.q.append(self.mspace.Read(self.ra.value))
-				if c_has_w.value:
-					self.w.Read()
-					self.w.value[0] &= CSIZE_MASK
-					c_w.value = self.w.value[0]
-					self.mspace.WriteScalarMask(*self.w.values)
-				self.RamuTick(
-					c_has_r, c_has_w, c_resp_got, c_r, c_w,
-					c_r_full_ptr, c_w_full_ptr, c_has_resp_ptr
-				)
-				update_resp = not self.rd_rdy.value[0] or self.rd_ack.value[0]
-				self.ra_ack.value[0] = not c_r_full.value
-				self.w_ack.value[0] = not c_w_full.value
-				self.rd_rdy.value[0] = c_has_resp.value
-				if update_resp and self.rd_rdy.value[0]:
-					self.rd.value = self.q.popleft()
-					self.rd.Write()
-				self.ra_ack.Write()
-				self.w_ack.Write()
-				self.rd_rdy.Write()
-			else:
-				c_has_r.value = 0
-				c_has_w.value = 0
-				c_resp_got.value = 0
-				c_r.value = 0
-				c_w.value = 0
-				self.RamuTick(
-					c_has_r, c_has_w, c_resp_got, c_r, c_w,
-					c_r_full_ptr, c_w_full_ptr, c_has_resp_ptr
-				)
-			self.dram_counter += self.dram_speed_inc
+from UmiModel import UmiModel, default_sample_conf, default_verf_func, npi, npd, newaxis
+from UmiModel import DramRespChan
 
 def main():
 	# init
@@ -134,14 +35,31 @@ def main():
 		w_rdy_bus, w_ack_bus, w_bus,
 		ck_ev, ms,
 		# Simulation configuration: 1600MHz/200MHz
-		8.0,
+		8.0, N_TAU, CSIZE
 	)
 
 	i_data = cfg_master.values
 	CompressWrap = lambda x: npd.bitwise_or.reduce((x == UmiModel.MEM_WRAP).astype('i2') << npi.arange(x.shape[0]))
 	VL_IDX = slice(None), 1 << npi.arange(CV_BW)
+	if SIM_MODE == 2:
+		# We use the same 'step' and shrink 'end'.
+		nblk = cfg.pcfg['end'][0]
+		ss0 = cfg.pcfg['syst0_skip'][0]
+		sx0 = cfg.pcfg['syst0_axis'][0]
+		st0 = cfg.pcfg['local'][0,sx0]
+		ss1 = cfg.pcfg['syst1_skip'][0]
+		sx1 = cfg.pcfg['syst1_axis'][0]
+		st1 = cfg.pcfg['local'][0,sx1]
+		nblk[sx0] = ((nblk[sx0]-1) // (st0*N_TAU_X) + 1) * st0
+		nblk[sx1] = ((nblk[sx1]-1) // (st1*N_TAU_Y) + 1) * st1
+		npd.copyto(i_data.i_bgrid_end, nblk)
+		i_data.i_i0_systolic_skip[0] = ss0
+		i_data.i_i0_systolic_axis[0] = sx0
+		i_data.i_i1_systolic_skip[0] = ss1
+		i_data.i_i1_systolic_axis[0] = sx1
+	else:
+		npd.copyto(i_data.i_bgrid_end, cfg.pcfg['end'][0])
 	npd.copyto(i_data.i_bgrid_step,    cfg.pcfg['local'][0])
-	npd.copyto(i_data.i_bgrid_end,     cfg.pcfg['end'][0])
 	npd.copyto(i_data.i_bboundary,     cfg.pcfg['total'][0])
 	npd.copyto(i_data.i_bsubofs,       cfg.v_nd >> cfg.pcfg['lg_vshuf'][0])
 	npd.copyto(i_data.i_bsub_up_order, cfg.pcfg['lg_vsize'][0])
@@ -231,12 +149,11 @@ def main():
 		next(verf_func_gen)
 	except StopIteration:
 		pass
-	resp_chan.RamuReport()
+	resp_chan.Report()
 	FinishSim()
 
 cfg = default_sample_conf
 CSIZE = cfg.DRAM_ALIGN
-CSIZE_MASK = ~(CSIZE-1)
 verf_func_gen = default_verf_func(CSIZE)
 VSIZE = cfg.VSIZE
 CV_BW = cfg.LG_VSIZE
@@ -250,14 +167,23 @@ N_CLUT, clut = cfg.luts["const"]
 N_TLUT, tlut = cfg.luts["texture"]
 N_SLUT0, slut0 = cfg.luts["stencil0"]
 N_SLUT1, slut1 = cfg.luts["stencil1"]
-sim_cfg = CreateBus(("GATE_LEVEL",))
+sim_cfg = CreateBus((
+	"GATE_LEVEL",
+	"SIM_MODE",
+	"N_TAU",
+	"N_TAU_X",
+	"N_TAU_Y"
+))
 sim_cfg.Read()
+SIM_MODE = int(sim_cfg.SIM_MODE.value[0])
+N_TAU = int(sim_cfg.N_TAU.value[0])
+N_TAU_X = int(sim_cfg.N_TAU_X.value[0])
+N_TAU_Y = int(sim_cfg.N_TAU_Y.value[0])
 strict = False if sim_cfg.GATE_LEVEL.value[0] else True
 (
 	w_rdy_bus, w_ack_bus,
 	ra_rdy_bus, ra_ack_bus,
 	rd_rdy_bus, rd_ack_bus,
-	cfg_rdy_bus, cfg_ack_bus,
 ) = CreateBuses([
 	(("w_rdy",),),
 	(("w_canack",),),
@@ -265,17 +191,24 @@ strict = False if sim_cfg.GATE_LEVEL.value[0] else True
 	(("ra_canack",),),
 	(("rd_rdy",),),
 	(("rd_ack",),),
-	(("cfg_rdy",),),
-	(("cfg_ack",),),
 ])
-w_bus, ra_bus, rd_bus, cfg_bus = CreateBuses([
+# We rename and reshape the data when there is only one ports
+w_bus, ra_bus, rd_bus, = CreateBuses([
 	(
-		("u_top", "o_dramwa"),
-		(None   , "o_dramwd", (CSIZE,)),
-		(None   , "o_dramw_mask"),
+		("u_top", "o_dramwas", (N_TAU,)),
+		(None   , "o_dramwds", (N_TAU,CSIZE,)),
+		(None   , "o_dramw_masks", (N_TAU,)),
 	),
-	(("u_top", "o_dramra"),),
-	(("u_top", "i_dramrd", (CSIZE,)),),
+	(("u_top", "o_dramras", (N_TAU,)),),
+	(("u_top", "i_dramrds", (N_TAU,CSIZE,)),),
+])
+syst_tup = (
+	(None   , "i_i0_systolic_skip"),
+	(None   , "i_i0_systolic_axis"),
+	(None   , "i_i1_systolic_skip"),
+	(None   , "i_i1_systolic_axis"),
+)
+cfg_bus, cfg_rdy_bus, cfg_ack_bus, = CreateBuses([
 	(
 		("u_top", "i_bgrid_step"             , (VDIM,)),
 		(None   , "i_bgrid_end"              , (VDIM,)),
@@ -351,7 +284,9 @@ w_bus, ra_bus, rd_bus, cfg_bus = CreateBuses([
 		(None   , "i_consts"                 , (N_CLUT,)),
 		(None   , "i_const_texs"             , (N_TLUT,)),
 		(None   , "i_reg_per_warp"),
-	),
+	) + (syst_tup if SIM_MODE == 2 else tuple()),
+	(("cfg_rdy",),),
+	(("cfg_ack",),),
 ])
 rst_out_ev, ck_ev = CreateEvents(["rst_out", "ck_ev"])
 npd.random.seed(12345)

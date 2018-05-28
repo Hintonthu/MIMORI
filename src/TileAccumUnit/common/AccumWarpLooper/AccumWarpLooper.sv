@@ -1,6 +1,6 @@
 `ifndef __ACCUMWARPLOOPER__
 `define __ACCUMWARPLOOPER__
-// Copyright 2016 Yu Sheng Lin
+// Copyright 2016,2018 Yu Sheng Lin
 
 // This file is part of MIMORI.
 
@@ -32,6 +32,9 @@ module AccumWarpLooper(
 	i_bofs,
 	i_abeg,
 	i_aend,
+`ifdef SD
+	i_syst_type,
+`endif
 	i_linears,
 	i_bboundary,
 	i_bsubofs,
@@ -54,16 +57,24 @@ module AccumWarpLooper(
 	i_stencil_begs,
 	i_stencil_ends,
 	i_stencil_lut,
+`ifdef SD
+	i_systolic_skip,
+`endif
 	`rdyack_port(addrval),
 	o_id,
 	o_address,
 	o_valid,
 	o_retire
+`ifdef SD
+	,
+	o_syst_type
+`endif
 );
 
 //======================================
 // Parameter
 //======================================
+import TauCfg::*;
 parameter N_CFG = TauCfg::N_ICFG;
 parameter ABW = TauCfg::GLOBAL_ADDR_BW;
 parameter STENCIL = 0;
@@ -90,6 +101,9 @@ localparam ST_BW = $clog2(STSIZE+1);
 input [WBW-1:0]     i_bofs [VDIM];
 input [WBW-1:0]     i_abeg [VDIM];
 input [WBW-1:0]     i_aend [VDIM];
+`ifdef SD
+input [STO_BW-1:0]  i_syst_type;
+`endif
 input [ABW-1:0]     i_linears [N_CFG];
 input [WBW-1:0]     i_bboundary      [VDIM];
 input [CV_BW-1:0]   i_bsubofs [VSIZE][VDIM];
@@ -111,11 +125,17 @@ input               i_stencil;
 input [ST_BW-1:0]   i_stencil_begs [N_CFG];
 input [ST_BW-1:0]   i_stencil_ends [N_CFG];
 input [ABW-1:0]     i_stencil_lut [STSIZE];
+`ifdef SD
+input [N_CFG-1:0]   i_systolic_skip;
+`endif
 `rdyack_output(addrval);
 output [NCFG_BW-1:0] o_id;
 output [ABW-1:0]     o_address [VSIZE];
 output [VSIZE-1:0]   o_valid;
 output               o_retire;
+`ifdef SD
+output [STO_BW-1:0]  o_syst_type;
+`endif
 
 //======================================
 // Internal
@@ -174,6 +194,9 @@ always_comb for (int i = 0; i < VDIM; i++) begin
 	abeg[i] = stencil_en ? 'b0 : i_abeg[i];
 	aend[i] = stencil_en ? 'b1 : i_aend[i];
 end
+`ifdef SD
+assign o_syst_type = i_systolic_skip[o_id] ? i_syst_type : `FROM_SELF;
+`endif
 
 //======================================
 // Submodule
@@ -197,7 +220,8 @@ OffsetStage#(.BW(WBW), .DIM(VDIM), .FROM_ZERO(0), .UNIT_STRIDE(1)) u_s0_ofs(
 	.o_sel_beg(s01_sel_beg),
 	.o_sel_end(s01_sel_end),
 	.o_sel_ret(s01_sel_ret),
-	.o_islast(s01_islast)
+	.o_islast(s01_islast),
+	.init_dval()
 );
 IdSelect#(.BW(NCFG_BW), .DIM(VDIM), .RETIRE(0)) u_s0_sel_beg(
 	.i_sel(s01_sel_beg),

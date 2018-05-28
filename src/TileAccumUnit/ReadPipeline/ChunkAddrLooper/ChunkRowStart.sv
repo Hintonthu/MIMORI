@@ -93,7 +93,8 @@ OffsetStage#(.BW(GBW), .DIM(DIM-1), .FROM_ZERO(1), .UNIT_STRIDE(0)) u_ostage(
 	.o_sel_beg(),
 	.o_sel_end(o_routing_rev),
 	.o_sel_ret(),
-	.o_islast(o_row_islast)
+	.o_islast(o_row_islast),
+	.init_dval()
 );
 OrCrossBar#(V_BW,DIM,1) u_ostage_selpad(
 	.i_data(i_mpad),

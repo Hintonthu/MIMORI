@@ -1,4 +1,4 @@
-// Copyright 2016 Yu Sheng Lin
+// Copyright 2016, 2018 Yu Sheng Lin
 
 // This file is part of MIMORI.
 
@@ -22,6 +22,12 @@ module AccumBlockLooper(
 	`clk_port,
 	`rdyack_port(src),
 	i_bofs,
+`ifdef SD
+	i_i0_systolic_gsize,
+	i_i0_systolic_idx,
+	i_i1_systolic_gsize,
+	i_i1_systolic_idx,
+`endif
 	i_agrid_step,
 	i_agrid_end,
 	i_aboundary,
@@ -39,12 +45,18 @@ module AccumBlockLooper(
 	o_i0_aofs_end,
 	o_i0_beg,
 	o_i0_end,
+`ifdef SD
+	o_i0_syst_type, // See SystolicSwitch.sv
+`endif
 	`rdyack_port(i1_abofs),
 	o_i1_bofs,
 	o_i1_aofs_beg,
 	o_i1_aofs_end,
 	o_i1_beg,
 	o_i1_end,
+`ifdef SD
+	o_i1_syst_type,
+`endif
 	`rdyack_port(o_abofs),
 	o_o_bofs,
 	o_o_aofs_beg,
@@ -61,6 +73,7 @@ module AccumBlockLooper(
 //======================================
 // Parameter
 //======================================
+import TauCfg::*;
 localparam WBW = TauCfg::WORK_BW;
 localparam VDIM = TauCfg::VDIM;
 localparam N_ICFG = TauCfg::N_ICFG;
@@ -70,6 +83,14 @@ localparam N_INST = TauCfg::N_INST;
 localparam ICFG_BW = $clog2(N_ICFG+1);
 localparam OCFG_BW = $clog2(N_OCFG+1);
 localparam INST_BW = $clog2(N_INST+1);
+`ifdef SD
+localparam N_TAU_X = TauCfg::N_TAU_X;
+localparam N_TAU_Y = TauCfg::N_TAU_Y;
+localparam CN_TAU_X = $clog2(N_TAU_X);
+localparam CN_TAU_Y = $clog2(N_TAU_Y);
+localparam CN_TAU_X1 = $clog2(N_TAU_X+1);
+localparam CN_TAU_Y1 = $clog2(N_TAU_Y+1);
+`endif
 
 //======================================
 // I/O
@@ -78,6 +99,12 @@ localparam INST_BW = $clog2(N_INST+1);
 `rdyack_input(src);
 input [WBW-1:0] i_bofs        [VDIM];
 input [WBW-1:0] i_agrid_step  [VDIM];
+`ifdef SD
+input [CN_TAU_X1-1:0] i_i0_systolic_gsize;
+input [CN_TAU_Y -1:0] i_i0_systolic_idx;
+input [CN_TAU_X1-1:0] i_i1_systolic_gsize;
+input [CN_TAU_Y -1:0] i_i1_systolic_idx;
+`endif
 input [WBW-1:0] i_agrid_end   [VDIM];
 input [WBW-1:0] i_aboundary   [VDIM];
 input [ICFG_BW-1:0] i_i0_id_begs [VDIM+1];
@@ -94,12 +121,18 @@ output logic [WBW-1:0]     o_i0_aofs_beg [VDIM];
 output logic [WBW-1:0]     o_i0_aofs_end [VDIM];
 output logic [ICFG_BW-1:0] o_i0_beg;
 output logic [ICFG_BW-1:0] o_i0_end;
+`ifdef SD
+output logic [STO_BW-1:0]  o_i0_syst_type;
+`endif
 `rdyack_output(i1_abofs);
 output logic [WBW-1:0]     o_i1_bofs     [VDIM];
 output logic [WBW-1:0]     o_i1_aofs_beg [VDIM];
 output logic [WBW-1:0]     o_i1_aofs_end [VDIM];
 output logic [ICFG_BW-1:0] o_i1_beg;
 output logic [ICFG_BW-1:0] o_i1_end;
+`ifdef SD
+output logic [STO_BW-1:0]  o_i1_syst_type;
+`endif
 `rdyack_output(o_abofs);
 output logic [WBW-1:0]     o_o_bofs     [VDIM];
 output logic [WBW-1:0]     o_o_aofs_beg [VDIM];
@@ -124,7 +157,7 @@ output logic [WBW-1:0] o_alu_aofs_end [VDIM];
 `rdyack_logic(i1_abofs_src);
 `rdyack_logic(o_abofs_src);
 `rdyack_logic(alu_abofs_src);
-`dval_logic(init);
+`dval_logic(ofs_init); // Used only in systolic mode
 logic [WBW-1:0] s0_aofs_beg [VDIM];
 logic [WBW-1:0] s0_aofs_end_tmp [VDIM];
 logic [WBW-1:0] s0_aofs_end     [VDIM];
@@ -145,6 +178,17 @@ logic s0_alu_eq;
 logic s0_skip_alu;
 logic s0_last_block;
 logic s1_alu_last_block_r;
+`ifdef SD
+logic i_i0_rmost, i_i0_lmost, i_i1_lmost, i_i1_rmost;
+logic [CN_TAU_X:0] i_i0_systolic_gsize2;
+logic [CN_TAU_X:0] i0_systolic_cnt_r;
+logic [CN_TAU_X:0] i0_systolic_cnt_w;
+logic [CN_TAU_Y:0] i_i1_systolic_gsize2;
+logic [CN_TAU_Y:0] i1_systolic_cnt_r;
+logic [CN_TAU_Y:0] i1_systolic_cnt_w;
+logic [STO_BW-1:0] o_i0_syst_type_w;
+logic [STO_BW-1:0] o_i1_syst_type_w;
+`endif
 
 //======================================
 // Combinational
@@ -154,6 +198,33 @@ assign s0_i0_eq = s0_i0_beg == s0_i0_end;
 assign s0_i1_eq = s0_i1_beg == s0_i1_end;
 assign s0_o_eq = s0_o_beg == s0_o_end;
 assign s0_alu_eq = s0_alu_beg == s0_alu_end;
+`ifdef SD
+always_comb begin
+	i_i0_systolic_gsize2 = (i_i0_systolic_gsize << 1) - 'b1;
+	i_i1_systolic_gsize2 = (i_i1_systolic_gsize << 1) - 'b1;
+	i_i0_lmost = i_i0_systolic_idx == '0;
+	i_i0_rmost = (i_i0_systolic_idx+'b1) == i_i0_systolic_gsize;
+	i_i1_lmost = i_i1_systolic_idx == '0;
+	i_i1_rmost = (i_i1_systolic_idx+'b1) == i_i1_systolic_gsize;
+end
+
+always_comb begin
+	i0_systolic_cnt_w = ofs_init_dval || (i0_systolic_cnt_r == i_i0_systolic_gsize2) ? 'b0 : (i0_systolic_cnt_r + 'b1);
+	i1_systolic_cnt_w = ofs_init_dval || (i1_systolic_cnt_r == i_i1_systolic_gsize2) ? 'b0 : (i1_systolic_cnt_r + 'b1);
+`define DetectSystolicType(target,cur,idx,bound,lmost,rmost)\
+	unique if (cur == idx || cur == bound - idx) begin\
+		target = `FROM_SELF | (rmost ? `TO_EMPTY : `TO_RIGHT) | (lmost ? `TO_EMPTY : `TO_LEFT);\
+	end else if (cur < idx || cur > bound - idx) begin\
+		target = `FROM_LEFT | (rmost ? `TO_EMPTY : `TO_RIGHT);\
+	end else begin\
+		target = `FROM_RIGHT | (lmost ? `TO_EMPTY : `TO_LEFT);\
+	end
+	// bit mismatch lint error here
+	`DetectSystolicType(o_i0_syst_type_w, i0_systolic_cnt_r, i_i0_systolic_idx, i_i0_systolic_gsize2, i_i0_lmost, i_i0_rmost);
+	`DetectSystolicType(o_i1_syst_type_w, i1_systolic_cnt_r, i_i1_systolic_idx, i_i1_systolic_gsize2, i_i1_lmost, i_i1_rmost);
+end
+`endif
+
 always_comb begin
 	for (int i = 0; i < VDIM; i++) begin
 		s0_aofs_end_tmp[i] = s0_aofs_beg[i] + i_agrid_step[i];
@@ -177,7 +248,8 @@ OffsetStage #(.BW(WBW), .DIM(VDIM), .FROM_ZERO(1), .UNIT_STRIDE(0)) u_s0(
 	.o_sel_beg(s0_sel_beg),
 	.o_sel_end(),
 	.o_sel_ret(s0_sel_end), /* .i_global_end == i_agrid_end, so sel_end == sel_ret */
-	.o_islast(s0_last_block)
+	.o_islast(s0_last_block),
+	`dval_connect(init, ofs_init)
 );
 Broadcast#(4) u_brd_0(
 	`clk_connect,
@@ -290,12 +362,18 @@ IdSelect#(.BW(INST_BW), .DIM(VDIM), .RETIRE(0)) u_s0_sel_alu_end(
 	end
 	o_i0_beg <= '0;
 	o_i0_end <= '0;
+`ifdef SD
+	o_i0_syst_type <= '0;
+`endif
 `ff_cg(i0_abofs_src_ack)
 	o_i0_bofs <= i_bofs;
 	o_i0_aofs_beg <= s0_aofs_beg;
 	o_i0_aofs_end <= s0_aofs_end;
 	o_i0_beg <= s0_i0_beg;
 	o_i0_end <= s0_i0_end;
+`ifdef SD
+	o_i0_syst_type <= o_i0_syst_type_w;
+`endif
 `ff_end
 
 `ff_rst
@@ -306,12 +384,18 @@ IdSelect#(.BW(INST_BW), .DIM(VDIM), .RETIRE(0)) u_s0_sel_alu_end(
 	end
 	o_i1_beg <= '0;
 	o_i1_end <= '0;
+`ifdef SD
+	o_i1_syst_type <= '0;
+`endif
 `ff_cg(i1_abofs_src_ack)
 	o_i1_bofs <= i_bofs;
 	o_i1_aofs_beg <= s0_aofs_beg;
 	o_i1_aofs_end <= s0_aofs_end;
 	o_i1_beg <= s0_i1_beg;
 	o_i1_end <= s0_i1_end;
+`ifdef SD
+	o_i1_syst_type <= o_i1_syst_type_w;
+`endif
 `ff_end
 
 `ff_rst
@@ -343,5 +427,15 @@ IdSelect#(.BW(INST_BW), .DIM(VDIM), .RETIRE(0)) u_s0_sel_alu_end(
 	o_alu_aofs_end <= s0_aofs_end;
 	s1_alu_last_block_r <= s0_last_block;
 `ff_end
+
+`ifdef SD
+`ff_rst
+	i0_systolic_cnt_r <= '0;
+	i1_systolic_cnt_r <= '0;
+`ff_cg(ofs_init_dval || s0_dst_ack)
+	i0_systolic_cnt_r <= i0_systolic_cnt_w;
+	i1_systolic_cnt_r <= i1_systolic_cnt_w;
+`ff_end
+`endif
 
 endmodule

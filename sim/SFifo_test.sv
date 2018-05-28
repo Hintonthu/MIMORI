@@ -17,8 +17,6 @@
 `timescale 1ns/1ns
 `include "SFifo_include.sv"
 
-`define IMPL IMPL_TP
-
 module SFifo_test;
 
 logic i_clk, i_rst, dst_canack;
@@ -42,7 +40,7 @@ initial begin
 end
 
 assign dst_ack = dst_rdy && dst_canack;
-SFifo#(.`IMPL(1), .NDATA(16), .BW(16)) dut(
+SFifo#(.IMPL(1), .NDATA(16), .BW(16)) dut(
 	`clk_connect,
 	`rdyack_connect(dst, dst)
 );

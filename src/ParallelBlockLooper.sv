@@ -83,7 +83,8 @@ OffsetStage#(.BW(WBW), .DIM(VDIM), .FROM_ZERO(1), .UNIT_STRIDE(0)) u_s0(
 	.o_sel_beg(),
 	.o_sel_end(),
 	.o_sel_ret(),
-	.o_islast()
+	.o_islast(),
+	.init_dval()
 );
 ForwardIf#(0) u_fwd_if_not_full(
 	.cond(block_full),

@@ -17,21 +17,9 @@
 # along with MIMORI.  If not, see <http://www.gnu.org/licenses/>.
 
 from __future__ import print_function, division
-from functools import partial
-# default numpy and i32 version numpy
-from numpy import newaxis
-import numpy as npd
-import bisect
 from os import environ
-i16 = npd.int16
-class npi(object): pass
-
-wrapped = [
-	'ones', 'zeros', 'empty', 'full', 'array',
-	'cumsum', 'cumprod', 'sum', 'prod', 'arange', 'indices',
-]
-for f in wrapped:
-	setattr(npi, f, partial(getattr(npd, f), dtype=npd.int32))
+from . import npi, npd, newaxis, i16
+from .ramulator import MemorySpace
 
 def ExtractUFloat(i, frac_bw):
 	i = int(i)
@@ -98,8 +86,10 @@ class UmiModel(object):
 
 	PCFG_DTYPE = ToIntTypes.__func__([
 		'total', 'local', 'vsize', 'vshuf', # user filled
-		'end', 'lg_vsize', 'lg_vshuf'
-	], [VDIM,VDIM,VDIM,VDIM,VDIM,VDIM,VDIM])
+		'end', 'lg_vsize', 'lg_vshuf',
+		'syst0_skip', 'syst0_axis',
+		'syst1_skip', 'syst1_axis',
+	], [VDIM,VDIM,VDIM,VDIM,VDIM,VDIM,VDIM,1,1,1,1])
 	ACFG_DTYPE = ToIntTypes.__func__([
 		'total', 'local', # user filled
 		'end'
@@ -484,30 +474,6 @@ class UmiModel(object):
 				dram_wmask.append(wmask)
 		return npi.array(dram_addr), npd.vstack(dram_wmask)
 
-class MemorySpace(object):
-	def __init__(self, mranges, n):
-		mranges.sort(key=lambda x: x[0])
-		self.keys = [x[0] for x in mranges]
-		self.values = [x[1] for x in mranges]
-		self.n = n
-
-	def FindRange(self, a):
-		idx = bisect.bisect_right(self.keys, a)-1
-		return a-self.keys[idx], self.values[idx]
-
-	def WriteScalarMask(self, a, d, m):
-		m = npd.bitwise_and(m[0]>>npi.arange(self.n), 1) != 0
-		aa, mem = self.FindRange(a[0])
-		mem[aa:aa+self.n][m] = d[m]
-
-	def Write(self, a, d, m):
-		aa, mem = self.FindRange(a[0])
-		mem[aa:aa+self.n][m] = d[m]
-
-	def Read(self, a):
-		aa, mem = self.FindRange(a[0])
-		return mem[aa:aa+self.n]
-
 sample_conf = list()
 verf_func = list()
 
@@ -539,6 +505,10 @@ p['total'] = [1,1,1,1,20,10]
 p['local'] = [1,1,1,1,16,8]
 p['vsize'] = [1,1,1,1,4,8]
 p['vshuf'] = [1,1,1,1,4,1]
+p['syst0_skip'] = 0
+p['syst0_axis'] = 4
+p['syst1_skip'] = 0b1
+p['syst1_axis'] = 5
 a['total'] = [1,1,1,1,3,3]
 a['local'] = [1,1,1,1,2,2]
 um_i0['mwrap'].fill(UmiModel.MEM_WRAP if PAD is None else UmiModel.MEM_PAD)
@@ -634,6 +604,10 @@ p['total'] = [1,1,1,1,1,100]
 p['local'] = [1,1,1,1,1,32]
 p['vsize'] = [1,1,1,1,1,32]
 p['vshuf'] = [1,1,1,1,1,1]
+p['syst0_skip'] = 0
+p['syst0_axis'] = 4
+p['syst1_skip'] = 0
+p['syst1_axis'] = 5
 a['total'] = [1,1,1,1,1,100]
 a['local'] = [1,1,1,1,1,32]
 um_i0['mwrap'].fill(UmiModel.MEM_WRAP)
@@ -667,7 +641,13 @@ def VerfFunc1(CSIZE):
 		(300000, result),
 	], CSIZE)
 	# check
-	check_res = result_2d != npd.cumsum(img_2d, axis=1, dtype=i16).T
+	golden = npd.cumsum(img_2d, axis=1, dtype=i16).T
+	check_res = result_2d != golden
+	fail = npd.any(check_res)
+	if fail:
+		npd.savetxt("intimg_i.txt", result_2d[:100,:100], "%d")
+		npd.savetxt("intimg_o.txt", golden[:100,:100], "%d")
+		assert not fail
 	assert not npd.any(check_res)
 	print("IntImg(1D) test result successes")
 
@@ -699,6 +679,10 @@ p['total'] = [1,1,1,1,128,64]
 p['local'] = [1,1,1,1,64,32]
 p['vsize'] = [1,1,1,1,1,32]
 p['vshuf'] = [1,1,1,1,1,1]
+p['syst0_skip'] = 0b1
+p['syst0_axis'] = 5
+p['syst1_skip'] = 0b1
+p['syst1_axis'] = 4
 a['total'] = [1,1,1,1,1,64]
 a['local'] = [1,1,1,1,1,16]
 um_i0['mwrap'].fill(UmiModel.MEM_WRAP)
@@ -774,6 +758,10 @@ p['total'] = [1,1,4,4,8,8] ## 4x4 block & 8x8 search range
 p['local'] = [1,1,1,1,8,8]
 p['vsize'] = [1,1,1,1,4,8]
 p['vshuf'] = [1,1,1,1,2,1]
+p['syst0_skip'] = 0
+p['syst0_axis'] = 4
+p['syst1_skip'] = 0b1
+p['syst1_axis'] = 5
 a['total'] = [1,1,1,1,8,8]
 a['local'] = [1,1,1,1,8,8]
 um_i0['mwrap'].fill(UmiModel.MEM_WRAP)
@@ -861,6 +849,10 @@ p['total'] = [1,1,1,1,60,30]
 p['local'] = [1,1,1,1,8,16]
 p['vsize'] = [1,1,1,1,2,16]
 p['vshuf'] = [1,1,1,1,1,1]
+p['syst0_skip'] = 0
+p['syst0_axis'] = 4
+p['syst1_skip'] = 0
+p['syst1_axis'] = 5
 a['total'] = [1,1,1,1,1,1]
 a['local'] = [1,1,1,1,1,1]
 um_o['mwrap'].fill(UmiModel.MEM_WRAP)
@@ -916,6 +908,10 @@ p['total'] = [1,1,1,1,H_grad-2,W_grad-2]
 p['local'] = [1,1,1,1,16,32]
 p['vsize'] = [1,1,1,1,1,32]
 p['vshuf'] = [1,1,1,1,1,1]
+p['syst0_skip'] = 0
+p['syst0_axis'] = 4
+p['syst1_skip'] = 0
+p['syst1_axis'] = 5
 a['total'] = [1,1,1,1,3,3]
 a['local'] = [1,1,1,1,3,3]
 um_i0['mwrap'].fill(UmiModel.MEM_WRAP)
@@ -984,6 +980,10 @@ p['total'] = [1,1,1,1,H_ds4,W_ds4]
 p['local'] = [1,1,1,1,4,32]
 p['vsize'] = [1,1,1,1,1,32]
 p['vshuf'] = [1,1,1,1,1,1]
+p['syst0_skip'] = 0
+p['syst0_axis'] = 4
+p['syst1_skip'] = 0
+p['syst1_axis'] = 5
 a['total'] = [1,1,1,1,1,1]
 a['local'] = [1,1,1,1,1,1]
 um_i0['mwrap'].fill(UmiModel.MEM_WRAP)

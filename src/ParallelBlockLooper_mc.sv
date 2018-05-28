@@ -75,7 +75,14 @@ logic [N_TAU-1:0] block_emptys;
 // Combinational
 //======================================
 assign wait_fin_ack = wait_fin_rdy && (&block_emptys) && !(|bofs_rdys);
-assign select_shamt_w = select_shamt_r == (N_TAU-1) ? '0 : (select_shamt_r + 'b1);
+
+always_comb begin
+	if (select_shamt_r == N_TAU-1) begin
+		select_shamt_w = '0;
+	end else begin
+		select_shamt_w = select_shamt_r + 'b1;
+	end
+end
 
 always_comb begin
 	// Use higher half
@@ -111,7 +118,8 @@ OffsetStage#(.BW(WBW), .DIM(VDIM), .FROM_ZERO(1), .UNIT_STRIDE(0)) u_s0(
 	.o_sel_beg(),
 	.o_sel_end(),
 	.o_sel_ret(),
-	.o_islast()
+	.o_islast(),
+	.init_dval()
 );
 FindFromMsb#(N_TAU,1) u_arbiter(
 	.i(can_send_rot[2*N_TAU-1:N_TAU]),

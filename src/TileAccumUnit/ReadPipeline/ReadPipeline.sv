@@ -19,6 +19,7 @@
 
 `include "common/define.sv"
 `include "common/Controllers.sv"
+`include "TileAccumUnit/common/AccumWarpLooper/AccumWarpLooper.sv"
 `include "TileAccumUnit/ReadPipeline/Allocator.sv"
 `include "TileAccumUnit/ReadPipeline/ChunkAddrLooper/ChunkAddrLooper.sv"
 `include "TileAccumUnit/ReadPipeline/ChunkHead.sv"
@@ -34,6 +35,9 @@ module ReadPipeline(
 	i_aend,
 	i_beg,
 	i_end,
+`ifdef SD
+	i_syst_type,
+`endif
 	i_bsub_up_order,
 	i_bsub_lo_order,
 	i_aboundary,
@@ -62,18 +66,25 @@ module ReadPipeline(
 	i_stencil_begs,
 	i_stencil_ends,
 	i_stencil_lut,
+`ifdef SD
+	i_systolic_skip,
+`endif
 	`dval_port(blkdone),
 	`rdyack_port(dramra),
 	o_dramra,
 	`rdyack_port(dramrd),
 	i_dramrd,
 	`rdyack_port(sramrd),
+`ifdef SD
+	o_syst_type,
+`endif
 	o_sramrd
 );
 
 //======================================
 // Parameter
 //======================================
+import TauCfg::*;
 parameter  LBW = TauCfg::LOCAL_ADDR_BW0;
 localparam WBW = TauCfg::WORK_BW;
 localparam GBW = TauCfg::GLOBAL_ADDR_BW;
@@ -110,6 +121,9 @@ input [WBW-1:0]     i_abeg           [VDIM];
 input [WBW-1:0]     i_aend           [VDIM];
 input [ICFG_BW-1:0] i_beg;
 input [ICFG_BW-1:0] i_end;
+`ifdef SD
+input [STO_BW-1:0]  i_syst_type;
+`endif
 input [CCV_BW-1:0]  i_bsub_up_order  [VDIM];
 input [CCV_BW-1:0]  i_bsub_lo_order  [VDIM];
 input [WBW-1:0]     i_aboundary      [VDIM];
@@ -138,12 +152,18 @@ input               i_stencil;
 input [ST_BW-1:0]   i_stencil_begs [N_ICFG];
 input [ST_BW-1:0]   i_stencil_ends [N_ICFG];
 input [LBW-1:0]     i_stencil_lut [STSIZE];
+`ifdef SD
+input [N_ICFG-1:0]  i_systolic_skip;
+`endif
 `dval_input(blkdone);
 `rdyack_output(dramra);
 output [GBW-1:0] o_dramra;
 `rdyack_input(dramrd);
 input [DBW-1:0] i_dramrd [CSIZE];
 `rdyack_output(sramrd);
+`ifdef SD
+output [STO_BW-1:0] o_syst_type;
+`endif
 output [DBW-1:0] o_sramrd [VSIZE];
 
 //======================================
@@ -207,6 +227,15 @@ logic [WBW-1:0] lc_bofs         [VDIM];
 logic [WBW-1:0] lc_abeg         [VDIM];
 logic [WBW-1:0] lc_aend         [VDIM];
 logic [LBW-1:0] lc_warp_linears [N_ICFG];
+`ifdef SD
+logic               ch_skip;
+`rdyack_logic(ch_cmd_mofs_src2);  // broadcast
+`rdyack_logic(ch_addr_mofs_src2); // broadcast
+logic               ch_alloc_false_alloc;
+logic               rmc_alloc_false_alloc;
+logic [STO_BW-1:0]  warp_rmc_syst_type;
+logic [STO_BW-1:0]  lc_syst_type;
+`endif
 
 //======================================
 // Submodule
@@ -230,6 +259,28 @@ Forward u_fwd_alloc(
 	`rdyack_connect(src, ch_alloc_mofs_src),
 	`rdyack_connect(dst, ch_alloc_mofs_dst)
 );
+`ifdef SD
+Forward u_fwd_cmd(
+	`clk_connect,
+	`rdyack_connect(src, ch_cmd_mofs_src2),
+	`rdyack_connect(dst, ch_cmd_mofs_dst)
+);
+Forward u_fwd_addr(
+	`clk_connect,
+	`rdyack_connect(src, ch_addr_mofs_src2),
+	`rdyack_connect(dst, ch_addr_mofs_dst)
+);
+IgnoreIf#(1) u_ign_ch_cmd(
+	.cond(ch_skip),
+	`rdyack_connect(src, ch_cmd_mofs_src),
+	`rdyack_connect(dst, ch_cmd_mofs_src2)
+);
+IgnoreIf#(1) u_ign_ch_addr(
+	.cond(ch_skip),
+	`rdyack_connect(src, ch_addr_mofs_src),
+	`rdyack_connect(dst, ch_addr_mofs_src2)
+);
+`else
 Forward u_fwd_cmd(
 	`clk_connect,
 	`rdyack_connect(src, ch_cmd_mofs_src),
@@ -240,6 +291,7 @@ Forward u_fwd_addr(
 	`rdyack_connect(src, ch_addr_mofs_src),
 	`rdyack_connect(dst, ch_addr_mofs_dst)
 );
+`endif
 ChunkHead u_chunk_head(
 	`clk_connect,
 	`rdyack_connect(i_abofs, brd0_ch),
@@ -247,6 +299,9 @@ ChunkHead u_chunk_head(
 	.i_aofs(i_abeg),
 	.i_beg(i_beg),
 	.i_end(i_end),
+`ifdef SD
+	.i_syst_type(i_syst_type),
+`endif
 	.i_global_mofs(i_global_mofs),
 	.i_global_bshufs(i_global_bshufs),
 	.i_bstrides_frac(i_bstrides_frac),
@@ -254,9 +309,16 @@ ChunkHead u_chunk_head(
 	.i_global_ashufs(i_global_ashufs),
 	.i_astrides_frac(i_astrides_frac),
 	.i_astrides_shamt(i_astrides_shamt),
+`ifdef SD
+	.i_systolic_skip(i_systolic_skip),
+`endif
 	`rdyack_connect(o_mofs, ch_mofs),
 	.o_mofs(ch_mofs),
 	.o_id(ch_mid)
+`ifdef SD
+	,
+	.o_skip(ch_skip)
+`endif
 );
 LinearCollector#(.LBW(LBW)) u_linear_col(
 	`clk_connect,
@@ -266,20 +328,30 @@ LinearCollector#(.LBW(LBW)) u_linear_col(
 	.i_aend(i_aend),
 	.i_beg(i_beg),
 	.i_end(i_end),
+`ifdef SD
+	.i_syst_type(i_syst_type),
+`endif
 	`rdyack_connect(src_linear, writer_warp_linear_fifo_out),
 	.i_linear(writer_warp_linear[0]),
 	`rdyack_connect(dst_linears, lc_warp),
 	.o_bofs(lc_bofs),
 	.o_abeg(lc_abeg),
 	.o_aend(lc_aend),
+`ifdef SD
+	.o_syst_type(lc_syst_type),
+`endif
 	.o_linears(lc_warp_linears)
 );
+// TODO: this works without large modification, but for low power, AG can be turned off
 AccumWarpLooper #(.N_CFG(N_ICFG), .ABW(LBW), .STENCIL(1), .USE_LOFS(1)) u_awl(
 	`clk_connect,
 	`rdyack_connect(abofs, lc_warp),
 	.i_bofs(lc_bofs),
 	.i_abeg(lc_abeg),
 	.i_aend(lc_aend),
+`ifdef SD
+	.i_syst_type(lc_syst_type),
+`endif
 	.i_linears(lc_warp_linears),
 	.i_bboundary(),
 	.i_bsubofs(),
@@ -301,22 +373,38 @@ AccumWarpLooper #(.N_CFG(N_ICFG), .ABW(LBW), .STENCIL(1), .USE_LOFS(1)) u_awl(
 	.i_stencil_begs(i_stencil_begs),
 	.i_stencil_ends(i_stencil_ends),
 	.i_stencil_lut(i_stencil_lut),
+`ifdef SD
+	.i_systolic_skip(i_systolic_skip),
+`endif
 	`rdyack_connect(addrval, warp_rmc_addrval),
 	.o_id(warp_rmc_id),
 	.o_address(warp_rmc_addr),
 	.o_valid(),
 	.o_retire(warp_rmc_retire)
+`ifdef SD
+	,
+	.o_syst_type(warp_rmc_syst_type)
+`endif
 );
 Allocator#(.LBW(LBW)) u_alloc(
 	`clk_connect,
 	.i_sizes(i_local_sizes),
 	`rdyack_connect(alloc, ch_alloc_mofs_dst2),
 	.i_alloc_id(ch_alloc_mid),
+`ifdef SD
+	.i_false_alloc(ch_alloc_false_alloc),
+`endif
 	`rdyack_connect(linear, alloc_writer_linear),
 	.o_linear(alloc_writer_linear),
 	.o_linear_id(alloc_writer_linear_id),
+`ifdef SD
+	.o_false_alloc(alloc_writer_false_alloc),
+`endif
 	`dval_connect(free, rmc_alloc_free_id),
 	.i_free_id(rmc_alloc_free_id),
+`ifdef SD
+	.i_false_free(rmc_alloc_false_alloc),
+`endif
 	`dval_connect(blkdone, blkdone)
 );
 SramWriteCollector#(.LBW(LBW)) u_swc(
@@ -325,6 +413,9 @@ SramWriteCollector#(.LBW(LBW)) u_swc(
 	.i_linear(alloc_writer_linear),
 	.i_linear_id(alloc_writer_linear_id),
 	.i_size(i_local_sizes[alloc_writer_linear_id]),
+`ifdef SD
+	.i_skip(alloc_writer_false_alloc),
+`endif
 	.i_padv(i_pad_value[alloc_writer_linear_id]),
 	`rdyack_connect(cmd, cal_writer_cmd),
 	.i_cmd_type(cal_writer_type),
@@ -341,6 +432,7 @@ SramWriteCollector#(.LBW(LBW)) u_swc(
 	.o_hiaddr(writer_rmc_whiaddr),
 	.o_data(writer_rmc_wdata)
 );
+// TODO: See AccumWarpLooper
 RemapCache#(.LBW(LBW)) u_rmc(
 	`clk_connect,
 	.i_xor_masks(i_local_xor_masks),
@@ -350,9 +442,18 @@ RemapCache#(.LBW(LBW)) u_rmc(
 	.i_rid(warp_rmc_id),
 	.i_raddr(warp_rmc_addr),
 	.i_retire(warp_rmc_retire),
+`ifdef SD
+	.i_syst_type(warp_rmc_syst_type),
+`endif
 	`rdyack_connect(rd, sramrd),
+`ifdef SD
+	.o_syst_type(o_syst_type),
+`endif
 	.o_rdata(o_sramrd),
 	`dval_connect(free, rmc_alloc_free_id),
+`ifdef SD
+	.o_false_alloc(rmc_alloc_false_alloc),
+`endif
 	.o_free_id(rmc_alloc_free_id),
 	`dval_connect(wad, writer_rmc),
 	.i_wid(writer_rmc_wid),
@@ -454,8 +555,14 @@ end
 //======================================
 `ff_rst
 	ch_alloc_mid <= '0;
+`ifdef SD
+	ch_alloc_false_alloc <= 1'b0;
+`endif
 `ff_cg(ch_alloc_mofs_src_ack)
 	ch_alloc_mid <= ch_mid;
+`ifdef SD
+	ch_alloc_false_alloc <= ch_skip;
+`endif
 `ff_end
 
 `ff_rst
@@ -463,7 +570,11 @@ end
 		ch_cmd_mofs[i] <= '0;
 	end
 	ch_cmd_mid <= '0;
+`ifdef SD
+`ff_cg(ch_cmd_mofs_src2_ack)
+`else
 `ff_cg(ch_cmd_mofs_src_ack)
+`endif
 	for (int i = 0; i < DIM-1; i++) begin
 		ch_cmd_mofs[i] <= ch_mofs_sext[i] * i_global_mboundaries[ch_mid][i+1];
 	end
@@ -476,7 +587,11 @@ end
 		ch_addr_mofs[i] <= '0;
 	end
 	ch_addr_mid <= '0;
+`ifdef SD
+`ff_cg(ch_addr_mofs_src2_ack)
+`else
 `ff_cg(ch_addr_mofs_src_ack)
+`endif
 	for (int i = 0; i < DIM-1; i++) begin
 		ch_addr_mofs[i] <= ch_mofs_sext[i] * i_global_mboundaries[ch_mid][i+1];
 	end
