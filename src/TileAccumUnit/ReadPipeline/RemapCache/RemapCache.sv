@@ -74,11 +74,11 @@ input [ICFG_BW-1:0] i_rid;
 input [LBW-1:0]     i_raddr [VSIZE];
 input               i_retire;
 `ifdef SD
-input [1:0]         i_syst_type;
+input [STO_BW-1:0]  i_syst_type;
 `endif
 `rdyack_output(rd);
 `ifdef SD
-output [1:0]     o_syst_type;
+output [STO_BW-1:0] o_syst_type;
 `endif
 output [DBW-1:0] o_rdata [VSIZE];
 `dval_output(free);

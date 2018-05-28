@@ -641,7 +641,13 @@ def VerfFunc1(CSIZE):
 		(300000, result),
 	], CSIZE)
 	# check
-	check_res = result_2d != npd.cumsum(img_2d, axis=1, dtype=i16).T
+	golden = npd.cumsum(img_2d, axis=1, dtype=i16).T
+	check_res = result_2d != golden
+	fail = npd.any(check_res)
+	if fail:
+		npd.savetxt("intimg_i.txt", result_2d[:100,:100], "%d")
+		npd.savetxt("intimg_o.txt", golden[:100,:100], "%d")
+		assert not fail
 	assert not npd.any(check_res)
 	print("IntImg(1D) test result successes")
 

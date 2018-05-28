@@ -355,10 +355,10 @@ logic [DBW-1:0] i1_dramrd [CSIZE];
 `ifdef SD
 `rdyack_logic(i0_alu_sramrd2);
 `rdyack_logic(i1_alu_sramrd2);
-logic [1:0] abl_i0_syst_type;
-logic [1:0] abl_i1_syst_type;
-logic [1:0] i0_alu_syst_type;
-logic [1:0] i1_alu_syst_type;
+logic [STO_BW-1:0] abl_i0_syst_type;
+logic [STO_BW-1:0] abl_i1_syst_type;
+logic [STO_BW-1:0] i0_alu_syst_type;
+logic [STO_BW-1:0] i1_alu_syst_type;
 `endif
 
 //======================================

@@ -1,4 +1,4 @@
-// Copyright 2016 Yu Sheng Lin
+// Copyright 2018 Yu Sheng Lin
 
 // This file is part of MIMORI.
 
@@ -21,20 +21,6 @@
 module SystolicSwitch(
 	`clk_port,
 	`rdyack_port(from_rp),
-	// +-----------------------------+------------------+------------------+
-	// | type = 0 | type = 1         | type = 2         | type = 3         |
-	// |   ALU    |       ALU        |       ALU        |       ALU        |
-	// |    ^     |        ^         |        ^         |        ^         |
-	// |    |     |        |         |        |         |        |         |
-	// |  Switch  | 0 <- Switch -> 1 | 0 -> Switch -> 1 | 0 <- Switch <- 1 |
-	// |    ^     |        ^         |        ^         |        ^         |
-	// |    |     |        |         |        |         |        |         |
-	// |   RP     |       RP         |       RP         |       RP         |
-	// +-----------------------------+------------------+------------------+
-	// |  Data from RP               | Data from 0      | Data from 1      |
-	// +-----------------------------+------------------+------------------+
-	// NOTE: 0 is never output from AccumBlockLooper_sd.sv. 0 is detected in
-	// ReadPipeline
 	i_syst_type,
 	rp_data,
 	`rdyack_port(src0),
@@ -51,6 +37,7 @@ module SystolicSwitch(
 //======================================
 // Parameter
 //======================================
+import TauCfg::*;
 localparam DBW = TauCfg::DATA_BW;
 localparam VSIZE = TauCfg::VSIZE;
 
@@ -59,7 +46,7 @@ localparam VSIZE = TauCfg::VSIZE;
 //======================================
 `clk_input;
 `rdyack_input(from_rp);
-input [1:0] i_syst_type;
+input [STO_BW-1:0] i_syst_type;
 input [DBW-1:0] rp_data [VSIZE];
 `rdyack_logic(i0_alu_sramrd);
 `rdyack_input(src0);
@@ -78,44 +65,43 @@ output logic [DBW-1:0] o_data [VSIZE];
 `rdyack_logic(dst0_brd);
 `rdyack_logic(dst1_brd);
 `rdyack_logic(alu_brd);
-logic ign_d0, ign_d1;
+logic en_d0, en_d1;
 
 //======================================
 // Combinational
 //======================================
-assign o_data = i_syst_type[1] ? (i_syst_type[0] ? s1_data : s0_data) : rp_data;
 always_comb begin
-	ign_d0 = i_syst_type == 2'd0 || i_syst_type == 2'd3;
-	ign_d1 = i_syst_type == 2'd0 || i_syst_type == 2'd2;
+	en_d0 = `IS_TO_RIGHT(i_syst_type);
+	en_d1 = `IS_TO_LEFT(i_syst_type);
 end
 
 always_comb begin
 	if (from_rp_rdy) begin
-		case (i_syst_type)
-			2'd0, 2'd1: begin
-				src_rdy = 1'b1;
-				src0_ack = 1'b0;
-				src1_ack = 1'b0;
-				from_rp_ack = src_ack;
-			end
-			2'd2: begin
-				src_rdy = src0_rdy;
-				src0_ack = src_ack;
-				src1_ack = 1'b0;
-				from_rp_ack = src_ack;
-			end
-			2'd3: begin
-				src_rdy = src1_rdy;
-				src0_ack = 1'b0;
-				src1_ack = src_ack;
-				from_rp_ack = src_ack;
-			end
-		endcase
+		unique if (`IS_FROM_LEFT(i_syst_type)) begin
+			src_rdy = src0_rdy;
+			src0_ack = src_ack;
+			src1_ack = 1'b0;
+			from_rp_ack = src_ack;
+			o_data = s0_data;
+		end else if (`IS_FROM_RIGHT(i_syst_type)) begin
+			src_rdy = src1_rdy;
+			src0_ack = 1'b0;
+			src1_ack = src_ack;
+			from_rp_ack = src_ack;
+			o_data = s1_data;
+		end else if (`IS_FROM_SELF(i_syst_type)) begin
+			src_rdy = 1'b1;
+			src0_ack = 1'b0;
+			src1_ack = 1'b0;
+			from_rp_ack = src_ack;
+			o_data = rp_data;
+		end
 	end else begin
 		src_rdy = 1'b0;
 		src0_ack = 1'b0;
 		src1_ack = 1'b0;
 		from_rp_ack = 1'b0;
+		o_data = rp_data;
 	end
 end
 
@@ -129,14 +115,14 @@ Broadcast#(3) u_brd(
 	.dst_rdys({dst0_brd_rdy, dst1_brd_rdy, to_alu_rdy}),
 	.dst_acks({dst0_brd_ack, dst1_brd_ack, to_alu_ack})
 );
-IgnoreIf#(1) u_ign_d0(
-	.cond(ign_d0),
+IgnoreIf#(0) u_ign_d0(
+	.cond(en_d0),
 	`rdyack_connect(src, dst0_brd),
 	`rdyack_connect(dst, dst0),
 	.skipped()
 );
-IgnoreIf#(1) u_ign_d1(
-	.cond(ign_d1),
+IgnoreIf#(0) u_ign_d1(
+	.cond(en_d1),
 	`rdyack_connect(src, dst1_brd),
 	`rdyack_connect(dst, dst1),
 	.skipped()

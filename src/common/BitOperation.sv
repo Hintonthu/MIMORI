@@ -63,4 +63,22 @@ always_comb begin
 end
 
 endmodule
+
+module Onehot2Binary(i, o);
+
+parameter N = 10;
+parameter ONE = 1;
+localparam LG = $clog2(N);
+input [N-1:0] i;
+output logic [LG-1:0] o;
+always_comb begin
+	for (int j = 0; j < LG; j++) begin
+		o[j] = 1'b0;
+		for (int k = 0; k < N; k++) begin
+			o[j] = o[j] | (((k>>j)&1) == 1) & i[k];
+		end
+	end
+end
+
+endmodule
 `endif

@@ -90,6 +90,12 @@ logic [WBW-1:0]             s0_dst_bofs [VDIM];
 logic [WBW-1:0]             s0_dst_bofss   [N_TAU_X][N_TAU_Y][VDIM];
 logic [VDIM-1:0]            s0_valid_conds [N_TAU_X][N_TAU_Y];
 logic                       s0_valid_cond  [N_TAU_X][N_TAU_Y];
+logic [N_TAU_X-1:0]         s0_valid_condx; // again, x = i0, y = i1
+logic [N_TAU_Y-1:0]         s0_valid_condy;
+logic [N_TAU_X  :0]         s0_valid_condx1;
+logic [N_TAU_Y  :0]         s0_valid_condy1;
+logic [CN_TAU_X1-1:0]       s0_i0_systolic_gsize;
+logic [CN_TAU_X1-1:0]       s0_i1_systolic_gsize;
 logic                       s0_valid_rdys  [N_TAU_X][N_TAU_Y];
 logic                       s0_valid_acks  [N_TAU_X][N_TAU_Y];
 logic [N_TAU_X*N_TAU_Y-1:0] s0_dst_rdys;
@@ -127,13 +133,23 @@ always_comb begin
 				end
 				s0_valid_conds[i][j][k] = s0_dst_bofss[i][j][k] < i_bboundary[k];
 			end
-			o_i0_systolic_gsize[i][j] = N_TAU_X;
 			o_i0_systolic_idx[i][j] = i;
-			o_i1_systolic_gsize[i][j] = N_TAU_Y;
 			o_i1_systolic_idx[i][j] = j;
 			s0_valid_cond[i][j] = &s0_valid_conds[i][j];
 		end
 	end
+end
+
+always_comb begin
+	// pack the signals
+	for (int i = 0; i < N_TAU_X; i++) begin
+		s0_valid_condx[i] = s0_valid_cond[i][0];
+	end
+	for (int i = 0; i < N_TAU_Y; i++) begin
+		s0_valid_condy[i] = s0_valid_cond[0][i];
+	end
+	s0_valid_condx1 = {s0_valid_condx, 1'b1} & {1'b1, ~s0_valid_condx};
+	s0_valid_condy1 = {s0_valid_condy, 1'b1} & {1'b1, ~s0_valid_condy};
 end
 
 //======================================
@@ -167,6 +183,8 @@ Broadcast#(N_TAU_X*N_TAU_Y) u_brd_bofs(
 	.dst_rdys(s0_dst_rdys),
 	.dst_acks(s0_dst_acks)
 );
+Onehot2Binary#(N_TAU_X+1) u_oh_x(s0_valid_condx1, s0_i0_systolic_gsize);
+Onehot2Binary#(N_TAU_Y+1) u_oh_y(s0_valid_condy1, s0_i1_systolic_gsize);
 
 genvar gi, gj;
 generate for (gi = 0; gi < N_TAU_X; gi++) begin: ctrlx
@@ -206,8 +224,12 @@ generate for (gi = 0; gi < N_TAU_X; gi++) begin: ctrlx
 			for (int k = 0; k < VDIM; k++) begin
 				o_bofss[gi][gj][k] <= '0;
 			end
-		`ff_cg(s0_dst_acks[gi*N_TAU_Y+gj])
+			o_i0_systolic_gsize[gi][gj] <= '0;
+			o_i1_systolic_gsize[gi][gj] <= '0;
+		`ff_cg(s0_valid_acks[gi][gj])
 			o_bofss[gi][gj] <= s0_dst_bofss[gi][gj];
+			o_i0_systolic_gsize[gi][gj] <= s0_i0_systolic_gsize;
+			o_i1_systolic_gsize[gi][gj] <= s0_i1_systolic_gsize;
 		`ff_end
 	end
 end endgenerate

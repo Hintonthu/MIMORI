@@ -17,6 +17,7 @@
 
 `include "common/define.sv"
 `include "common/Controllers.sv"
+import TauCfg::*;
 
 module BankSramReadIf(
 	`clk_port,
@@ -74,11 +75,11 @@ input [ID_BW-1:0]        i_id;
 input [ABW-1:0]          i_raddr [NBANK];
 input                    i_retire;
 `ifdef SD
-input [1:0]              i_syst_type;
+input [STO_BW-1:0]       i_syst_type;
 `endif
 `rdyack_output(dout);
 `ifdef SD
-output logic [1:0]    o_syst_type;
+output logic [STO_BW-1:0] o_syst_type;
 `endif
 output logic [BW-1:0] o_rdata [NBANK];
 `dval_output(free);
@@ -113,8 +114,8 @@ logic dout_retire;
 assign free_dval = dout_retire && dout_ack;
 assign o_sram_re = addrin_ack ? i_ren[0] : '0;
 `ifdef SD
-logic [1:0] s1_syst_type;
-assign o_false_alloc = o_syst_type[1];
+logic [STO_BW-1:0] s1_syst_type;
+assign o_false_alloc = `IS_FROM_SIDE(o_syst_type);
 `endif
 
 // I give up. Let the code generator do it.
@@ -194,7 +195,7 @@ Forward u_fwd_dat(
 	s1_free_id <= '0;
 	s1_retire <= 1'b0;
 `ifdef SD
-	s1_syst_type <= 2'b0;
+	s1_syst_type <= '0;
 `endif
 `ff_cg(addrin_ack)
 	s1_bf <= i_bf;
@@ -212,7 +213,7 @@ Forward u_fwd_dat(
 	end
 	o_free_id <= '0;
 `ifdef SD
-	o_syst_type <= 2'b0;
+	o_syst_type <= '0;
 `endif
 `ff_cg(s1_ack)
 	dout_retire <= s1_retire;

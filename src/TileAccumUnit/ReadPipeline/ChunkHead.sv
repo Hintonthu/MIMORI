@@ -47,6 +47,7 @@ module ChunkHead(
 //======================================
 // Parameter
 //======================================
+import TauCfg::*;
 localparam WBW = TauCfg::WORK_BW;
 localparam N_ICFG = TauCfg::N_ICFG;
 localparam VDIM = TauCfg::VDIM;
@@ -64,7 +65,7 @@ input [WBW-1:0]     i_aofs [VDIM];
 input [ICFG_BW-1:0] i_beg;
 input [ICFG_BW-1:0] i_end;
 `ifdef SD
-input [1:0]         i_syst_type;
+input [STO_BW-1:0]  i_syst_type;
 `endif
 input [WBW-1:0]     i_global_mofs    [N_ICFG][DIM];
 input [DIM_BW-1:0]  i_global_bshufs  [N_ICFG][VDIM];
@@ -144,7 +145,7 @@ NDShufAccum#(.BW(WBW), .DIM_IN(VDIM), .DIM_OUT(DIM), .ZERO_AUG(0)) u_saccum(
 	o_id <= o_id_w;
 	o_mofs <= o_mofs_w;
 `ifdef SD
-	o_skip <= i_systolic_skip[o_id_w] && i_syst_type[1];
+	o_skip <= i_systolic_skip[o_id_w] && `IS_FROM_SIDE(i_syst_type);
 `endif
 `ff_end
 

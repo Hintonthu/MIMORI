@@ -74,6 +74,7 @@ module AccumWarpLooper(
 //======================================
 // Parameter
 //======================================
+import TauCfg::*;
 parameter N_CFG = TauCfg::N_ICFG;
 parameter ABW = TauCfg::GLOBAL_ADDR_BW;
 parameter STENCIL = 0;
@@ -101,7 +102,7 @@ input [WBW-1:0]     i_bofs [VDIM];
 input [WBW-1:0]     i_abeg [VDIM];
 input [WBW-1:0]     i_aend [VDIM];
 `ifdef SD
-input [1:0]         i_syst_type;
+input [STO_BW-1:0]  i_syst_type;
 `endif
 input [ABW-1:0]     i_linears [N_CFG];
 input [WBW-1:0]     i_bboundary      [VDIM];
@@ -133,7 +134,7 @@ output [ABW-1:0]     o_address [VSIZE];
 output [VSIZE-1:0]   o_valid;
 output               o_retire;
 `ifdef SD
-output [1:0]         o_syst_type;
+output [STO_BW-1:0]  o_syst_type;
 `endif
 
 //======================================
@@ -194,7 +195,7 @@ always_comb for (int i = 0; i < VDIM; i++) begin
 	aend[i] = stencil_en ? 'b1 : i_aend[i];
 end
 `ifdef SD
-assign o_syst_type = (i_systolic_skip[o_id] == '0) ? '0 : i_syst_type;
+assign o_syst_type = i_systolic_skip[o_id] ? i_syst_type : `FROM_SELF;
 `endif
 
 //======================================

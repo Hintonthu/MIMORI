@@ -84,6 +84,7 @@ module ReadPipeline(
 //======================================
 // Parameter
 //======================================
+import TauCfg::*;
 parameter  LBW = TauCfg::LOCAL_ADDR_BW0;
 localparam WBW = TauCfg::WORK_BW;
 localparam GBW = TauCfg::GLOBAL_ADDR_BW;
@@ -121,7 +122,7 @@ input [WBW-1:0]     i_aend           [VDIM];
 input [ICFG_BW-1:0] i_beg;
 input [ICFG_BW-1:0] i_end;
 `ifdef SD
-input [1:0]         i_syst_type;
+input [STO_BW-1:0]  i_syst_type;
 `endif
 input [CCV_BW-1:0]  i_bsub_up_order  [VDIM];
 input [CCV_BW-1:0]  i_bsub_lo_order  [VDIM];
@@ -161,7 +162,7 @@ output [GBW-1:0] o_dramra;
 input [DBW-1:0] i_dramrd [CSIZE];
 `rdyack_output(sramrd);
 `ifdef SD
-output [1:0]     o_syst_type;
+output [STO_BW-1:0] o_syst_type;
 `endif
 output [DBW-1:0] o_sramrd [VSIZE];
 
@@ -232,8 +233,8 @@ logic               ch_skip;
 `rdyack_logic(ch_addr_mofs_src2); // broadcast
 logic               ch_alloc_false_alloc;
 logic               rmc_alloc_false_alloc;
-logic [1:0]         warp_rmc_syst_type;
-logic [1:0]     lc_syst_type;
+logic [STO_BW-1:0]  warp_rmc_syst_type;
+logic [STO_BW-1:0]  lc_syst_type;
 `endif
 
 //======================================

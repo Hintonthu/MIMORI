@@ -41,6 +41,7 @@ module LinearCollector(
 //======================================
 // Parameter
 //======================================
+import TauCfg::*;
 parameter LBW = TauCfg::LOCAL_ADDR_BW0;
 localparam WBW = TauCfg::WORK_BW;
 localparam VDIM = TauCfg::VDIM;
@@ -56,7 +57,7 @@ input [WBW-1:0]     i_aend [VDIM];
 input [ICFG_BW-1:0] i_beg;
 input [ICFG_BW-1:0] i_end;
 `ifdef SD
-input [1:0]         i_syst_type;
+input [STO_BW-1:0]  i_syst_type;
 `endif
 `rdyack_input(src_linear);
 input [LBW-1:0] i_linear;
@@ -65,7 +66,7 @@ output logic [WBW-1:0] o_bofs    [VDIM];
 output logic [WBW-1:0] o_abeg    [VDIM];
 output logic [WBW-1:0] o_aend    [VDIM];
 `ifdef SD
-output logic [1:0]     o_syst_type;
+output logic [STO_BW-1:0] o_syst_type;
 `endif
 output logic [LBW-1:0] o_linears [N_ICFG];
 
@@ -117,7 +118,7 @@ BroadcastInorder#(2) u_brd(
 		o_aend[i] <= '0;
 	end
 `ifdef SD
-	o_syst_type <= 2'b0;
+	o_syst_type <= '0;
 `endif
 `ff_cg(range_ack)
 	end_r <= i_end;

@@ -42,15 +42,16 @@ def main():
 	CompressWrap = lambda x: npd.bitwise_or.reduce((x == UmiModel.MEM_WRAP).astype('i2') << npi.arange(x.shape[0]))
 	VL_IDX = slice(None), 1 << npi.arange(CV_BW)
 	if SIM_MODE == 2:
-		nblk = cfg.pcfg['end'][0]+1
+		# We use the same 'step' and shrink 'end'.
+		nblk = cfg.pcfg['end'][0]
 		ss0 = cfg.pcfg['syst0_skip'][0]
 		sx0 = cfg.pcfg['syst0_axis'][0]
-		st0 = cfg.pcfg['local'][0,sx0] * N_TAU_X
+		st0 = cfg.pcfg['local'][0,sx0]
 		ss1 = cfg.pcfg['syst1_skip'][0]
 		sx1 = cfg.pcfg['syst1_axis'][0]
-		st1 = cfg.pcfg['local'][0,sx1] * N_TAU_Y
-		nblk[sx0] = nblk[sx0] // st0 * st0
-		nblk[sx1] = nblk[sx1] // st1 * st1
+		st1 = cfg.pcfg['local'][0,sx1]
+		nblk[sx0] = ((nblk[sx0]-1) // (st0*N_TAU_X) + 1) * st0
+		nblk[sx1] = ((nblk[sx1]-1) // (st1*N_TAU_Y) + 1) * st1
 		npd.copyto(i_data.i_bgrid_end, nblk)
 		i_data.i_i0_systolic_skip[0] = ss0
 		i_data.i_i0_systolic_axis[0] = sx0
