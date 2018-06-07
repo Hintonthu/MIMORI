@@ -112,10 +112,12 @@ logic dout_retire;
 `include "TileAccumUnit/ReadPipeline/RemapCache/rmc_common_include.sv"
 `include "TileAccumUnit/ReadPipeline/RemapCache/codegen/RemapCacheLowRotate5.sv"
 assign free_dval = dout_retire && dout_ack;
-assign o_sram_re = addrin_ack ? i_ren[0] : '0;
 `ifdef SD
 logic [STO_BW-1:0] s1_syst_type;
 assign o_false_alloc = `IS_FROM_SIDE(o_syst_type);
+assign o_sram_re = (`IS_FROM_SELF(i_syst_type) && addrin_ack) ? i_ren[0] : '0;
+`else
+assign o_sram_re = addrin_ack ? i_ren[0] : '0;
 `endif
 
 // I give up. Let the code generator do it.
@@ -189,39 +191,59 @@ Forward u_fwd_dat(
 // Sequential
 //======================================
 `ff_rst
-	for (int i = 0; i < CLOG2_NBANK; i++) begin
-		s1_bf[i] <= '0;
-	end
 	s1_free_id <= '0;
 	s1_retire <= 1'b0;
-`ifdef SD
-	s1_syst_type <= '0;
-`endif
 `ff_cg(addrin_ack)
-	s1_bf <= i_bf;
 	s1_free_id <= i_id;
 	s1_retire <= i_retire;
-`ifdef SD
-	s1_syst_type <= i_syst_type;
-`endif
 `ff_end
 
 `ff_rst
 	dout_retire <= 1'b0;
+	o_free_id <= '0;
+`ff_cg(s1_ack)
+	dout_retire <= s1_retire;
+	o_free_id <= s1_free_id;
+`ff_end
+
+// CG the data, and butterfly when the data is from side
+`ff_rst
+	for (int i = 0; i < CLOG2_NBANK; i++) begin
+		s1_bf[i] <= '0;
+	end
+`ifdef SD
+`ff_cg(addrin_ack)
+`else
+`ff_cg(addrin_ack && `IS_FROM_SELF(i_syst_type))
+`endif
+	s1_bf <= i_bf;
+`ff_end
+
+`ff_rst
 	for (int i = 0; i < NBANK; i++) begin
 		o_rdata[i] <= '0;
 	end
-	o_free_id <= '0;
 `ifdef SD
-	o_syst_type <= '0;
-`endif
+`ff_cg(s1_ack && `IS_FROM_SELF(s1_syst_type))
+`else
 `ff_cg(s1_ack)
-	dout_retire <= s1_retire;
-	o_rdata <= s1_bf_data[CLOG2_NBANK];
-	o_free_id <= s1_free_id;
-`ifdef SD
-	o_syst_type <= s1_syst_type;
 `endif
+	o_rdata <= s1_bf_data[CLOG2_NBANK];
 `ff_end
+
+// Also pipeline the systolic type flag.
+`ifdef SD
+`ff_rst
+	s1_syst_type <= '0;
+`ff_cg(addrin_ack)
+	s1_syst_type <= i_syst_type;
+`ff_end
+
+`ff_rst
+	o_syst_type <= '0;
+`ff_cg(s1_ack)
+	o_syst_type <= s1_syst_type;
+`ff_end
+`endif
 
 endmodule
