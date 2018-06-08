@@ -180,6 +180,7 @@ OffsetStage#(.BW(WBW), .DIM(VDIM), .FROM_ZERO(1), .UNIT_STRIDE(0)) u_s0(
 Broadcast#(N_TAU_X*N_TAU_Y) u_brd_bofs(
 	`clk_connect,
 	`rdyack_connect(src, s0_dst),
+	.acked(),
 	.dst_rdys(s0_dst_rdys),
 	.dst_acks(s0_dst_acks)
 );
@@ -194,7 +195,8 @@ generate for (gi = 0; gi < N_TAU_X; gi++) begin: ctrlx
 			.src_rdy(s0_dst_rdys[gi*N_TAU_Y+gj]),
 			.src_ack(s0_dst_acks[gi*N_TAU_Y+gj]),
 			.dst_rdy(s0_valid_rdys[gi][gj]),
-			.dst_ack(s0_valid_acks[gi][gj])
+			.dst_ack(s0_valid_acks[gi][gj]),
+			.skipped()
 		);
 		Forward u_fwd(
 			`clk_connect,

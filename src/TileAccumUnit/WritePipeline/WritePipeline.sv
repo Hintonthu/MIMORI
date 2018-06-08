@@ -150,6 +150,10 @@ AccumWarpLooper#(.N_CFG(N_OCFG), .ABW(GBW), .STENCIL(0), .USE_LOFS(0)) u_awl(
 	.o_address(warp_write_addr),
 	.o_valid(warp_write_valid),
 	.o_retire()
+`ifdef SD
+	,
+	.o_syst_type()
+`endif
 );
 DramWriteCollector u_dwc(
 	`clk_connect,
