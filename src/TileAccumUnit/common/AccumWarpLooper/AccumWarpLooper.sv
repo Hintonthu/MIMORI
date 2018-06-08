@@ -78,6 +78,8 @@ import TauCfg::*;
 parameter N_CFG = TauCfg::N_ICFG;
 parameter ABW = TauCfg::GLOBAL_ADDR_BW;
 parameter STENCIL = 0;
+// 1 = ReadPipeline, 0 = WritePipeline
+// This is also used for systolic (WritePipeline do not use systolic information).
 parameter USE_LOFS = 0;
 localparam WBW = TauCfg::WORK_BW;
 localparam VDIM = TauCfg::VDIM;
@@ -322,9 +324,13 @@ end else begin: StencilBypass
 	assign s34_retire = s23_retire;
 	assign s34_islast = s23_islast;
 end endgenerate
-AccumWarpLooperVectorStage#(.N_CFG(N_CFG), .ABW(ABW)) u_s4_vofs(
+// Enable systolic if USE_LOFS != 0 (ReadPipeline)
+AccumWarpLooperVectorStage#(.N_CFG(N_CFG), .ABW(ABW), .SYST(USE_LOFS != 0 ? 1 : 0)) u_s4_vofs(
 	`clk_connect,
 	`rdyack_connect(src, s34),
+`ifdef SD
+	.i_syst_type(i_syst_type),
+`endif
 	.i_id(s34_id),
 	.i_linear(s34_linear),
 	.i_bofs(s34_bofs),
@@ -334,6 +340,9 @@ AccumWarpLooperVectorStage#(.N_CFG(N_CFG), .ABW(ABW)) u_s4_vofs(
 	.i_bsubofs(i_bsubofs),
 	.i_bsub_lo_order(i_bsub_lo_order),
 	.i_mofs_bsubsteps(i_mofs_bsubsteps),
+`ifdef SD
+	.i_systolic_skip(i_systolic_skip),
+`endif
 	`rdyack_connect(dst, addrval),
 	.o_id(o_id),
 	.o_address(o_address),

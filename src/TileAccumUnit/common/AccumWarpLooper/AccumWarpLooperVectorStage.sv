@@ -1,4 +1,4 @@
-// Copyright 2016 Yu Sheng Lin
+// Copyright 2016,2018 Yu Sheng Lin
 
 // This file is part of MIMORI.
 
@@ -22,6 +22,9 @@
 module AccumWarpLooperVectorStage(
 	`clk_port,
 	`rdyack_port(src),
+`ifdef SD
+	i_syst_type,
+`endif
 	i_id,
 	i_linear,
 	i_bofs,
@@ -31,6 +34,9 @@ module AccumWarpLooperVectorStage(
 	i_bsubofs,
 	i_bsub_lo_order,
 	i_mofs_bsubsteps,
+`ifdef SD
+	i_systolic_skip,
+`endif
 	`rdyack_port(dst),
 	o_id,
 	o_address,
@@ -42,8 +48,10 @@ module AccumWarpLooperVectorStage(
 //======================================
 // Parameter
 //======================================
+import TauCfg::*;
 parameter N_CFG = TauCfg::N_ICFG;
 parameter ABW = TauCfg::GLOBAL_ADDR_BW;
+parameter SYST = 1;
 localparam WBW = TauCfg::WORK_BW;
 localparam VDIM = TauCfg::VDIM;
 localparam VSIZE = TauCfg::VSIZE;
@@ -57,6 +65,9 @@ localparam CCV_BW = $clog2(CV_BW+1);
 //======================================
 `clk_input;
 `rdyack_input(src);
+`ifdef SD
+input [STO_BW-1:0]  i_syst_type;
+`endif
 input [NCFG_BW-1:0] i_id;
 input [ABW-1:0]     i_linear;
 input [WBW-1:0]     i_bofs  [VDIM];
@@ -66,6 +77,9 @@ input [WBW-1:0]     i_bboundary      [VDIM];
 input [CV_BW-1:0]   i_bsubofs [VSIZE][VDIM];
 input [CCV_BW-1:0]  i_bsub_lo_order  [VDIM];
 input [ABW-1:0]     i_mofs_bsubsteps [N_CFG][CV_BW];
+`ifdef SD
+input [N_CFG-1:0]   i_systolic_skip;
+`endif
 `rdyack_output(dst);
 output logic [NCFG_BW-1:0] o_id;
 output logic [ABW-1:0]     o_address [VSIZE];
@@ -81,6 +95,7 @@ logic [VSIZE-1:0] valid_w;
 logic [ABW-1:0] mofs_bsubstep [CV_BW];
 logic islast_r;
 logic [WBW-1:0] vector_blockofs [VSIZE][VDIM];
+logic syst_skip;
 
 //======================================
 // Submodule
@@ -103,6 +118,7 @@ BofsExpand u_bexp(
 // Combinational
 //======================================
 assign mofs_bsubstep = i_mofs_bsubsteps[i_id];
+assign syst_skip = i_systolic_skip[i_id] && `IS_FROM_SIDE(i_syst_type);
 assign fin_dval = dst_ack && islast_r;
 always_comb begin
 	for (int i = 0; i < VSIZE; i++) begin
@@ -121,18 +137,26 @@ end
 //======================================
 `ff_rst
 	o_id <= '0;
-	for (int i = 0; i < VSIZE; i++) begin
-		o_address[i] <= '0;
-	end
 	o_valid <= '0;
 	o_retire <= 1'b0;
 	islast_r <= 1'b0;
 `ff_cg(src_ack)
 	o_id <= i_id;
-	o_address <= address_w;
 	o_valid <= valid_w;
 	o_retire <= i_retire;
 	islast_r <= i_islast;
+`ff_end
+
+`ff_rst
+	for (int i = 0; i < VSIZE; i++) begin
+		o_address[i] <= '0;
+	end
+`ifdef SD
+`ff_cg(src_ack && (SYST == 0 || !syst_skip))
+`else
+`ff_cg(src_ack)
+`endif
+	o_address <= address_w;
 `ff_end
 
 endmodule
