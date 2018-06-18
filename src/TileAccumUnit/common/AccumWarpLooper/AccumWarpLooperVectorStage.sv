@@ -16,6 +16,7 @@
 // along with MIMORI.  If not, see <http://www.gnu.org/licenses/>.
 
 `include "common/define.sv"
+`include "common/TauCfg.sv"
 `include "common/Controllers.sv"
 `include "TileAccumUnit/common/BofsExpand.sv"
 
@@ -118,7 +119,9 @@ BofsExpand u_bexp(
 // Combinational
 //======================================
 assign mofs_bsubstep = i_mofs_bsubsteps[i_id];
+`ifdef SD
 assign syst_skip = i_systolic_skip[i_id] && `IS_FROM_SIDE(i_syst_type);
+`endif
 assign fin_dval = dst_ack && islast_r;
 always_comb begin
 	for (int i = 0; i < VSIZE; i++) begin

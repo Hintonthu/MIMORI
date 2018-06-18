@@ -16,6 +16,7 @@
 // along with MIMORI.  If not, see <http://www.gnu.org/licenses/>.
 
 `include "common/define.sv"
+`include "common/TauCfg.sv"
 `include "common/Controllers.sv"
 import TauCfg::*;
 
@@ -212,9 +213,9 @@ Forward u_fwd_dat(
 		s1_bf[i] <= '0;
 	end
 `ifdef SD
-`ff_cg(addrin_ack)
-`else
 `ff_cg(addrin_ack && `IS_FROM_SELF(i_syst_type))
+`else
+`ff_cg(addrin_ack)
 `endif
 	s1_bf <= i_bf;
 `ff_end
