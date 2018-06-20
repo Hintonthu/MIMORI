@@ -83,7 +83,8 @@ OrCrossBar#(DBW, VSIZE, CSIZE) u_oxbar(
 IgnoreIf#(0) u_ign_if_no_data(
 	.cond(has_data),
 	`rdyack_connect(src, dst),
-	`rdyack_connect(dst, dramw)
+	`rdyack_connect(dst, dramw),
+	.skipped()
 );
 
 //======================================

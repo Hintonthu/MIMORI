@@ -50,8 +50,10 @@ def main():
 		ss1 = cfg.pcfg['syst1_skip'][0]
 		sx1 = cfg.pcfg['syst1_axis'][0]
 		st1 = cfg.pcfg['local'][0,sx1]
-		nblk[sx0] = ((nblk[sx0]-1) // (st0*N_TAU_X) + 1) * st0
-		nblk[sx1] = ((nblk[sx1]-1) // (st1*N_TAU_Y) + 1) * st1
+		if sx0 != -1:
+			nblk[sx0] = ((nblk[sx0]-1) // (st0*N_TAU_X) + 1) * st0
+		if sx1 != -1:
+			nblk[sx1] = ((nblk[sx1]-1) // (st1*N_TAU_Y) + 1) * st1
 		npd.copyto(i_data.i_bgrid_end, nblk)
 		i_data.i_i0_systolic_skip[0] = ss0
 		i_data.i_i0_systolic_axis[0] = sx0

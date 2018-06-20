@@ -117,6 +117,9 @@ AccumWarpLooper#(.N_CFG(N_OCFG), .ABW(GBW), .STENCIL(0), .USE_LOFS(0)) u_awl(
 	.i_bofs(i_bofs),
 	.i_abeg(i_abeg),
 	.i_aend(i_aend),
+`ifdef SD
+	.i_syst_type(),
+`endif
 	.i_linears(i_global_linears),
 	.i_bboundary(i_bboundary),
 	.i_bsubofs(i_bsubofs),
@@ -139,11 +142,18 @@ AccumWarpLooper#(.N_CFG(N_OCFG), .ABW(GBW), .STENCIL(0), .USE_LOFS(0)) u_awl(
 	.i_stencil_begs(),
 	.i_stencil_ends(),
 	.i_stencil_lut(),
+`ifdef SD
+	.i_systolic_skip(),
+`endif
 	`rdyack_connect(addrval, warp_write_addrval),
 	.o_id(),
 	.o_address(warp_write_addr),
 	.o_valid(warp_write_valid),
 	.o_retire()
+`ifdef SD
+	,
+	.o_syst_type()
+`endif
 );
 DramWriteCollector u_dwc(
 	`clk_connect,

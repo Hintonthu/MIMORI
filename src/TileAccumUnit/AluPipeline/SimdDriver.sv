@@ -117,6 +117,7 @@ BroadcastInorder#(2) u_brd0(
 Broadcast#(2) u_brd1(
 	`clk_connect,
 	`rdyack_connect(src, brd1),
+	.acked(),
 	.dst_rdys({wait_last_rdy, s0_src_rdy}),
 	.dst_acks({wait_last_ack, s0_src_ack})
 );
@@ -153,6 +154,7 @@ AccumWarpLooperIndexStage#(.N_CFG(N_INST)) u_s1_idx(
 	`rdyack_connect(src, s1_src),
 	.i_bofs(i_bofs),
 	.i_aofs(s01_aofs),
+	.i_alofs(),
 	.i_islast(s01_islast),
 	.i_id_beg(s01_id_beg),
 	.i_id_end(s01_id_end),

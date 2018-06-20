@@ -273,12 +273,14 @@ Forward u_fwd_addr(
 IgnoreIf#(1) u_ign_ch_cmd(
 	.cond(ch_skip),
 	`rdyack_connect(src, ch_cmd_mofs_src),
-	`rdyack_connect(dst, ch_cmd_mofs_src2)
+	`rdyack_connect(dst, ch_cmd_mofs_src2),
+	.skipped()
 );
 IgnoreIf#(1) u_ign_ch_addr(
 	.cond(ch_skip),
 	`rdyack_connect(src, ch_addr_mofs_src),
-	`rdyack_connect(dst, ch_addr_mofs_src2)
+	`rdyack_connect(dst, ch_addr_mofs_src2),
+	.skipped()
 );
 `else
 Forward u_fwd_cmd(
@@ -522,7 +524,8 @@ Semaphore#(ALLOC_CNT) u_sem_alloc(
 IgnoreIf#(0) u_ign_if_not_last_addr(
 	.cond(cal_addr_islast),
 	`rdyack_connect(src, cal_addr),
-	`rdyack_connect(dst, dramra)
+	`rdyack_connect(dst, dramra),
+	.skipped()
 );
 ForwardIf#(0) u_fwd_if_linear_not_full(
 	.cond(linear_full),
