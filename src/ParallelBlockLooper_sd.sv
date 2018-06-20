@@ -36,7 +36,6 @@ module ParallelBlockLooper_sd(
 	// Counter:            0123321001233210
 	// Systolic hold data? 0100001001000010 (counter == idx)
 	// (For now idx is constant)
-	// TODO: We should use a more smart scheduler
 	o_i0_systolic_gsize,
 	o_i0_systolic_idx,
 	o_i1_systolic_gsize,
@@ -60,6 +59,7 @@ localparam CN_TAU_X = $clog2(N_TAU_X);
 localparam CN_TAU_Y = $clog2(N_TAU_Y);
 localparam CN_TAU_X1 = $clog2(N_TAU_X+1);
 localparam CN_TAU_Y1 = $clog2(N_TAU_Y+1);
+localparam CN_TAU = $clog2(N_TAU);
 
 //======================================
 // I/O
@@ -86,6 +86,18 @@ input [N_TAU-1:0] blkdone_dvals;
 `rdyack_logic(s0_src);
 `rdyack_logic(s0_dst);
 `rdyack_logic(wait_fin);
+logic i_i0_systolic_enable;
+logic i_i1_systolic_enable;
+logic [CN_TAU-1:0] select_shamt_r;
+logic [CN_TAU-1:0] select_shamt_w;
+logic [CN_TAU-1:0] select_shamt_max;
+logic [  N_TAU-1:0] can_send;
+logic [  N_TAU-1:0] can_send2;
+logic [2*N_TAU-1:0] can_send_rot;
+logic [  N_TAU  :0] select_send_rot;
+logic [2*N_TAU-1:0] select_send;
+logic [  N_TAU-1:0] select_send2;
+logic [  N_TAU-1:0] select_send3;
 logic [WBW-1:0]             s0_dst_bofs [VDIM];
 logic [WBW-1:0]             s0_dst_bofss   [N_TAU_X][N_TAU_Y][VDIM];
 logic [VDIM-1:0]            s0_valid_conds [N_TAU_X][N_TAU_Y];
@@ -111,6 +123,7 @@ logic [N_TAU_X*N_TAU_Y-1:0] bofs_rdysxy;
 // Combinational
 //======================================
 always_comb begin
+	// pack signals
 	for (int i = 0; i < N_TAU_X; i++) begin
 		for (int j = 0; j < N_TAU_Y; j++) begin
 			block_emptysxy[i*N_TAU_Y+j] = block_emptys[i][j];
@@ -118,6 +131,23 @@ always_comb begin
 		end
 	end
 	wait_fin_ack = wait_fin_rdy && (&block_emptysxy) && !(|bofs_rdysxy);
+end
+
+always_comb begin
+	// for scheduler
+	i_i0_systolic_enable = i_i0_systolic_axis != '1;
+	i_i1_systolic_enable = i_i1_systolic_axis != '1;
+	case ({i_i0_systolic_enable,i_i1_systolic_enable})
+		2'b00: begin select_shamt_max = N_TAU - 1;   end
+		2'b01: begin select_shamt_max = N_TAU_X - 1; end
+		2'b10: begin select_shamt_max = N_TAU_Y - 1; end
+		2'b11: begin select_shamt_max = '0;          end
+	endcase
+	if (select_shamt_r == select_shamt_max) begin
+		select_shamt_w = '0;
+	end else begin
+		select_shamt_w = select_shamt_r + 'b1;
+	end
 end
 
 always_comb begin
@@ -133,8 +163,6 @@ always_comb begin
 				end
 				s0_valid_conds[i][j][k] = s0_dst_bofss[i][j][k] < i_bboundary[k];
 			end
-			o_i0_systolic_idx[i][j] = i;
-			o_i1_systolic_idx[i][j] = j;
 			s0_valid_cond[i][j] = &s0_valid_conds[i][j];
 		end
 	end
@@ -150,6 +178,75 @@ always_comb begin
 	end
 	s0_valid_condx1 = {s0_valid_condx, 1'b1} & {1'b1, ~s0_valid_condx};
 	s0_valid_condy1 = {s0_valid_condy, 1'b1} & {1'b1, ~s0_valid_condy};
+end
+
+always_comb begin
+	for (int i = 0; i < N_TAU_X; i++) begin
+		for (int j = 0; j < N_TAU_Y; j++) begin
+			can_send[N_TAU_Y*i+j] = !s1_rdys[i][j] || !s0_valid_cond[i][j];
+		end
+	end
+	can_send2 = '0;
+	case ({i_i0_systolic_enable,i_i1_systolic_enable})
+		2'b00: begin
+			can_send2 = can_send;
+		end
+		2'b01: begin
+			can_send2[N_TAU_X-1:0] = '1;
+			for (int i = 0; i < N_TAU_X; i++) begin
+				for (int j = 0; j < N_TAU_Y; j++) begin
+					can_send2[i] = can_send2[i] && can_send[N_TAU_Y*i+j];
+				end
+			end
+		end
+		2'b10: begin
+			can_send2[N_TAU_Y-1:0] = '1;
+			for (int i = 0; i < N_TAU_Y; i++) begin
+				for (int j = 0; j < N_TAU_X; j++) begin
+					can_send2[i] = can_send2[i] && can_send[i+N_TAU_Y*j];
+				end
+			end
+		end
+		2'b11: begin
+			can_send2[0] = &can_send;
+		end
+	endcase
+	// Use higher half
+	can_send_rot = {2{can_send2}} << select_shamt_r;
+	// Use lower half
+	select_send = {2{select_send_rot[N_TAU:1]}} >> select_shamt_r;
+	case ({i_i0_systolic_enable,i_i1_systolic_enable})
+		2'b00: begin
+			select_send2 = select_send[N_TAU-1:0];
+		end
+		2'b01: begin
+			for (int i = 0; i < N_TAU_X; i++) begin
+				for (int j = 0; j < N_TAU_Y; j++) begin
+					select_send2[N_TAU_Y*i+j] = select_send[i];
+				end
+			end
+		end
+		2'b10: begin
+			for (int i = 0; i < N_TAU_Y; i++) begin
+				for (int j = 0; j < N_TAU_X; j++) begin
+					select_send2[i+N_TAU_Y*j] = select_send[i];
+				end
+			end
+		end
+		2'b11: begin
+			select_send2 = {N_TAU{select_send[0]}};
+		end
+	endcase
+	for (int i = 0; i < N_TAU_X; i++) begin
+		for (int j = 0; j < N_TAU_Y; j++) begin
+			select_send3[i*N_TAU_Y+j] = select_send2[i*N_TAU_Y+j] && s0_valid_cond[i][j];
+		end
+	end
+end
+
+always_comb begin
+	s0_dst_rdys = {N_TAU{s0_dst_rdy}} & select_send3;
+	s0_dst_ack = |s0_dst_acks;
 end
 
 //======================================
@@ -177,15 +274,13 @@ OffsetStage#(.BW(WBW), .DIM(VDIM), .FROM_ZERO(1), .UNIT_STRIDE(0)) u_s0(
 	.o_islast(),
 	.init_dval()
 );
-Broadcast#(N_TAU_X*N_TAU_Y) u_brd_bofs(
-	`clk_connect,
-	`rdyack_connect(src, s0_dst),
-	.acked(),
-	.dst_rdys(s0_dst_rdys),
-	.dst_acks(s0_dst_acks)
-);
 Onehot2Binary#(N_TAU_X+1) u_oh_x(s0_valid_condx1, s0_i0_systolic_gsize);
 Onehot2Binary#(N_TAU_Y+1) u_oh_y(s0_valid_condy1, s0_i1_systolic_gsize);
+FindFromMsb#(N_TAU,1) u_arbiter(
+	.i(can_send_rot[2*N_TAU-1:N_TAU]),
+	.prefix(),
+	.detect(select_send_rot)
+);
 
 genvar gi, gj;
 generate for (gi = 0; gi < N_TAU_X; gi++) begin: ctrlx
@@ -228,12 +323,22 @@ generate for (gi = 0; gi < N_TAU_X; gi++) begin: ctrlx
 			end
 			o_i0_systolic_gsize[gi][gj] <= '0;
 			o_i1_systolic_gsize[gi][gj] <= '0;
+			o_i0_systolic_idx[gi][gj] <= '0;
+			o_i1_systolic_idx[gi][gj] <= '0;
 		`ff_cg(s0_valid_acks[gi][gj])
 			o_bofss[gi][gj] <= s0_dst_bofss[gi][gj];
-			o_i0_systolic_gsize[gi][gj] <= s0_i0_systolic_gsize;
-			o_i1_systolic_gsize[gi][gj] <= s0_i1_systolic_gsize;
+			o_i0_systolic_gsize[gi][gj] <= (i_i0_systolic_enable ? s0_i0_systolic_gsize : 'b1);
+			o_i1_systolic_gsize[gi][gj] <= (i_i1_systolic_enable ? s0_i1_systolic_gsize : 'b1);
+			o_i0_systolic_idx[gi][gj] <= (i_i0_systolic_enable ? gi : '0);
+			o_i1_systolic_idx[gi][gj] <= (i_i1_systolic_enable ? gj : '0);
 		`ff_end
 	end
 end endgenerate
+
+`ff_rst
+	select_shamt_r <= '0;
+`ff_cg(s0_dst_ack && !(i_i0_systolic_enable && i_i1_systolic_enable))
+	select_shamt_r <= select_shamt_w;
+`ff_end
 
 endmodule
