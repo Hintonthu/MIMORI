@@ -277,7 +277,7 @@ always_comb begin
 	priority case (i_opcode)
 		3'b000: result = AluOpAdd(sel_a, sel_b, sel_c, i_shamt, i_opcode == 3'b000);
 		3'b001: result = AluOpSub(sel_a, sel_b, sel_c, i_shamt, i_opcode == 3'b001);
-		3'b010: result = AluOp2Norm(sel_a, sel_b, sel_c, i_shamt, i_opcode == 3'b010);
+		// 3'b010: result = AluOp2Norm(sel_a, sel_b, sel_c, i_shamt, i_opcode == 3'b010);
 		3'b011: result = AluOp1Norm(sel_a, sel_b, sel_c, i_shamt, i_opcode == 3'b011);
 		3'b100: result = AluOpMac(sel_a, sel_b, sel_c, i_shamt, i_opcode == 3'b100);
 		// 3'b110: result = AluOpNull();
