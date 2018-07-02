@@ -54,7 +54,7 @@ uniquify
 ungroup -flatten $ungroup_cells
 
 # Timing
-set CLK_PERIOD 2.5
+set CLK_PERIOD 2.7
 set TRANSIT 0.1
 set CLK_PIN [get_ports i_clk]
 set RESET_PIN [get_ports i_rst]
@@ -90,8 +90,8 @@ check_design
 # Can we enable boundary_optimization and seq_output_inversion
 compile_ultra -no_autoungroup -no_boundary_optimization -no_seq_output_inversion -gate_clock
 
-report_timing -net -max_path 10
-report_area -hier
+report_timing -net -max_path 10 -nosplit
+report_area -hier -nosplit
 write_sdf Top_syn.sdf
 write_sdc Top_syn.sdc
 write -format ddc -o ./Top_syn.ddc -hier

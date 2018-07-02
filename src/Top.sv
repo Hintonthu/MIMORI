@@ -149,16 +149,10 @@ localparam REG_ADDR = TauCfg::WARP_REG_ADDR_SPACE;
 localparam CONST_LUT = TauCfg::CONST_LUT;
 localparam CONST_TEX_LUT = TauCfg::CONST_TEX_LUT;
 localparam STSIZE = TauCfg::STENCIL_SIZE;
-`ifdef SC
-localparam N_TAU = 1;
-`endif
-`ifdef MC
 localparam N_TAU = TauCfg::N_TAU;
-`endif
 `ifdef SD
 localparam N_TAU_X = TauCfg::N_TAU_X;
 localparam N_TAU_Y = TauCfg::N_TAU_Y;
-localparam N_TAU = N_TAU_X * N_TAU_Y;
 localparam CN_TAU_X = $clog2(N_TAU_X);
 localparam CN_TAU_Y = $clog2(N_TAU_Y);
 localparam CN_TAU_X1 = $clog2(N_TAU_X+1);

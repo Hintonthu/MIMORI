@@ -141,7 +141,7 @@ NDShufAccum#(.BW(WBW), .DIM_IN(VDIM), .DIM_OUT(DIM), .ZERO_AUG(0)) u_saccum(
 `ifdef SD
 	o_skip <= 1'b0;
 `endif
-`ff_cg(o_mofs_ack || i_init_dval)
+`ff_cg((o_mofs_ack && !o_islast_id) || i_init_dval)
 	o_id <= o_id_w;
 	o_mofs <= o_mofs_w;
 `ifdef SD

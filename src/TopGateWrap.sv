@@ -15,7 +15,8 @@
 // You should have received a copy of the GNU General Public License
 // along with MIMORI.  If not, see <http://www.gnu.org/licenses/>.
 
-`timescale 1ns/1ps
+`include "common/define.sv"
+`include "common/TauCfg.sv"
 
 module TopGateWrap(
 	`clk_port,
@@ -31,7 +32,7 @@ module TopGateWrap(
 	i_aboundary,
 	i_i0_local_xor_masks,
 	i_i0_local_xor_schemes,
-	i_i0_local_bit_swaps,
+	i_i0_local_xor_configs,
 	i_i0_local_boundaries,
 	i_i0_local_bsubsteps,
 	i_i0_local_pads,
@@ -45,6 +46,8 @@ module TopGateWrap(
 	i_i0_bstrides_shamt,
 	i_i0_astrides_frac,
 	i_i0_astrides_shamt,
+	i_i0_wrap,
+	i_i0_pad_value,
 	i_i0_id_begs,
 	i_i0_id_ends,
 	i_i0_stencil,
@@ -53,7 +56,7 @@ module TopGateWrap(
 	i_i0_stencil_lut,
 	i_i1_local_xor_masks,
 	i_i1_local_xor_schemes,
-	i_i1_local_bit_swaps,
+	i_i1_local_xor_configs,
 	i_i1_local_boundaries,
 	i_i1_local_bsubsteps,
 	i_i1_local_pads,
@@ -67,6 +70,8 @@ module TopGateWrap(
 	i_i1_bstrides_shamt,
 	i_i1_astrides_frac,
 	i_i1_astrides_shamt,
+	i_i1_wrap,
+	i_i1_pad_value,
 	i_i1_id_begs,
 	i_i1_id_ends,
 	i_i1_stencil,
@@ -91,13 +96,13 @@ module TopGateWrap(
 	i_const_texs,
 	i_reg_per_warp,
 	`rdyack_port(dramra),
-	o_dramra,
+	o_dramras,
 	`rdyack_port(dramrd),
-	i_dramrd,
+	i_dramrds,
 	`rdyack_port(dramw),
-	o_dramwa,
-	o_dramwd,
-	o_dramw_mask
+	o_dramwas,
+	o_dramwds,
+	o_dramw_masks
 );
 
 //======================================
@@ -124,6 +129,15 @@ localparam REG_ADDR = TauCfg::WARP_REG_ADDR_SPACE;
 localparam CONST_LUT = TauCfg::CONST_LUT;
 localparam CONST_TEX_LUT = TauCfg::CONST_TEX_LUT;
 localparam STSIZE = TauCfg::STENCIL_SIZE;
+localparam N_TAU = TauCfg::N_TAU;
+`ifdef SD
+localparam N_TAU_X = TauCfg::N_TAU_X;
+localparam N_TAU_Y = TauCfg::N_TAU_Y;
+localparam CN_TAU_X = $clog2(N_TAU_X);
+localparam CN_TAU_Y = $clog2(N_TAU_Y);
+localparam CN_TAU_X1 = $clog2(N_TAU_X+1);
+localparam CN_TAU_Y1 = $clog2(N_TAU_Y+1);
+`endif
 // derived
 localparam ICFG_BW = $clog2(N_ICFG+1);
 localparam OCFG_BW = $clog2(N_OCFG+1);
@@ -150,8 +164,8 @@ input [WBW-1:0]     i_agrid_step     [VDIM];
 input [WBW-1:0]     i_agrid_end      [VDIM];
 input [WBW-1:0]     i_aboundary      [VDIM];
 input [CV_BW-1:0]   i_i0_local_xor_masks      [N_ICFG];
-input [CX_BW-1:0]   i_i0_local_xor_schemes    [N_ICFG][CV_BW];
-input [CCV_BW-1:0]  i_i0_local_bit_swaps      [N_ICFG];
+input [CCV_BW-1:0]  i_i0_local_xor_schemes    [N_ICFG][CV_BW];
+input [XOR_BW-1:0]  i_i0_local_xor_configs    [N_ICFG];
 input [LBW0-1:0]    i_i0_local_boundaries     [N_ICFG][DIM];
 input [LBW0-1:0]    i_i0_local_bsubsteps      [N_ICFG][CV_BW];
 input [CV_BW-1:0]   i_i0_local_pads           [N_ICFG][DIM];
@@ -165,6 +179,8 @@ input [SF_BW-1:0]   i_i0_bstrides_frac        [N_ICFG][VDIM];
 input [SS_BW-1:0]   i_i0_bstrides_shamt       [N_ICFG][VDIM];
 input [SF_BW-1:0]   i_i0_astrides_frac        [N_ICFG][VDIM];
 input [SS_BW-1:0]   i_i0_astrides_shamt       [N_ICFG][VDIM];
+input [N_ICFG-1:0]  i_i0_wrap;
+input [DBW-1:0]     i_i0_pad_value [N_ICFG];
 input [ICFG_BW-1:0] i_i0_id_begs [VDIM+1];
 input [ICFG_BW-1:0] i_i0_id_ends [VDIM+1];
 input               i_i0_stencil;
@@ -172,8 +188,8 @@ input [ST_BW-1:0]   i_i0_stencil_begs [N_ICFG];
 input [ST_BW-1:0]   i_i0_stencil_ends [N_ICFG];
 input [LBW0-1:0]    i_i0_stencil_lut [STSIZE];
 input [CV_BW-1:0]   i_i1_local_xor_masks      [N_ICFG];
-input [CX_BW-1:0]   i_i1_local_xor_schemes    [N_ICFG][CV_BW];
-input [CCV_BW-1:0]  i_i1_local_bit_swaps      [N_ICFG];
+input [CCV_BW-1:0]  i_i1_local_xor_schemes    [N_ICFG][CV_BW];
+input [XOR_BW-1:0]  i_i1_local_xor_configs    [N_ICFG];
 input [LBW1-1:0]    i_i1_local_boundaries     [N_ICFG][DIM];
 input [LBW1-1:0]    i_i1_local_bsubsteps      [N_ICFG][CV_BW];
 input [CV_BW-1:0]   i_i1_local_pads           [N_ICFG][DIM];
@@ -187,6 +203,8 @@ input [SF_BW-1:0]   i_i1_bstrides_frac        [N_ICFG][VDIM];
 input [SS_BW-1:0]   i_i1_bstrides_shamt       [N_ICFG][VDIM];
 input [SF_BW-1:0]   i_i1_astrides_frac        [N_ICFG][VDIM];
 input [SS_BW-1:0]   i_i1_astrides_shamt       [N_ICFG][VDIM];
+input [N_ICFG-1:0]  i_i1_wrap;
+input [DBW-1:0]     i_i1_pad_value [N_ICFG];
 input [ICFG_BW-1:0] i_i1_id_begs [VDIM+1];
 input [ICFG_BW-1:0] i_i1_id_ends [VDIM+1];
 input               i_i1_stencil;
@@ -210,14 +228,17 @@ input [ISA_BW-1:0]  i_insts [N_INST];
 input [TDBW-1:0]    i_consts [CONST_LUT];
 input [TDBW-1:0]    i_const_texs [CONST_TEX_LUT];
 input [REG_ABW-1:0] i_reg_per_warp;
-`rdyack_output(dramra);
-output [GBW-1:0] o_dramra;
-`rdyack_input(dramrd);
-input [DBW-1:0] i_dramrd [CSIZE];
-`rdyack_output(dramw);
-output [GBW-1:0]   o_dramwa;
-output [DBW-1:0]   o_dramwd [CSIZE];
-output [CSIZE-1:0] o_dramw_mask;
+output [N_TAU-1:0] dramra_rdy;
+input  [N_TAU-1:0] dramra_ack;
+output [GBW-1:0]   o_dramras [N_TAU];
+input  [N_TAU-1:0] dramrd_rdy;
+output [N_TAU-1:0] dramrd_ack;
+input  [DBW-1:0]   i_dramrds [N_TAU][CSIZE];
+output [N_TAU-1:0] dramw_rdy;
+input  [N_TAU-1:0] dramw_ack;
+output [GBW-1:0]   o_dramwas [N_TAU];
+output [DBW-1:0]   o_dramwds [N_TAU][CSIZE];
+output [CSIZE-1:0] o_dramw_masks [N_TAU];
 
 Top u_top(
 	`clk_connect,
@@ -233,7 +254,7 @@ Top u_top(
 	.i_aboundary({>>{i_aboundary}}),
 	.i_i0_local_xor_masks({>>{i_i0_local_xor_masks}}),
 	.i_i0_local_xor_schemes({>>{i_i0_local_xor_schemes}}),
-	.i_i0_local_bit_swaps({>>{i_i0_local_bit_swaps}}),
+	.i_i0_local_xor_configs({>>{i_i0_local_xor_configs}}),
 	.i_i0_local_boundaries({>>{i_i0_local_boundaries}}),
 	.i_i0_local_bsubsteps({>>{i_i0_local_bsubsteps}}),
 	.i_i0_local_pads({>>{i_i0_local_pads}}),
@@ -247,6 +268,8 @@ Top u_top(
 	.i_i0_bstrides_shamt({>>{i_i0_bstrides_shamt}}),
 	.i_i0_astrides_frac({>>{i_i0_astrides_frac}}),
 	.i_i0_astrides_shamt({>>{i_i0_astrides_shamt}}),
+	.i_i0_wrap(i_i0_wrap),
+	.i_i0_pad_value({>>{i_i0_pad_value}}),
 	.i_i0_id_begs({>>{i_i0_id_begs}}),
 	.i_i0_id_ends({>>{i_i0_id_ends}}),
 	.i_i0_stencil(i_i0_stencil),
@@ -255,7 +278,7 @@ Top u_top(
 	.i_i0_stencil_lut({>>{i_i0_stencil_lut}}),
 	.i_i1_local_xor_masks({>>{i_i1_local_xor_masks}}),
 	.i_i1_local_xor_schemes({>>{i_i1_local_xor_schemes}}),
-	.i_i1_local_bit_swaps({>>{i_i1_local_bit_swaps}}),
+	.i_i1_local_xor_configs({>>{i_i1_local_xor_configs}}),
 	.i_i1_local_boundaries({>>{i_i1_local_boundaries}}),
 	.i_i1_local_bsubsteps({>>{i_i1_local_bsubsteps}}),
 	.i_i1_local_pads({>>{i_i1_local_pads}}),
@@ -269,6 +292,8 @@ Top u_top(
 	.i_i1_bstrides_shamt({>>{i_i1_bstrides_shamt}}),
 	.i_i1_astrides_frac({>>{i_i1_astrides_frac}}),
 	.i_i1_astrides_shamt({>>{i_i1_astrides_shamt}}),
+	.i_i1_wrap(i_i1_wrap),
+	.i_i1_pad_value({>>{i_i1_pad_value}}),
 	.i_i1_id_begs({>>{i_i1_id_begs}}),
 	.i_i1_id_ends({>>{i_i1_id_ends}}),
 	.i_i1_stencil(i_i1_stencil),
@@ -292,14 +317,17 @@ Top u_top(
 	.i_consts({>>{i_consts}}),
 	.i_const_texs({>>{i_const_texs}}),
 	.i_reg_per_warp(i_reg_per_warp),
-	`rdyack_connect(dramra, dramra),
-	.o_dramra(o_dramra),
-	`rdyack_connect(dramrd, dramrd),
-	.i_dramrd({>>{i_dramrd}}),
-	`rdyack_connect(dramw, dramw),
-	.o_dramwa(o_dramwa),
-	.o_dramwd({>>{o_dramwd}}),
-	.o_dramw_mask(o_dramw_mask)
+	.dramra_rdy(dramra_rdy),
+	.dramra_ack(dramra_ack),
+	.o_dramras({>>{o_dramras}}),
+	.dramrd_rdy(dramrd_rdy),
+	.dramrd_ack(dramrd_ack),
+	.i_dramrds({>>{i_dramrds}}),
+	.dramw_rdy(dramw_rdy),
+	.dramw_ack(dramw_ack),
+	.o_dramwas({>>{o_dramwas}}),
+	.o_dramwds({>>{o_dramwds}}),
+	.o_dramw_masks({>>{o_dramw_masks}})
 );
 
 endmodule
