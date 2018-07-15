@@ -49,13 +49,13 @@ void GenerateArray(int *iarray, const int *bf, const int bf_shamt)
 {
 	const int SRAM_TOTAL = N*SRAM_SIZE;
 	int tmp[SRAM_TOTAL];
-	for (int i = ORDER-1; i >= 0; --i) {
+	for (int i = 0; i < ORDER; ++i) {
 		if (bf[i] < 0) {
 			continue;
 		}
 		const int xor_num = 1<<i;
 		for (int j = 0; j < SRAM_TOTAL; ++j) {
-			if ((j & xor_num) == 0 and ((iarray[j]>>bf[i]) & 1) != 0) {
+			if ((j & xor_num) == 0 and ((j>>bf[i]) & 1) != 0) {
 				swap(iarray[j], iarray[j^xor_num]);
 			}
 		}
