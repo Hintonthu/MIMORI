@@ -18,6 +18,7 @@
 // along with MIMORI.  If not, see <http://www.gnu.org/licenses/>.
 
 `include "common/define.sv"
+`include "common/TauCfg.sv"
 `include "common/Controllers.sv"
 `include "common/OffsetStage.sv"
 `include "common/ND.sv"
