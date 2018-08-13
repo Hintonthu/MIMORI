@@ -87,10 +87,13 @@ module SFifo(
 	`clk_port,
 	`rdyack_port(src),
 	i_data,
+`ifdef VERI_TOP_SFifo
+	`rdyack2_port(dst),
+`else
 	`rdyack_port(dst),
+`endif
 	o_data
 );
-
 // 0: register
 // 1: TP sram
 parameter IMPL = 0;
@@ -109,7 +112,11 @@ endtask
 `clk_input;
 `rdyack_input(src);
 input [BW-1:0] i_data;
+`ifdef VERI_TOP_SFifo
+`rdyack2_output(dst);
+`else
 `rdyack_output(dst);
+`endif
 output logic [BW-1:0] o_data;
 genvar gi;
 

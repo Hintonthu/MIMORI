@@ -17,11 +17,11 @@ tops_sc:
 
 all_sub:
 	-make COVERAGE=$(COV) pbl
+	-make COVERAGE=$(COV) pbl_mc
 	-make COVERAGE=$(COV) abl
 	-make COVERAGE=$(COV) simd_drv
 	-make COVERAGE=$(COV) awl
 	-make COVERAGE=$(COV) wc
-	-make COVERAGE=$(COV) cal
 	-make COVERAGE=$(COV) alloc
 	-make COVERAGE=$(COV) rmc
 	-make COVERAGE=$(COV) chal
@@ -47,7 +47,7 @@ pbl:
 	make COVERAGE=$(COV) ParallelBlockLooper
 
 pbl_mc:
-	make COVERAGE=$(COV) ParallelBlockLooper_mc
+	make ARGS="+define+MC" COVERAGE=$(COV) ParallelBlockLooper_mc
 
 alloc:
 	make COVERAGE=$(COV) Allocator

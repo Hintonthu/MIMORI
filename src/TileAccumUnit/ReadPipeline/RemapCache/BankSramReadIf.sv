@@ -144,20 +144,20 @@ always_comb begin
 	end
 	// Butterfly (MSB -> LSB)
 	i_ren[CLOG2_NBANK] = '1;
-	for (int i = CLOG2_NBANK-1, m = 1<<i; i >= 0; --i, m >>= 1) begin
+	for (int i = CLOG2_NBANK-1; i >= 0; --i) begin
 		for (int j = 0; j < NBANK; ++j) begin
-			 i_bf[i][j] = i_bf_loaddr[i+1][j][CLOG2_NBANK-1] ^ ((j>>i)&1);
+			 i_bf[i][j] = i_bf_loaddr[i+1][j][CLOG2_NBANK-1] ^ 1'((j>>i)&1);
 		end
 		for (int j = 0; j < NBANK; ++j) begin
 			i_ren[i][j] =
-				~i_bf[i][j  ] && i_ren[i+1][j  ] ||
-				 i_bf[i][j^m] && i_ren[i+1][j^m];
+				~i_bf[i][j       ] && i_ren[i+1][j       ] ||
+				 i_bf[i][j^(1<<i)] && i_ren[i+1][j^(1<<i)];
 			i_bf_hiaddr[i][j] =
-				(~i_bf[i][j  ] ? i_bf_hiaddr[i+1][j  ] : '0) |
-				( i_bf[i][j^m] ? i_bf_hiaddr[i+1][j^m] : '0);
+				(~i_bf[i][j       ] ? i_bf_hiaddr[i+1][j       ] : '0) |
+				( i_bf[i][j^(1<<i)] ? i_bf_hiaddr[i+1][j^(1<<i)] : '0);
 			i_bf_loaddr[i][j] = (
-				(~i_bf[i][j  ] ? i_bf_loaddr[i+1][j  ] : '0) |
-				( i_bf[i][j^m] ? i_bf_loaddr[i+1][j^m] : '0)
+				(~i_bf[i][j       ] ? i_bf_loaddr[i+1][j       ] : '0) |
+				( i_bf[i][j^(1<<i)] ? i_bf_loaddr[i+1][j^(1<<i)] : '0)
 			) << 1;
 		end
 	end
@@ -167,9 +167,9 @@ end
 always_comb begin
 	// Butterfly (LSB -> MSB)
 	s1_bf_data[0] = i_sram_rdata;
-	for (int i = 0, m = 1; i < CLOG2_NBANK; ++i, m <<= 1) begin
+	for (int i = 0; i < CLOG2_NBANK; ++i) begin
 		for (int j = 0; j < NBANK; ++j) begin
-			s1_bf_data[i+1][j] = s1_bf[i][j] ? s1_bf_data[i][j^m] : s1_bf_data[i][j];
+			s1_bf_data[i+1][j] = s1_bf[i][j] ? s1_bf_data[i][j^(1<<i)] : s1_bf_data[i][j];
 		end
 	end
 end

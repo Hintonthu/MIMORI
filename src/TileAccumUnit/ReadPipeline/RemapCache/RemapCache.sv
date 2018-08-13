@@ -98,6 +98,16 @@ logic [VSIZE-1:0] sram_re;
 logic [HBW-1:0] sram_ra [VSIZE];
 logic [DBW-1:0] sram_rd [VSIZE];
 logic [DBW-1:0] sram_wd [VSIZE];
+logic [CCV_BW-1:0]  xor_rscheme [CV_BW];
+logic [CCV_BW-1:0]  xor_wscheme [CV_BW];
+
+//======================================
+// Combinational
+//======================================
+always_comb for (int i = 0; i < CV_BW; i++) begin
+	xor_rscheme[i] = i_xor_schemes[i][i_rid];
+	xor_wscheme[i] = i_xor_schemes[i][i_wid];
+end
 
 //======================================
 // Submodules
@@ -111,7 +121,7 @@ BankSramReadIf #(
 	`clk_connect,
 	`rdyack_connect(addrin, ra),
 	.i_xor_mask(i_xor_masks[i_rid]),
-	.i_xor_scheme(i_xor_schemes[i_rid]),
+	.i_xor_scheme(xor_rscheme),
 	.i_xor_config(i_xor_configs[i_rid]),
 	.i_id(i_rid),
 	.i_raddr(i_raddr),
@@ -140,7 +150,7 @@ BankSramButterflyWriteIf #(
 	.NBANK(VSIZE)
 ) u_wif (
 	.i_xor_mask(i_xor_masks[i_wid]),
-	.i_xor_scheme(i_xor_schemes[i_wid]),
+	.i_xor_scheme(xor_wscheme),
 	.i_xor_config(i_xor_configs[i_wid]),
 	.i_hiaddr(i_whiaddr),
 	.i_data(i_wdata),

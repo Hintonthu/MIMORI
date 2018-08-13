@@ -31,7 +31,11 @@ module ChunkAddrLooper(
 	i_mlast,
 	i_maddr,
 	i_wrap,
+`ifdef VERI_TOP_ChunkAddrLooper
+	`rdyack2_port(cmd),
+`else
 	`rdyack_port(cmd),
+`endif
 	o_cmd_type, // 0,1,2
 	o_cmd_islast,
 	o_cmd_addr,
@@ -64,7 +68,11 @@ input [GBW-1:0]  i_mbound  [DIM];
 input [GBW-1:0]  i_mlast   [DIM];
 input [GBW-1:0]  i_maddr;
 input            i_wrap;
+`ifdef VERI_TOP_ChunkAddrLooper
+`rdyack2_output(cmd);
+`else
 `rdyack_output(cmd);
+`endif
 output logic [1:0]       o_cmd_type;
 output logic             o_cmd_islast;
 output logic [GBW-1:0]   o_cmd_addr;

@@ -59,6 +59,7 @@ localparam CC_BW = $clog2(CSIZE);
 localparam CX_BW = $clog2(XOR_BW);
 localparam [LBW-CV_BW1-1:0] LV_PAD_ZERO = 0;
 localparam [LBW-CV_BW1  :0] L1V_PAD_ZERO = 0;
+localparam CV_MIN_SIZE = CSIZE>VSIZE ? VSIZE : CSIZE;
 localparam CV_DIFF_BW = CSIZE>VSIZE ? CSIZE-VSIZE : 1;
 localparam READ_DIFF_BW = VSIZE>CSIZE ? (VSIZE-CSIZE)*DBW : 1;
 localparam [CV_DIFF_BW-1:0] CV_PAD_ZERO = 0;
@@ -212,7 +213,7 @@ always_comb begin
 		data_1d_shiftr = data_1d >> (
 			(i_cmd_addrofs+{CV_PAD_ZERO, cmd_handled_r})*DBW
 		);
-		data_1d_shiftl = data_1d_shiftr[VSIZE*DBW-1:0] << (cur_r[CV_BW-1:0]*DBW);
+		data_1d_shiftl = data_1d_shiftr[CV_MIN_SIZE*DBW-1:0] << (cur_r[CV_BW-1:0]*DBW);
 	end
 	case (i_cmd_type)
 		2'd0: for (int i = 0; i < VSIZE; i++) begin

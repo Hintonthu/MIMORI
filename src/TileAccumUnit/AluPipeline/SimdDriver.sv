@@ -16,8 +16,10 @@
 // along with MIMORI.  If not, see <http://www.gnu.org/licenses/>.
 
 `include "common/define.sv"
+`include "common/TauCfg.sv"
 `include "common/ND.sv"
 `include "common/Controllers.sv"
+`include "common/OffsetStage.sv"
 `include "TileAccumUnit/common/AccumWarpLooper/AccumWarpLooperIndexStage.sv"
 
 module SimdDriver(
@@ -32,7 +34,11 @@ module SimdDriver(
 	i_aboundary,
 	i_inst_id_begs,
 	i_inst_id_ends,
+`ifdef VERI_TOP_SimdDriver
+	`rdyack2_port(inst),
+`else
 	`rdyack_port(inst),
+`endif
 	o_bofs,
 	o_aofs,
 	o_pc,
@@ -69,7 +75,11 @@ input [CCV_BW-1:0]  i_bsub_lo_order [VDIM];
 input [WBW-1:0]     i_aboundary     [VDIM];
 input [INST_BW-1:0] i_inst_id_begs [VDIM+1];
 input [INST_BW-1:0] i_inst_id_ends [VDIM+1];
+`ifdef VERI_TOP_SimdDriver
+`rdyack2_output(inst);
+`else
 `rdyack_output(inst);
+`endif
 output [WBW-1:0]     o_bofs [VDIM];
 output [WBW-1:0]     o_aofs [VDIM];
 output [INST_BW-1:0] o_pc;

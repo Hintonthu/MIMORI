@@ -30,6 +30,11 @@
 `include "TileAccumUnit/TileAccumUnit.sv"
 
 module Top(
+`ifdef VERI_TOP_Top
+	n_tau,
+	n_tau_x,
+	n_tau_y,
+`endif
 	`clk_port,
 	`rdyack_port(src),
 	i_bgrid_step,    // block shape
@@ -115,14 +120,26 @@ module Top(
 	i_consts,
 	i_const_texs,
 	i_reg_per_warp,
+`ifdef VERI_TOP_Top
+	`rdyack2_port(dramra),
+`else
 	`rdyack_port(dramra),
+`endif
 	o_dramras,
 	`rdyack_port(dramrd),
 	i_dramrds,
+`ifdef VERI_TOP_Top
+	`rdyack2_port(dramw),
+`else
 	`rdyack_port(dramw),
+`endif
 	o_dramwas,
 	o_dramwds,
 	o_dramw_masks
+`ifdef SD
+	i_i1_systolic_skip,
+	i_i1_systolic_axis,
+`endif
 );
 
 //======================================
@@ -157,6 +174,9 @@ localparam CN_TAU_X = $clog2(N_TAU_X);
 localparam CN_TAU_Y = $clog2(N_TAU_Y);
 localparam CN_TAU_X1 = $clog2(N_TAU_X+1);
 localparam CN_TAU_Y1 = $clog2(N_TAU_Y+1);
+`else
+localparam N_TAU_X = 1;
+localparam N_TAU_Y = 1;
 `endif
 // derived
 localparam ICFG_BW = $clog2(N_ICFG+1);
@@ -173,6 +193,14 @@ localparam ST_BW = $clog2(STSIZE+1);
 //======================================
 // I/O
 //======================================
+`ifdef VERI_TOP_Top
+	output [31:0] n_tau;
+	output [31:0] n_tau_x;
+	output [31:0] n_tau_y;
+	assign n_tau = N_TAU;
+	assign n_tau_x = N_TAU_X;
+	assign n_tau_y = N_TAU_Y;
+`endif
 `clk_input;
 `rdyack_input(src);
 input [WBW-1:0]     i_bgrid_step     [VDIM];
@@ -258,13 +286,25 @@ input [TDBW-1:0]    i_consts [CONST_LUT];
 input [TDBW-1:0]    i_const_texs [CONST_TEX_LUT];
 input [REG_ABW-1:0] i_reg_per_warp;
 output [N_TAU-1:0] dramra_rdy;
+`ifdef VERI_TOP_Top
+input  [N_TAU-1:0] dramra_canack;
+logic  [N_TAU-1:0] dramra_ack;
+assign dramra_ack = dramra_rdy & dramra_canack;
+`else
 input  [N_TAU-1:0] dramra_ack;
+`endif
 output [GBW-1:0]   o_dramras [N_TAU];
 input  [N_TAU-1:0] dramrd_rdy;
 output [N_TAU-1:0] dramrd_ack;
 input  [DBW-1:0]   i_dramrds [N_TAU][CSIZE];
 output [N_TAU-1:0] dramw_rdy;
+`ifdef VERI_TOP_Top
+input  [N_TAU-1:0] dramw_canack;
+logic  [N_TAU-1:0] dramw_ack;
+assign dramw_ack = dramw_rdy & dramw_canack;
+`else
 input  [N_TAU-1:0] dramw_ack;
+`endif
 output [GBW-1:0]   o_dramwas [N_TAU];
 output [DBW-1:0]   o_dramwds [N_TAU][CSIZE];
 output [CSIZE-1:0] o_dramw_masks [N_TAU];

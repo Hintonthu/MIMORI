@@ -16,6 +16,7 @@
 // along with MIMORI.  If not, see <http://www.gnu.org/licenses/>.
 
 `include "common/define.sv"
+`include "common/TauCfg.sv"
 `include "common/Controllers.sv"
 `include "common/OffsetStage.sv"
 `include "common/BitOperation.sv"
@@ -26,9 +27,20 @@ module ParallelBlockLooper_mc(
 	i_bgrid_step,
 	i_bgrid_end,
 	bofs_rdys,
+`ifdef VERI_TOP_ParallelBlockLooper_mc
+	dst3_rdy,dst2_rdy,dst1_rdy,dst0_rdy,
+	dst3_canack,dst2_canack,dst1_canack,dst0_canack,
+	dst3_bofs,dst2_bofs,dst1_bofs,dst0_bofs,
+	done3,done2,done1,done0,
+`else
 	bofs_acks,
+`endif
 	o_bofss,
+`ifdef VERI_TOP_ParallelBlockLooper_mc
+	done3,done2,done1,done0
+`else
 	blkdone_dvals
+`endif
 );
 //======================================
 // Parameter
@@ -47,9 +59,33 @@ localparam CN_TAU = $clog2(N_TAU);
 input [WBW-1:0] i_bgrid_step [VDIM];
 input [WBW-1:0] i_bgrid_end  [VDIM];
 output logic [N_TAU-1:0] bofs_rdys;
+`ifdef VERI_TOP_ParallelBlockLooper_mc
+logic        [N_TAU-1:0] bofs_acks;
+`else
 input        [N_TAU-1:0] bofs_acks;
+`endif
 output logic [WBW-1:0]   o_bofss [N_TAU][VDIM];
+`ifdef VERI_TOP_ParallelBlockLooper_mc
+logic [N_TAU-1:0] blkdone_dvals;
+`else
 input [N_TAU-1:0] blkdone_dvals;
+`endif
+
+`ifdef VERI_TOP_ParallelBlockLooper_mc
+output logic dst3_rdy,dst2_rdy,dst1_rdy,dst0_rdy;
+input logic dst3_canack,dst2_canack,dst1_canack,dst0_canack;
+output logic [WBW-1:0] dst3_bofs[VDIM],dst2_bofs[VDIM],dst1_bofs[VDIM],dst0_bofs[VDIM];
+input logic done3,done2,done1,done0;
+assign {dst3_rdy,dst2_rdy,dst1_rdy,dst0_rdy} = bofs_rdys;
+assign bofs_acks = {dst3_canack,dst2_canack,dst1_canack,dst0_canack} & bofs_rdys;
+assign blkdone_dvals = {done3,done2,done1,done0};
+always_comb for (int i = 0; i < VDIM; i++) begin
+	dst3_bofs[i] = o_bofss[3][i];
+	dst2_bofs[i] = o_bofss[2][i];
+	dst1_bofs[i] = o_bofss[1][i];
+	dst0_bofs[i] = o_bofss[0][i];
+end
+`endif
 
 //======================================
 // Internal

@@ -88,6 +88,7 @@ def main():
 				dc.Resize(accum_idx_i0.shape[0])
 				npd.copyto(data_bus[20], 0)
 				tst.Expect((rg_flat_i0[:,newaxis], addr_i0, valid_i0_packed[:,newaxis], rt_flat_i0[:,newaxis]))
+			yield ck_ev
 			yield from master.Send(data_bus)
 			for ck in range(30):
 				yield ck_ev
