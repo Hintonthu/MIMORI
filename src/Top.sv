@@ -46,9 +46,8 @@ module Top(
 	i_agrid_step,
 	i_agrid_end,
 	i_aboundary,
-	i_i0_local_xor_masks,    // TODO: document
-	i_i0_local_xor_schemes,  // TODO: document
-	i_i0_local_xor_configs,    // TODO: document
+	i_i0_local_xor_srcs,     // configure data layout in SRAM
+	i_i0_local_xor_swaps,    // configure omega network (see paper)
 	i_i0_local_boundaries,   // memory multiplier (also boundary)
 	i_i0_local_bsubsteps,    // memory offsets for a warp
 	i_i0_local_pads,         // padding after each dimension
@@ -74,9 +73,8 @@ module Top(
 	i_i0_systolic_skip,      // Can we skip the data load and obtain from neighbors
 	i_i0_systolic_axis,      // How to schedule blocks
 `endif
-	i_i1_local_xor_masks,
-	i_i1_local_xor_schemes,
-	i_i1_local_xor_configs,
+	i_i1_local_xor_srcs,
+	i_i1_local_xor_swaps,
 	i_i1_local_boundaries,
 	i_i1_local_bsubsteps,
 	i_i1_local_pads,
@@ -186,7 +184,6 @@ localparam DIM_BW = $clog2(DIM);
 localparam VDIM_BW1 = $clog2(VDIM+1);
 localparam CV_BW = $clog2(VSIZE);
 localparam CCV_BW = $clog2(CV_BW+1);
-localparam CX_BW = $clog2(XOR_BW);
 localparam REG_ABW = $clog2(REG_ADDR);
 localparam ST_BW = $clog2(STSIZE+1);
 
@@ -212,9 +209,8 @@ input [CCV_BW-1:0]  i_bsub_lo_order  [VDIM];
 input [WBW-1:0]     i_agrid_step     [VDIM];
 input [WBW-1:0]     i_agrid_end      [VDIM];
 input [WBW-1:0]     i_aboundary      [VDIM];
-input [CV_BW-1:0]   i_i0_local_xor_masks      [N_ICFG];
-input [CCV_BW-1:0]  i_i0_local_xor_schemes    [N_ICFG][CV_BW];
-input [XOR_BW-1:0]  i_i0_local_xor_configs    [N_ICFG];
+input [XOR_BW-1:0]  i_i0_local_xor_srcs       [N_ICFG][CV_BW];
+input [CCV_BW-1:0]  i_i0_local_xor_swaps      [N_ICFG];
 input [LBW0-1:0]    i_i0_local_boundaries     [N_ICFG][DIM];
 input [LBW0-1:0]    i_i0_local_bsubsteps      [N_ICFG][CV_BW];
 input [CV_BW-1:0]   i_i0_local_pads           [N_ICFG][DIM];
@@ -240,9 +236,8 @@ input [LBW0-1:0]    i_i0_stencil_lut [STSIZE];
 input [N_ICFG-1:0]  i_i0_systolic_skip;
 input [VDIM_BW1-1:0] i_i0_systolic_axis;
 `endif
-input [CV_BW-1:0]   i_i1_local_xor_masks      [N_ICFG];
-input [CCV_BW-1:0]  i_i1_local_xor_schemes    [N_ICFG][CV_BW];
-input [XOR_BW-1:0]  i_i1_local_xor_configs    [N_ICFG];
+input [XOR_BW-1:0]  i_i1_local_xor_srcs       [N_ICFG][CV_BW];
+input [CCV_BW-1:0]  i_i1_local_xor_swaps      [N_ICFG];
 input [LBW1-1:0]    i_i1_local_boundaries     [N_ICFG][DIM];
 input [LBW1-1:0]    i_i1_local_bsubsteps      [N_ICFG][CV_BW];
 input [CV_BW-1:0]   i_i1_local_pads           [N_ICFG][DIM];
@@ -467,9 +462,8 @@ TileAccumUnit u_tau(
 	.i_bgrid_step(i_bgrid_step),
 	.i_agrid_end(i_agrid_end),
 	.i_aboundary(i_aboundary),
-	.i_i0_local_xor_masks(i_i0_local_xor_masks),
-	.i_i0_local_xor_schemes(i_i0_local_xor_schemes),
-	.i_i0_local_xor_configs(i_i0_local_xor_configs),
+	.i_i0_local_xor_srcs(i_i0_local_xor_srcs),
+	.i_i0_local_xor_swaps(i_i0_local_xor_swaps),
 	.i_i0_local_boundaries(i_i0_local_boundaries),
 	.i_i0_local_bsubsteps(i_i0_local_bsubsteps),
 	.i_i0_local_pads(i_i0_local_pads),
@@ -494,9 +488,8 @@ TileAccumUnit u_tau(
 `ifdef SD
 	.i_i0_systolic_skip(i_i0_systolic_skip),
 `endif
-	.i_i1_local_xor_masks(i_i1_local_xor_masks),
-	.i_i1_local_xor_schemes(i_i1_local_xor_schemes),
-	.i_i1_local_xor_configs(i_i1_local_xor_configs),
+	.i_i1_local_xor_srcs(i_i1_local_xor_srcs),
+	.i_i1_local_xor_swaps(i_i1_local_xor_swaps),
 	.i_i1_local_boundaries(i_i1_local_boundaries),
 	.i_i1_local_bsubsteps(i_i1_local_bsubsteps),
 	.i_i1_local_pads(i_i1_local_pads),

@@ -23,9 +23,8 @@ import TauCfg::*;
 module BankSramReadIf(
 	`clk_port,
 	`rdyack_port(addrin),
-	i_xor_mask,
-	i_xor_scheme,
-	i_xor_config,
+	i_xor_src,
+	i_xor_swap,
 	i_id,
 	i_raddr,
 	i_retire,
@@ -56,6 +55,7 @@ parameter NDATA = 32;
 parameter NBANK = 16;
 parameter ID_BW = 2;
 parameter XOR_BW = TauCfg::XOR_BW;
+localparam XOR_ADDR_BW = 1<<XOR_BW;
 localparam CLOG2_NDATA = $clog2(NDATA);
 localparam CLOG2_NBANK = $clog2(NBANK);
 localparam CCLOG2_NBANK = $clog2(CLOG2_NBANK+1);
@@ -69,9 +69,8 @@ localparam NBANK2 = NBANK/2;
 input i_clk;
 input i_rst;
 `rdyack_input(addrin);
-input [CLOG2_NBANK-1:0]  i_xor_mask;
-input [CCLOG2_NBANK-1:0] i_xor_scheme [CLOG2_NBANK];
-input [XOR_BW-1:0]       i_xor_config;
+input [XOR_BW-1:0]       i_xor_src [CLOG2_NBANK];
+input [CCLOG2_NBANK-1:0] i_xor_swap;
 input [ID_BW-1:0]        i_id;
 input [ABW-1:0]          i_raddr [NBANK];
 input                    i_retire;
@@ -95,7 +94,9 @@ input        [BW         -1:0] i_sram_rdata [NBANK];
 //======================================
 // Internal
 //======================================
-logic [CLOG2_NBANK-1:0] i_bf_loaddr_rot [NBANK];
+logic [XOR_ADDR_BW-1:0] i_addrs_x [NBANK];
+logic [CLOG2_NBANK-1:0] i_bf_loaddr_x [NBANK];
+logic [CLOG2_NBANK*2-1:0] i_bf_loaddr_x2 [NBANK];
 logic [CLOG2_NDATA-1:0] i_bf_hiaddr [CLOG2_NBANK+1][NBANK];
 logic [CLOG2_NBANK-1:0] i_bf_loaddr [CLOG2_NBANK+1][NBANK];
 logic [NBANK-1:0] i_ren [CLOG2_NBANK+1];
@@ -110,8 +111,6 @@ logic dout_retire;
 //======================================
 // Combinational
 //======================================
-`include "TileAccumUnit/ReadPipeline/RemapCache/rmc_common_include.sv"
-`include "TileAccumUnit/ReadPipeline/RemapCache/codegen/RemapCacheLowRotate5.sv"
 assign free_dval = dout_retire && dout_ack;
 `ifdef SD
 logic [STO_BW-1:0] s1_syst_type;
@@ -121,32 +120,26 @@ assign o_sram_re = (`IS_FROM_SELF(i_syst_type) && addrin_ack) ? i_ren[0] : '0;
 assign o_sram_re = addrin_ack ? i_ren[0] : '0;
 `endif
 
-// I give up. Let the code generator do it.
-generate if (CLOG2_NBANK == 5) begin: rmc_read_5
-	always_comb begin
-		for (int i = 0; i < NBANK; ++i) begin
-			i_bf_loaddr_rot[i] = RemapCacheLowRotate5(i_raddr[i][CLOG2_NBANK-1:0], i_xor_config);
-		end
-	end
-end else begin: rmc_read_error
-	initial begin
-		$display("Only support 32-way SIMD now.");
-		$finish;
-	end
-end endgenerate
-
 always_comb begin
 	for (int i = 0; i < NBANK; ++i) begin
+		i_addrs_x[i] = i_raddr[i];
+		i_addrs_x[i] = (i_addrs_x[i] << 1) >> 1;
 		i_bf_hiaddr[CLOG2_NBANK][i] = i_raddr[i][ABW-1:CLOG2_NBANK];
-		i_bf_loaddr[CLOG2_NBANK][i] =
-			XMask(i_bf_hiaddr[CLOG2_NBANK][i], i_xor_mask, i_xor_scheme) ^
-			i_bf_loaddr_rot[i];
+		for (int j = 0; j < CLOG2_NBANK; ++j) begin
+			i_bf_loaddr_x[i][j] = i_raddr[i][j] ^ i_addrs_x[i][i_xor_src[j]];
+		end
+		i_bf_loaddr_x2[i] = {2{i_bf_loaddr_x[i]}} << i_xor_swap;
+		i_bf_loaddr[CLOG2_NBANK][i] = i_bf_loaddr_x2[i][2*CLOG2_NBANK-1 -: CLOG2_NBANK];
 	end
 	// Butterfly (MSB -> LSB)
+	// FIXME: stuck at 1
 	i_ren[CLOG2_NBANK] = '1;
 	for (int i = CLOG2_NBANK-1; i >= 0; --i) begin
 		for (int j = 0; j < NBANK; ++j) begin
-			 i_bf[i][j] = i_bf_loaddr[i+1][j][CLOG2_NBANK-1] ^ 1'((j>>i)&1);
+			// [i+1] previous layer
+			// [j] n-th element
+			// [CLOG2_NBANK-1] bit-plane (target bit-plane is shifted up)
+			i_bf[i][j] = i_bf_loaddr[i+1][j][CLOG2_NBANK-1] ^ 1'((j>>i)&1);
 		end
 		for (int j = 0; j < NBANK; ++j) begin
 			i_ren[i][j] =

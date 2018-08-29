@@ -52,9 +52,8 @@ module ReadPipeline(
 	i_global_ashufs,
 	i_astrides_frac,
 	i_astrides_shamt,
-	i_local_xor_masks,
-	i_local_xor_schemes,
-	i_local_xor_configs,
+	i_local_xor_srcs,
+	i_local_xor_swaps,
 	i_local_pads,
 	i_local_bsubsteps,
 	i_local_mboundaries,
@@ -138,9 +137,8 @@ input [SS_BW-1:0]   i_bstrides_shamt     [N_ICFG][VDIM];
 input [DIM_BW-1:0]  i_global_ashufs      [N_ICFG][VDIM];
 input [SF_BW-1:0]   i_astrides_frac      [N_ICFG][VDIM];
 input [SS_BW-1:0]   i_astrides_shamt     [N_ICFG][VDIM];
-input [CV_BW-1:0]   i_local_xor_masks    [N_ICFG];
-input [CCV_BW-1:0]  i_local_xor_schemes  [N_ICFG][CV_BW];
-input [XOR_BW-1:0]  i_local_xor_configs  [N_ICFG];
+input [XOR_BW-1:0]  i_local_xor_srcs     [N_ICFG][CV_BW];
+input [CCV_BW-1:0]  i_local_xor_swaps    [N_ICFG];
 input [CV_BW-1:0]   i_local_pads         [N_ICFG][DIM];
 input [LBW-1:0]     i_local_bsubsteps    [N_ICFG][CV_BW];
 input [LBW-1:0]     i_local_mboundaries  [N_ICFG][DIM];
@@ -443,9 +441,8 @@ SramWriteCollector#(.LBW(LBW)) u_swc(
 // TODO: See AccumWarpLooper
 RemapCache#(.LBW(LBW)) u_rmc(
 	`clk_connect,
-	.i_xor_masks(i_local_xor_masks),
-	.i_xor_schemes(i_local_xor_schemes),
-	.i_xor_configs(i_local_xor_configs),
+	.i_xor_srcs(i_local_xor_srcs),
+	.i_xor_swaps(i_local_xor_swaps),
 	`rdyack_connect(ra, warp_rmc_addrval),
 	.i_rid(warp_rmc_id),
 	.i_raddr(warp_rmc_addr),

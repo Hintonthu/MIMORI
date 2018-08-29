@@ -116,8 +116,8 @@ int main(int argc, char const* argv[])
 		const int bf[ORDER];
 	};
 	Config configs[] {
-		{{6,4,48,32,64}, 1, {6,-1,-1,4,5}},
-		{{48,32,64,6,4}, 3, {6,-1,-1,4,5}}
+		{{6,4,48,32,64}, 0, {1,2,4,5,6}},
+		{{48,32,64,6,4}, 2, {1,2,4,5,6}}
 	};
 	int CFG, adr_base;
 	cin >> CFG;

@@ -45,7 +45,7 @@ package TauCfg;
 `endif
 	parameter SYSTOLIC_FIFO_DEPTH = 4;
 	// derived
-	localparam XOR_BW = 8; // this is a magic number for N=32
+	localparam XOR_BW = 4; // Enough for indexing 16 bits (3 or 4 are suitable in most cases)
 	localparam ICFG_BW = $clog2(N_ICFG+1);
 	localparam OCFG_BW = $clog2(N_OCFG+1);
 	localparam INST_BW = $clog2(N_INST+1);
