@@ -73,9 +73,8 @@ int main()
 	MAP_SIGNAL(i_agrid_step);
 	MAP_SIGNAL(i_agrid_end);
 	MAP_SIGNAL(i_aboundary);
-	MAP_SIGNAL(i_i0_local_xor_masks);
-	MAP_SIGNAL(i_i0_local_xor_schemes);
-	MAP_SIGNAL(i_i0_local_xor_configs);
+	MAP_SIGNAL(i_i0_local_xor_srcs);
+	MAP_SIGNAL(i_i0_local_xor_swaps);
 	MAP_SIGNAL(i_i0_local_boundaries);
 	MAP_SIGNAL(i_i0_local_bsubsteps);
 	MAP_SIGNAL(i_i0_local_pads);
@@ -97,9 +96,8 @@ int main()
 	MAP_SIGNAL(i_i0_stencil_begs);
 	MAP_SIGNAL(i_i0_stencil_ends);
 	MAP_SIGNAL(i_i0_stencil_lut);
-	MAP_SIGNAL(i_i1_local_xor_masks);
-	MAP_SIGNAL(i_i1_local_xor_schemes);
-	MAP_SIGNAL(i_i1_local_xor_configs);
+	MAP_SIGNAL(i_i1_local_xor_srcs);
+	MAP_SIGNAL(i_i1_local_xor_swaps);
 	MAP_SIGNAL(i_i1_local_boundaries);
 	MAP_SIGNAL(i_i1_local_bsubsteps);
 	MAP_SIGNAL(i_i1_local_pads);
