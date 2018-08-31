@@ -8,6 +8,7 @@ install:
     - git submodule update --init --recursive
 script:
     - make -C sim/UmiModel
+    - make -C nicotb/lib/cpp
     - make -C sim_verilator top_sc_all
 branches:
     only:
