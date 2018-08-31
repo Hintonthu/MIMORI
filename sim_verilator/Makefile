@@ -19,7 +19,7 @@ all_sub:
 	-make simd_drv
 	-make wc
 	-make awl
-	#-make rmc
+	-make rmc
 
 awl:
 	make VF_PATH="TileAccumUnit/common/AccumWarpLooper/AccumWarpLooper.sv" \
@@ -51,6 +51,14 @@ pbl_mc:
 
 fifo:
 	make VF_PATH="common/SFifo.sv" SFifo
+
+rmc:
+	RMC_CONF=0 make                VF_PATH="TileAccumUnit/ReadPipeline/RemapCache/RemapCache.sv" RemapCache
+	RMC_CONF=1 make COMPILE_ONLY=1 VF_PATH="TileAccumUnit/ReadPipeline/RemapCache/RemapCache.sv" RemapCache
+	RMC_CONF=2 make COMPILE_ONLY=1 VF_PATH="TileAccumUnit/ReadPipeline/RemapCache/RemapCache.sv" RemapCache
+	RMC_CONF=3 make COMPILE_ONLY=1 VF_PATH="TileAccumUnit/ReadPipeline/RemapCache/RemapCache.sv" RemapCache
+	RMC_CONF=4 make COMPILE_ONLY=1 VF_PATH="TileAccumUnit/ReadPipeline/RemapCache/RemapCache.sv" RemapCache
+	RMC_CONF=5 make COMPILE_ONLY=1 VF_PATH="TileAccumUnit/ReadPipeline/RemapCache/RemapCache.sv" RemapCache
 
 %: TEST ?= $@_test
 %: TOP ?= $@

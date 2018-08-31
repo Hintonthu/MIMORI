@@ -30,7 +30,11 @@ module RemapCache(
 `ifdef SD
 	i_syst_type,
 `endif
+`ifdef VERI_TOP_RemapCache
+	`rdyack2_port(rd),
+`else
 	`rdyack_port(rd),
+`endif
 `ifdef SD
 	o_syst_type,
 `endif
@@ -74,7 +78,11 @@ input               i_retire;
 `ifdef SD
 input [STO_BW-1:0]  i_syst_type;
 `endif
+`ifdef VERI_TOP_RemapCache
+`rdyack2_output(rd);
+`else
 `rdyack_output(rd);
+`endif
 `ifdef SD
 output [STO_BW-1:0] o_syst_type;
 `endif

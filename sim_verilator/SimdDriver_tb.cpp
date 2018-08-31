@@ -98,8 +98,11 @@ int main()
 		Eval;
 		if (Nicotb::nicotb_fin_wire) {
 			n_sim_cycle = min(cycle + SIM_CYCLE_AFTER_STOP, n_sim_cycle);
+			goto cleanup;
 		}
 	}
+	cout << "Timeout\n";
+	ret = 1;
 cleanup:
 	cout << "Simulation stop at timestep " << cycle << endl;
 	tfp->close();
