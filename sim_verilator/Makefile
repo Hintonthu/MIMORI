@@ -5,6 +5,15 @@ MKFLAG=-j
 NPY_CFLAGS=-I$(shell $(PY) -c "from numpy import get_include as i; print(i())") \
            $(shell $(PY)-config --includes) -DNPY_NO_DEPRECATED_API=NPY_1_7_API_VERSION
 
+top_sc_all:
+	TEST_CFG=0 make                top_sc
+	TEST_CFG=1 make COMPILE_ONLY=1 top_sc
+	TEST_CFG=2 make COMPILE_ONLY=1 top_sc
+	TEST_CFG=3 make COMPILE_ONLY=1 top_sc
+	TEST_CFG=4 make COMPILE_ONLY=1 top_sc
+	TEST_CFG=5 make COMPILE_ONLY=1 top_sc
+	TEST_CFG=6 make COMPILE_ONLY=1 top_sc
+
 # Usage: TEST_CFG=X make top_xx (default X = 0)
 top_sc:
 	make CFLAGS="-DSC" VERI_FLAGS="+define+SC" VF_PATH="Top.sv" Top
@@ -71,7 +80,7 @@ rmc:
 	 -LDFLAGS "-lz" -CFLAGS "-O2 --std=c++11 $(CFLAGS) $(NPY_CFLAGS) -I$(NICOTB)/cpp"
 	make -j $(MKFLAG) -C $(MDIR) -f $(EXE).mk
 	GLOG_logtostderr=1 \
-	GLOG_minloglevel=0 \
+	GLOG_minloglevel=1 \
 	PYTHONPATH=$(NICOTB)/python:`pwd`/../sim/ \
 	TEST=$(TEST) \
 	$(GDB) ./$(MDIR)/$(EXE)

@@ -1,0 +1,14 @@
+sudo: required
+dist: trusty
+install:
+    - sudo add-apt-repository -y ppa:ubuntu-toolchain-r/test
+    - sudo apt-get update -qq
+    - sudo apt-get install -qq -y g++-5 git make python3 python3-numpy python3-dev libgoogle-glog-dev verilator
+    - sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-5 90
+    - git submodule update --init --recursive
+script:
+    - make -C sim/UmiModel
+    - make -C sim_verilator top_sc_all
+branches:
+    only:
+        - master
