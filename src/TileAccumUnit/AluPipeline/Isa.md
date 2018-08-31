@@ -10,7 +10,6 @@ shift amount
 
 * `000 a + ((b+c)     >> shamt)`
 * `001 a + ((b-c)     >> shamt)`
-* `010 a + ((b-c)^2   >> shamt)` ; only lower 16 bit of b and c is used
 * `011 a + (|b-c|     >> shamt)`
 * `100 a + ((b*c)     >> shamt)` ; only lower 16 bit of b and c is used
 * `101`
