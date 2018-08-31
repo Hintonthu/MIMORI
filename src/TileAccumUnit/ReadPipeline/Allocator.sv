@@ -26,7 +26,11 @@ module Allocator(
 `ifdef SD
 	i_false_alloc,
 `endif
+`ifdef VERI_TOP_Allocator
+	`rdyack2_port(linear),
+`else
 	`rdyack_port(linear),
+`endif
 	o_linear,
 	o_linear_id,
 `ifdef SD
@@ -38,6 +42,9 @@ module Allocator(
 	i_false_free,
 `endif
 	`dval_port(blkdone)
+`ifdef VERI_TOP_Allocator
+	, lbw, capacity
+`endif
 );
 
 //======================================
@@ -59,7 +66,11 @@ input [ICFG_BW-1:0] i_alloc_id;
 `ifdef SD
 input               i_false_alloc;
 `endif
+`ifdef VERI_TOP_Allocator
+`rdyack2_output(linear);
+`else
 `rdyack_output(linear);
+`endif
 output logic [LBW-1:0]     o_linear;
 output logic [ICFG_BW-1:0] o_linear_id;
 `ifdef SD
@@ -71,6 +82,10 @@ input [ICFG_BW-1:0] i_free_id;
 input               i_false_free;
 `endif
 `dval_input(blkdone);
+`ifdef VERI_TOP_Allocator
+output logic [31:0]  lbw;
+output logic [LBW:0] capacity;
+`endif
 
 //======================================
 // Internal
@@ -148,5 +163,10 @@ end
 	o_false_alloc <= i_false_alloc;
 `endif
 `ff_end
+
+`ifdef VERI_TOP_Allocator
+assign lbw = LBW;
+assign capacity = capacity_r;
+`endif
 
 endmodule

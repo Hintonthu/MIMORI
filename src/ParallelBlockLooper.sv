@@ -16,6 +16,7 @@
 // along with MIMORI.  If not, see <http://www.gnu.org/licenses/>.
 
 `include "common/define.sv"
+`include "common/TauCfg.sv"
 `include "common/OffsetStage.sv"
 `include "common/Controllers.sv"
 
@@ -24,7 +25,11 @@ module ParallelBlockLooper(
 	`rdyack_port(src),
 	i_bgrid_step,
 	i_bgrid_end,
+`ifdef VERI_TOP_ParallelBlockLooper
+	`rdyack2_port(bofs),
+`else
 	`rdyack_port(bofs),
+`endif
 	o_bofs,
 	`dval_port(blkdone)
 );
@@ -42,7 +47,11 @@ localparam N_PENDING = TauCfg::MAX_PENDING_BLOCK;
 `rdyack_input(src);
 input [WBW-1:0] i_bgrid_step [VDIM];
 input [WBW-1:0] i_bgrid_end  [VDIM];
+`ifdef VERI_TOP_ParallelBlockLooper
+`rdyack2_output(bofs);
+`else
 `rdyack_output(bofs);
+`endif
 output logic [WBW-1:0] o_bofs [VDIM];
 `dval_input(blkdone);
 

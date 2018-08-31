@@ -23,7 +23,7 @@ def main():
 	seed = np.random.randint(10000)
 	print(f"Seed for this run is {seed}")
 	np.random.seed(seed)
-	N = 1000
+	N = 250
 	scb = Scoreboard("Fifo")
 	test = scb.GetTest("test")
 	st = Stacker(N, callbacks=[test.Get])

@@ -15,7 +15,10 @@
 // You should have received a copy of the GNU General Public License
 // along with MIMORI.  If not, see <http://www.gnu.org/licenses/>.
 
+`include "common/TauCfg.sv"
 `include "common/define.sv"
+`include "common/Controllers.sv"
+`include "common/OffsetStage.sv"
 `include "common/ND.sv"
 
 module AccumBlockLooper(
@@ -39,7 +42,11 @@ module AccumBlockLooper(
 	i_o_id_ends,
 	i_inst_id_begs,
 	i_inst_id_ends,
+`ifdef VERI_TOP_AccumBlockLooper
+	`rdyack2_port(i0_abofs),
+`else
 	`rdyack_port(i0_abofs),
+`endif
 	o_i0_bofs,
 	o_i0_aofs_beg,
 	o_i0_aofs_end,
@@ -48,7 +55,11 @@ module AccumBlockLooper(
 `ifdef SD
 	o_i0_syst_type, // See SystolicSwitch.sv
 `endif
+`ifdef VERI_TOP_AccumBlockLooper
+	`rdyack2_port(i1_abofs),
+`else
 	`rdyack_port(i1_abofs),
+`endif
 	o_i1_bofs,
 	o_i1_aofs_beg,
 	o_i1_aofs_end,
@@ -57,13 +68,21 @@ module AccumBlockLooper(
 `ifdef SD
 	o_i1_syst_type,
 `endif
+`ifdef VERI_TOP_AccumBlockLooper
+	`rdyack2_port(o_abofs),
+`else
 	`rdyack_port(o_abofs),
+`endif
 	o_o_bofs,
 	o_o_aofs_beg,
 	o_o_aofs_end,
 	o_o_beg,
 	o_o_end,
+`ifdef VERI_TOP_AccumBlockLooper
+	`rdyack2_port(alu_abofs),
+`else
 	`rdyack_port(alu_abofs),
+`endif
 	o_alu_bofs,
 	o_alu_aofs_beg,
 	o_alu_aofs_end,
@@ -115,7 +134,11 @@ input [OCFG_BW-1:0] i_o_id_begs [VDIM+1];
 input [OCFG_BW-1:0] i_o_id_ends [VDIM+1];
 input [INST_BW-1:0] i_inst_id_begs [VDIM+1];
 input [INST_BW-1:0] i_inst_id_ends [VDIM+1];
+`ifdef VERI_TOP_AccumBlockLooper
+`rdyack2_output(i0_abofs);
+`else
 `rdyack_output(i0_abofs);
+`endif
 output logic [WBW-1:0]     o_i0_bofs     [VDIM];
 output logic [WBW-1:0]     o_i0_aofs_beg [VDIM];
 output logic [WBW-1:0]     o_i0_aofs_end [VDIM];
@@ -124,7 +147,11 @@ output logic [ICFG_BW-1:0] o_i0_end;
 `ifdef SD
 output logic [STO_BW-1:0]  o_i0_syst_type;
 `endif
+`ifdef VERI_TOP_AccumBlockLooper
+`rdyack2_output(i1_abofs);
+`else
 `rdyack_output(i1_abofs);
+`endif
 output logic [WBW-1:0]     o_i1_bofs     [VDIM];
 output logic [WBW-1:0]     o_i1_aofs_beg [VDIM];
 output logic [WBW-1:0]     o_i1_aofs_end [VDIM];
@@ -133,13 +160,21 @@ output logic [ICFG_BW-1:0] o_i1_end;
 `ifdef SD
 output logic [STO_BW-1:0]  o_i1_syst_type;
 `endif
+`ifdef VERI_TOP_AccumBlockLooper
+`rdyack2_output(o_abofs);
+`else
 `rdyack_output(o_abofs);
+`endif
 output logic [WBW-1:0]     o_o_bofs     [VDIM];
 output logic [WBW-1:0]     o_o_aofs_beg [VDIM];
 output logic [WBW-1:0]     o_o_aofs_end [VDIM];
 output logic [OCFG_BW-1:0] o_o_beg;
 output logic [OCFG_BW-1:0] o_o_end;
+`ifdef VERI_TOP_AccumBlockLooper
+`rdyack2_output(alu_abofs);
+`else
 `rdyack_output(alu_abofs);
+`endif
 output logic [WBW-1:0] o_alu_bofs     [VDIM];
 output logic [WBW-1:0] o_alu_aofs_beg [VDIM];
 output logic [WBW-1:0] o_alu_aofs_end [VDIM];

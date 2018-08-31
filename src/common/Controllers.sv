@@ -290,7 +290,7 @@ logic [N-1:0] dst_rdys_w;
 assign dst_rdys = src_rdy ? dst_rdys_r : '0;
 always_comb begin
 	src_ack = dst_acks[N-1];
-	priority case ({src_ack, dst_acks[N-2:0]})
+	priority case ({src_ack, |dst_acks[N-2:0]})
 		2'b00: dst_rdys_w = dst_rdys_r;
 		2'b10: dst_rdys_w = 'b1;
 		2'b01: dst_rdys_w = dst_rdys_r<<1;

@@ -21,9 +21,8 @@
 
 module RemapCache(
 	`clk_port,
-	i_xor_masks,
-	i_xor_schemes,
-	i_xor_configs,
+	i_xor_srcs,
+	i_xor_swaps,
 	`rdyack_port(ra),
 	i_rid,
 	i_raddr,
@@ -31,7 +30,11 @@ module RemapCache(
 `ifdef SD
 	i_syst_type,
 `endif
+`ifdef VERI_TOP_RemapCache
+	`rdyack2_port(rd),
+`else
 	`rdyack_port(rd),
+`endif
 `ifdef SD
 	o_syst_type,
 `endif
@@ -66,9 +69,8 @@ localparam NDATA = 1<<HBW;
 // I/O
 //======================================
 `clk_input;
-input [CV_BW-1:0]   i_xor_masks   [N_ICFG];
-input [CCV_BW-1:0]  i_xor_schemes [N_ICFG][CV_BW];
-input [XOR_BW-1:0]  i_xor_configs [N_ICFG];
+input [XOR_BW-1:0] i_xor_srcs [N_ICFG][CV_BW];
+input [CCV_BW-1:0] i_xor_swaps [N_ICFG];
 `rdyack_input(ra);
 input [ICFG_BW-1:0] i_rid;
 input [LBW-1:0]     i_raddr [VSIZE];
@@ -76,7 +78,11 @@ input               i_retire;
 `ifdef SD
 input [STO_BW-1:0]  i_syst_type;
 `endif
+`ifdef VERI_TOP_RemapCache
+`rdyack2_output(rd);
+`else
 `rdyack_output(rd);
+`endif
 `ifdef SD
 output [STO_BW-1:0] o_syst_type;
 `endif
@@ -98,6 +104,16 @@ logic [VSIZE-1:0] sram_re;
 logic [HBW-1:0] sram_ra [VSIZE];
 logic [DBW-1:0] sram_rd [VSIZE];
 logic [DBW-1:0] sram_wd [VSIZE];
+logic [XOR_BW-1:0] xor_rsrc [CV_BW];
+logic [XOR_BW-1:0] xor_wsrc [CV_BW];
+
+//======================================
+// Combinational
+//======================================
+always_comb for (int i = 0; i < CV_BW; i++) begin
+	xor_rsrc[i] = i_xor_srcs[i_rid][i];
+	xor_wsrc[i] = i_xor_srcs[i_wid][i];
+end
 
 //======================================
 // Submodules
@@ -110,9 +126,8 @@ BankSramReadIf #(
 ) u_rif (
 	`clk_connect,
 	`rdyack_connect(addrin, ra),
-	.i_xor_mask(i_xor_masks[i_rid]),
-	.i_xor_scheme(i_xor_schemes[i_rid]),
-	.i_xor_config(i_xor_configs[i_rid]),
+	.i_xor_src(xor_rsrc),
+	.i_xor_swap(i_xor_swaps[i_rid]),
 	.i_id(i_rid),
 	.i_raddr(i_raddr),
 	.i_retire(i_retire),
@@ -139,9 +154,8 @@ BankSramButterflyWriteIf #(
 	.NDATA(NDATA),
 	.NBANK(VSIZE)
 ) u_wif (
-	.i_xor_mask(i_xor_masks[i_wid]),
-	.i_xor_scheme(i_xor_schemes[i_wid]),
-	.i_xor_config(i_xor_configs[i_wid]),
+	.i_xor_src(xor_wsrc),
+	.i_xor_swap(i_xor_swaps[i_wid]),
 	.i_hiaddr(i_whiaddr),
 	.i_data(i_wdata),
 	.o_data(sram_wd)

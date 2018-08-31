@@ -19,9 +19,8 @@
 `include "TileAccumUnit/ReadPipeline/RemapCache/codegen/RemapCacheSwapUnit5.sv"
 
 module BankSramButterflyWriteIf(
-	i_xor_mask,
-	i_xor_scheme,
-	i_xor_config,
+	i_xor_src,
+	i_xor_swap,
 	i_hiaddr,
 	i_data,
 	o_data
@@ -34,6 +33,7 @@ parameter BW = 8;
 parameter NDATA = 32;
 parameter NBANK = 16;
 parameter XOR_BW = TauCfg::XOR_BW;
+localparam XOR_ADDR_BW = 1<<XOR_BW;
 localparam CLOG2_NDATA = $clog2(NDATA);
 localparam CLOG2_NBANK = $clog2(NBANK);
 localparam CCLOG2_NBANK = $clog2(CLOG2_NBANK);
@@ -42,9 +42,8 @@ localparam BANK_MASK = NBANK-1;
 //======================================
 // I/O
 //======================================
-input [CLOG2_NBANK-1:0]  i_xor_mask;
-input [CCLOG2_NBANK-1:0] i_xor_scheme [CLOG2_NBANK];
-input [XOR_BW-1:0]       i_xor_config;
+input [XOR_BW-1:0]       i_xor_src [CLOG2_NBANK];
+input [CCLOG2_NBANK-1:0] i_xor_swap;
 input [CLOG2_NDATA-1:0]  i_hiaddr;
 input        [BW-1:0] i_data [NBANK];
 output logic [BW-1:0] o_data [NBANK];
@@ -53,28 +52,46 @@ output logic [BW-1:0] o_data [NBANK];
 // Internal
 //======================================
 logic [CLOG2_NBANK-1:0] i_flags;
+logic [BW-1:0] i_bf [CLOG2_NBANK+CCLOG2_NBANK+1][NBANK];
+// We can address at most these bits
+logic [XOR_ADDR_BW-1:0] i_addrs [NBANK];
 
 //======================================
 // Combinational
 //======================================
-`include "TileAccumUnit/ReadPipeline/RemapCache/rmc_common_include.sv"
-assign i_flags = XMask(i_hiaddr, i_xor_mask, i_xor_scheme);
-
-//======================================
-// Submodules
-//======================================
-// I give up. Let the code generator do it.
-generate if (CLOG2_NBANK == 5) begin: rmc_write_5
-	RemapCacheSwapUnit5#(BW) u_rmc_su(
-		.i_data(i_data),
-		.i_flags({i_flags, i_xor_config}),
-		.o_data(o_data)
-	);
-end else begin: rmc_write_error
-	initial begin
-		$display("Only support 32-way SIMD now.");
-		$finish;
+always_comb begin
+	for (int i = 0; i < NBANK; ++i) begin
+		// FIXME: lint bit width error
+		// FIXME: stuck at 0
+		i_addrs[i][CLOG2_NBANK-1:0] = i;
+		i_addrs[i][XOR_ADDR_BW-2:CLOG2_NBANK] = i_hiaddr;
+		i_addrs[i][XOR_ADDR_BW-1] = 1'b0;
 	end
-end endgenerate
+end
+
+always_comb begin
+	for (int i = 0; i < NBANK; ++i) begin
+		i_bf[0][i] = i_data[i];
+	end
+	// Butterfly (LSB -> MSB)
+	for (int i = 0; i < CLOG2_NBANK; ++i) begin
+		for (int j = 0; j < NBANK; ++j) begin
+			i_bf[i+1][j] = i_addrs[j][i_xor_src[i]] ? i_bf[i][j^(1<<i)] : i_bf[i][j];
+		end
+	end
+	// Omega (LSB -> MSB)
+	for (int i = 0; i < CCLOG2_NBANK; ++i) begin
+		for (int j = 0; j < NBANK; ++j) begin
+			i_bf[i+CLOG2_NBANK+1][j] = (
+				i_xor_swap[i] ?
+				i_bf[CLOG2_NBANK+i][((j|(j<<CLOG2_NBANK))>>(1<<i))&BANK_MASK] :
+				i_bf[CLOG2_NBANK+i][j]
+			);
+		end
+	end
+	for (int i = 0; i < NBANK; ++i) begin
+		o_data[i] = i_bf[CLOG2_NBANK+CCLOG2_NBANK][i];
+	end
+end
 
 endmodule

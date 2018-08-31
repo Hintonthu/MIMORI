@@ -2,6 +2,7 @@
 !*/
 !.gitignore
 !.gitmodules
+!*.cpp
 !*.py
 !*.v
 !*.sv

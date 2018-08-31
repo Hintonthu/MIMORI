@@ -45,9 +45,8 @@ module TileAccumUnit(
 	i_bgrid_step,
 	i_agrid_end,
 	i_aboundary,
-	i_i0_local_xor_masks,
-	i_i0_local_xor_schemes,
-	i_i0_local_xor_configs,
+	i_i0_local_xor_srcs,
+	i_i0_local_xor_swaps,
 	i_i0_local_boundaries,
 	i_i0_local_bsubsteps,
 	i_i0_local_pads,
@@ -72,9 +71,8 @@ module TileAccumUnit(
 `ifdef SD
 	i_i0_systolic_skip,
 `endif
-	i_i1_local_xor_masks,
-	i_i1_local_xor_schemes,
-	i_i1_local_xor_configs,
+	i_i1_local_xor_srcs,
+	i_i1_local_xor_swaps,
 	i_i1_local_boundaries,
 	i_i1_local_bsubsteps,
 	i_i1_local_pads,
@@ -212,9 +210,8 @@ input [WBW-1:0]     i_agrid_step     [VDIM];
 input [WBW-1:0]     i_bgrid_step     [VDIM];
 input [WBW-1:0]     i_agrid_end      [VDIM];
 input [WBW-1:0]     i_aboundary      [VDIM];
-input [CV_BW-1:0]   i_i0_local_xor_masks    [N_ICFG];
-input [CCV_BW-1:0]  i_i0_local_xor_schemes  [N_ICFG][CV_BW];
-input [XOR_BW-1:0]  i_i0_local_xor_configs  [N_ICFG];
+input [XOR_BW-1:0]  i_i0_local_xor_srcs     [N_ICFG][CV_BW];
+input [CCV_BW-1:0]  i_i0_local_xor_swaps    [N_ICFG];
 input [LBW0-1:0]    i_i0_local_boundaries   [N_ICFG][DIM];
 input [LBW0-1:0]    i_i0_local_bsubsteps    [N_ICFG][CV_BW];
 input [CV_BW-1:0]   i_i0_local_pads         [N_ICFG][DIM];
@@ -239,9 +236,8 @@ input [LBW0-1:0]    i_i0_stencil_lut [STSIZE];
 `ifdef SD
 input [N_ICFG-1:0]  i_i0_systolic_skip;
 `endif
-input [CV_BW-1:0]   i_i1_local_xor_masks    [N_ICFG];
-input [CCV_BW-1:0]  i_i1_local_xor_schemes  [N_ICFG][CV_BW];
-input [XOR_BW-1:0]  i_i1_local_xor_configs  [N_ICFG];
+input [XOR_BW-1:0]  i_i1_local_xor_srcs     [N_ICFG][CV_BW];
+input [CCV_BW-1:0]  i_i1_local_xor_swaps    [N_ICFG];
 input [LBW1-1:0]    i_i1_local_boundaries   [N_ICFG][DIM];
 input [LBW1-1:0]    i_i1_local_bsubsteps    [N_ICFG][CV_BW];
 input [CV_BW-1:0]   i_i1_local_pads         [N_ICFG][DIM];
@@ -541,9 +537,8 @@ ReadPipeline#(.LBW(LBW0)) u_r0(
 	.i_global_ashufs(i_i0_global_ashufs),
 	.i_astrides_frac(i_i0_astrides_frac),
 	.i_astrides_shamt(i_i0_astrides_shamt),
-	.i_local_xor_masks(i_i0_local_xor_masks),
-	.i_local_xor_schemes(i_i0_local_xor_schemes),
-	.i_local_xor_configs(i_i0_local_xor_configs),
+	.i_local_xor_srcs(i_i0_local_xor_srcs),
+	.i_local_xor_swaps(i_i0_local_xor_swaps),
 	.i_local_pads(i_i0_local_pads),
 	.i_local_bsubsteps(i_i0_local_bsubsteps),
 	.i_local_mboundaries(i_i0_local_boundaries),
@@ -594,9 +589,8 @@ ReadPipeline#(.LBW(LBW1)) u_r1(
 	.i_global_ashufs(i_i1_global_ashufs),
 	.i_astrides_frac(i_i1_astrides_frac),
 	.i_astrides_shamt(i_i1_astrides_shamt),
-	.i_local_xor_masks(i_i1_local_xor_masks),
-	.i_local_xor_schemes(i_i1_local_xor_schemes),
-	.i_local_xor_configs(i_i1_local_xor_configs),
+	.i_local_xor_srcs(i_i1_local_xor_srcs),
+	.i_local_xor_swaps(i_i1_local_xor_swaps),
 	.i_local_pads(i_i1_local_pads),
 	.i_local_bsubsteps(i_i1_local_bsubsteps),
 	.i_local_mboundaries(i_i1_local_boundaries),

@@ -87,10 +87,13 @@ module SFifo(
 	`clk_port,
 	`rdyack_port(src),
 	i_data,
+`ifdef VERI_TOP_SFifo
+	`rdyack2_port(dst),
+`else
 	`rdyack_port(dst),
+`endif
 	o_data
 );
-
 // 0: register
 // 1: TP sram
 parameter IMPL = 0;
@@ -109,7 +112,11 @@ endtask
 `clk_input;
 `rdyack_input(src);
 input [BW-1:0] i_data;
+`ifdef VERI_TOP_SFifo
+`rdyack2_output(dst);
+`else
 `rdyack_output(dst);
+`endif
 output logic [BW-1:0] o_data;
 genvar gi;
 
@@ -141,7 +148,7 @@ generate if (IMPL == 0 && NDATA >= 2) begin: fifo_reg
 		data_r[NDATA-1] <= i_data;
 	`ff_end
 end else if (IMPL == 1 && NDATA >= 2) begin: fifo_2p
-	logic dst_rdy_w, sfull, sempty;
+	logic dst_rdy_w, sfull, sempty, re;
 	logic [CL_N-1:0]  ra_r, ra_w, wa_r, wa_w;
 	assign src_ack = src_rdy && !sfull;
 	// rdy -> if ack and empty, then stop; if ack but not empty, then read next;

@@ -154,6 +154,9 @@ always_comb begin
 	req_rd0 = req_rd0_a || req_rd0_b || req_rd0_c;
 	req_rd1 = req_rd1_a || req_rd1_b || req_rd1_c;
 	data_ready = op_rdy && !(req_rd0 && !sramrd0_rdy) && !(req_rd1 && !sramrd1_rdy);
+end
+
+always_comb begin
 	dramwd_rdy = data_ready && to_dram;
 	op_ack = dramwd_ack || data_ready && !to_dram;
 	reg_we_dval = op_ack && i_to_reg;
@@ -277,7 +280,7 @@ always_comb begin
 	priority case (i_opcode)
 		3'b000: result = AluOpAdd(sel_a, sel_b, sel_c, i_shamt, i_opcode == 3'b000);
 		3'b001: result = AluOpSub(sel_a, sel_b, sel_c, i_shamt, i_opcode == 3'b001);
-		3'b010: result = AluOp2Norm(sel_a, sel_b, sel_c, i_shamt, i_opcode == 3'b010);
+		// 3'b010: result = AluOp2Norm(sel_a, sel_b, sel_c, i_shamt, i_opcode == 3'b010);
 		3'b011: result = AluOp1Norm(sel_a, sel_b, sel_c, i_shamt, i_opcode == 3'b011);
 		3'b100: result = AluOpMac(sel_a, sel_b, sel_c, i_shamt, i_opcode == 3'b100);
 		// 3'b110: result = AluOpNull();

@@ -52,9 +52,8 @@ module ReadPipeline(
 	i_global_ashufs,
 	i_astrides_frac,
 	i_astrides_shamt,
-	i_local_xor_masks,
-	i_local_xor_schemes,
-	i_local_xor_configs,
+	i_local_xor_srcs,
+	i_local_xor_swaps,
 	i_local_pads,
 	i_local_bsubsteps,
 	i_local_mboundaries,
@@ -138,9 +137,8 @@ input [SS_BW-1:0]   i_bstrides_shamt     [N_ICFG][VDIM];
 input [DIM_BW-1:0]  i_global_ashufs      [N_ICFG][VDIM];
 input [SF_BW-1:0]   i_astrides_frac      [N_ICFG][VDIM];
 input [SS_BW-1:0]   i_astrides_shamt     [N_ICFG][VDIM];
-input [CV_BW-1:0]   i_local_xor_masks    [N_ICFG];
-input [CCV_BW-1:0]  i_local_xor_schemes  [N_ICFG][CV_BW];
-input [XOR_BW-1:0]  i_local_xor_configs  [N_ICFG];
+input [XOR_BW-1:0]  i_local_xor_srcs     [N_ICFG][CV_BW];
+input [CCV_BW-1:0]  i_local_xor_swaps    [N_ICFG];
 input [CV_BW-1:0]   i_local_pads         [N_ICFG][DIM];
 input [LBW-1:0]     i_local_bsubsteps    [N_ICFG][CV_BW];
 input [LBW-1:0]     i_local_mboundaries  [N_ICFG][DIM];
@@ -186,10 +184,16 @@ logic [ICFG_BW-1:0] ch_mid;
 `rdyack_logic(ch_alloc_mofs_dst2);// if alloc counter < MAX
 logic [ICFG_BW-1:0] ch_alloc_mid;
 `rdyack_logic(ch_cmd_mofs_dst);   // pipeline
+logic [CV_BW-1:0]   ch_cmd_local_pad [DIM];
+logic [GBW-1:0]     ch_cmd_global_mboundary [DIM];
+logic [GBW-1:0]     ch_cmd_global_cboundary [DIM];
 logic [GBW-1:0]     ch_cmd_mofs [DIM];
 logic [ICFG_BW-1:0] ch_cmd_mid;
 `rdyack_logic(ch_addr_mofs_dst);  // pipeline
 `rdyack_logic(ch_addr_mofs_dst2); // if alloc counter > 0
+logic [CV_BW-1:0]   ch_addr_local_pad [DIM];
+logic [GBW-1:0]     ch_addr_global_mboundary [DIM];
+logic [GBW-1:0]     ch_addr_global_cboundary [DIM];
 logic [GBW-1:0]     ch_addr_mofs [DIM];
 logic [ICFG_BW-1:0] ch_addr_mid;
 `rdyack_logic(cal_cmd);
@@ -437,9 +441,8 @@ SramWriteCollector#(.LBW(LBW)) u_swc(
 // TODO: See AccumWarpLooper
 RemapCache#(.LBW(LBW)) u_rmc(
 	`clk_connect,
-	.i_xor_masks(i_local_xor_masks),
-	.i_xor_schemes(i_local_xor_schemes),
-	.i_xor_configs(i_local_xor_configs),
+	.i_xor_srcs(i_local_xor_srcs),
+	.i_xor_swaps(i_local_xor_swaps),
 	`rdyack_connect(ra, warp_rmc_addrval),
 	.i_rid(warp_rmc_id),
 	.i_raddr(warp_rmc_addr),
@@ -466,11 +469,11 @@ ChunkAddrLooper#(.LBW(LBW)) u_cal_addr(
 	`clk_connect,
 	`rdyack_connect(mofs, ch_addr_mofs_dst2),
 	.i_mofs(ch_addr_mofs),
-	.i_mpad(i_local_pads[ch_cmd_mid]),
-	.i_mbound(i_global_mboundaries[ch_cmd_mid]),
-	.i_mlast(i_global_cboundaries[ch_cmd_mid]),
-	.i_maddr(i_global_linears[ch_cmd_mid]),
-	.i_wrap(i_wrap[ch_cmd_mid]),
+	.i_mpad(ch_addr_local_pad),
+	.i_mbound(ch_addr_global_mboundary),
+	.i_mlast(ch_addr_global_cboundary),
+	.i_maddr(i_global_linears[ch_addr_mid]),
+	.i_wrap(i_wrap[ch_addr_mid]),
 	`rdyack_connect(cmd, cal_addr),
 	.o_cmd_type(),
 	.o_cmd_islast(cal_addr_islast),
@@ -482,11 +485,11 @@ ChunkAddrLooper#(.LBW(LBW)) u_cal_cmd(
 	`clk_connect,
 	`rdyack_connect(mofs, ch_cmd_mofs_dst),
 	.i_mofs(ch_cmd_mofs),
-	.i_mpad(i_local_pads[ch_addr_mid]),
-	.i_mbound(i_global_mboundaries[ch_addr_mid]),
-	.i_mlast(i_global_cboundaries[ch_addr_mid]),
-	.i_maddr(i_global_linears[ch_addr_mid]),
-	.i_wrap(i_wrap[ch_addr_mid]),
+	.i_mpad(ch_cmd_local_pad),
+	.i_mbound(ch_cmd_global_mboundary),
+	.i_mlast(ch_cmd_global_cboundary),
+	.i_maddr(i_global_linears[ch_cmd_mid]),
+	.i_wrap(i_wrap[ch_cmd_mid]),
 	`rdyack_connect(cmd, cal_writer_cmd),
 	.o_cmd_type(cal_writer_type),
 	.o_cmd_islast(cal_writer_islast),
@@ -551,7 +554,14 @@ end
 
 always_comb for (int i = 0; i < DIM; i++) begin
 	ch_mofs_sext[i] = $signed(ch_mofs[i]);
+	ch_cmd_local_pad[i] = i_local_pads[ch_cmd_mid][i];
+	ch_cmd_global_mboundary[i] = i_global_mboundaries[ch_cmd_mid][i];
+	ch_cmd_global_cboundary[i] = i_global_cboundaries[ch_cmd_mid][i];
+	ch_addr_local_pad[i] = i_local_pads[ch_addr_mid][i];
+	ch_addr_global_mboundary[i] = i_global_mboundaries[ch_addr_mid][i];
+	ch_addr_global_cboundary[i] = i_global_cboundaries[ch_addr_mid][i];
 end
+
 
 //======================================
 // Sequential

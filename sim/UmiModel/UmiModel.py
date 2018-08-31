@@ -19,7 +19,31 @@
 from __future__ import print_function, division
 from os import environ
 from . import npi, npd, newaxis, i16
-from .ramulator import MemorySpace
+import bisect
+
+class MemorySpace(object):
+	def __init__(self, mranges, n):
+		mranges.sort(key=lambda x: x[0])
+		self.keys = [x[0] for x in mranges]
+		self.values = [x[1] for x in mranges]
+		self.n = n
+
+	def FindRange(self, a):
+		idx = bisect.bisect_right(self.keys, a)-1
+		return a-self.keys[idx], self.values[idx]
+
+	def WriteScalarMask(self, a, d, m):
+		m = npd.bitwise_and(m[0]>>npi.arange(self.n), 1) != 0
+		aa, mem = self.FindRange(a[0])
+		mem[aa:aa+self.n][m] = d[m]
+
+	def Write(self, a, d, m):
+		aa, mem = self.FindRange(a[0])
+		mem[aa:aa+self.n][m] = d[m]
+
+	def Read(self, a):
+		aa, mem = self.FindRange(a[0])
+		return mem[aa:aa+self.n]
 
 def ExtractUFloat(i, frac_bw):
 	i = int(i)
@@ -46,6 +70,13 @@ def Clog2(i, exact=False):
 		ret += 1
 		i >>= 1
 	assert not exact or (1<<ret) == ii
+	return ret
+
+def TrailingZeros(i):
+	ret = 0
+	while (i&1) == 0:
+		ret += 1
+		i >>= 1
 	return ret
 
 class UmiModel(object):
@@ -103,7 +134,7 @@ class UmiModel(object):
 		'mstart', # precomuted offsets
 		'lmpad', 'lmsize', # derived from lmwidth, lmalign
 		'vlinear', # precomputed vector addresses local/global for I/O
-		'xor_mask', 'xor_src', 'xor_config', # XOR scheme: TODO document
+		'xor_src', 'xor_swap', # XOR scheme: TODO document
 	], [
 		DIM,1,2*VDIM,2*VDIM,2*VDIM,DIM,DIM,
 		1,1,
@@ -113,7 +144,7 @@ class UmiModel(object):
 		DIM,
 		DIM,1,
 		VSIZE,
-		1,LG_VSIZE,1,
+		LG_VSIZE,1,
 	])
 	# cmd_type 0: fill addr[ofs:ofs+len] to SRAM
 	# cmd_type 1: repeat addr[ofs] len times to SRAM
@@ -187,6 +218,25 @@ class UmiModel(object):
 		)
 
 	@staticmethod
+	def _CalXor(strides, xor_src, xor_swap):
+		s = npd.empty_like(strides)
+		n = s.size
+		for i in range(n):
+			st = strides[i]
+			if st != 0:
+				s[i] = TrailingZeros(strides[i])
+		min_element = npd.argmin(s)
+		xor_swap[0] = min_element
+		ind = npd.roll(npi.arange(n), min_element)
+		xor_src[:] = -1
+		for i in range(n):
+			dst = ind[i]
+			src = s[i]
+			if strides[i] != 0 and src != dst:
+				assert xor_src[dst] == -1, "Cannot create a suitable scheme"
+				xor_src[dst] = src
+
+	@staticmethod
 	def _CountBlockRoutine(ref_local, ref_end=None):
 		"""
 			Input:
@@ -204,7 +254,7 @@ class UmiModel(object):
 		n_ref = ref_ofs.shape[0]
 		return n_ref, ref_ofs
 
-	def _InitUmcfg(self, umcfg, n, is_local):
+	def _InitUmcfg(self, umcfg, n, is_local, xor_fallback):
 		# layout of umcfg
 		#   aaaapppp
 		n_total = n[1][-1]
@@ -223,6 +273,12 @@ class UmiModel(object):
 		# Calculate vector related
 		if is_local:
 			umcfg['vlinear'] = npd.dot(self._CalStride(umcfg, True), self.v_nd.T)
+			# if true, then use the value provided by users
+			if not xor_fallback:
+				idx = npi.ones(UmiModel.LG_VSIZE) << npi.arange(UmiModel.LG_VSIZE)
+				for i in range(n_total):
+					# use i:i+1 to pass by reference
+					UmiModel._CalXor(umcfg['vlinear'][i,idx], umcfg['xor_src'][i,:], umcfg['xor_swap'][i:i+1])
 		else:
 			umcfg['vlinear'] = npd.dot(self._CalStride(umcfg, False), self.v_nd.T)
 		for i in range(n_total):
@@ -278,7 +334,7 @@ class UmiModel(object):
 		mofs[:,:-1] *= mbound[:,1:]
 		return mofs
 
-	def __init__(self, pcfg, acfg, umcfg_i0, umcfg_i1, umcfg_o, insts, n_i0, n_i1, n_o, n_inst):
+	def __init__(self, pcfg, acfg, umcfg_i0, umcfg_i1, umcfg_o, insts, n_i0, n_i1, n_o, n_inst, xor_fallback=False):
 		# convert to internal format
 		# v_nd_shuf, v_nd = head of warp, warp sub idx
 		self.pcfg, self.acfg, self.warp_nd, self.v_nd = self._InitApcfg(pcfg, acfg)
@@ -289,10 +345,10 @@ class UmiModel(object):
 			npi.empty(self.n_i0[1][-1]),
 			npi.empty(self.n_i1[1][-1]),
 		]
-		self.umcfg_i0 = self._InitUmcfg(umcfg_i0, n_i0, is_local=True)
-		self.umcfg_i1 = self._InitUmcfg(umcfg_i1, n_i1, is_local=True)
+		self.umcfg_i0 = self._InitUmcfg(umcfg_i0, n_i0, is_local=True, xor_fallback=xor_fallback)
+		self.umcfg_i1 = self._InitUmcfg(umcfg_i1, n_i1, is_local=True, xor_fallback=xor_fallback)
 		self.n_o = self._CvtRange(n_o)
-		self.umcfg_o = self._InitUmcfg(umcfg_o, n_o, is_local=False)
+		self.umcfg_o = self._InitUmcfg(umcfg_o, n_o, is_local=False, xor_fallback=True) # True is not used
 		self.n_inst = self._CvtRange(n_inst)
 		self.insts = insts
 		self.n_reg = 1
@@ -522,8 +578,6 @@ um_i0['udim'] = [[0,0,0,0,2,3,0,0,0,0,2,3],]
 um_i0['lmwidth'] = [[1,1,17,9],]
 um_i0['lmalign'] = [[192,192,192,10],]
 um_i0['mwidth'] = [[1,1,100,301],]
-um_i0['xor_mask'] = 0
-um_i0['xor_config'] = 0
 um_i0['pad_value'] = 0 if PAD is None else PAD
 
 um_i1['mwrap'].fill(UmiModel.MEM_WRAP)
@@ -534,8 +588,6 @@ um_i1['udim'] = [[0,0,0,0,2,3,0,0,0,0,0,0],]
 um_i1['lmwidth'] = [[1,1,2,2],]
 um_i1['lmalign'] = [[32,32,32,2],]
 um_i1['mwidth'] = [[1,1,3,3],]
-um_i1['xor_mask'] = 0
-um_i1['xor_config'] = 0
 
 um_o['mwrap'].fill(UmiModel.MEM_WRAP)
 um_o['mlinear'] = [300000]
@@ -621,9 +673,6 @@ um_i0['udim'] = [[0,0,0,0,0,3,0,0,0,0,0,2],]
 um_i0['lmwidth'] = [[1,1,32,32],]
 um_i0['lmalign'] = [[1024,1024,1024,32],]
 um_i0['mwidth'] = [[1,1,100,100],]
-um_i0['xor_mask'] = 0b11111
-um_i0['xor_src'] = [[0,1,2,3,4],]
-um_i0['xor_config'] = 0
 um_o['mwrap'].fill(UmiModel.MEM_WRAP)
 um_o['mlinear'] = [300000]
 um_o['ustart'] = [[0,0,0,0,0,0,0,0,0,0,0,0],]
@@ -696,8 +745,6 @@ um_i0['udim'] = [[0,0,0,0,0,3,0,0,0,0,2,0],]
 um_i0['lmwidth'] = [[1,1,64,16],]
 um_i0['lmalign'] = [[1024,1024,1024,16],]
 um_i0['mwidth'] = [[1,1,128,64],]
-um_i0['xor_mask'] = 0
-um_i0['xor_config'] = 0
 um_i1['mlinear'] = [100000]
 um_i1['ustart'] = [[0,0,0,0,0,0,0,0,0,0,0,0],]
 um_i1['ustride'] = [[0,0,0,0,0,1,0,0,0,0,0,1],]
@@ -705,8 +752,6 @@ um_i1['udim'] = [[0,0,0,0,0,2,0,0,0,0,0,3],]
 um_i1['lmwidth'] = [[1,1,16,32],]
 um_i1['lmalign'] = [[512,512,512,32],]
 um_i1['mwidth'] = [[1,1,64,64],]
-um_i1['xor_mask'] = 0
-um_i1['xor_config'] = 0
 um_o['mwrap'].fill(UmiModel.MEM_WRAP)
 um_o['mlinear'] = [300000]
 um_o['ustart'] = [[0,0,0,0,0,0,0,0,0,0,0,0],]
@@ -775,9 +820,6 @@ um_i0['udim'] = [[0,0,0,0,2,3,0,0,2,3,2,3],]
 um_i0['lmwidth'] = [[1,1,15,15],]
 um_i0['lmalign'] = [[256,256,256,16],]
 um_i0['mwidth'] = [[1,1,50,50],]
-um_i0['xor_mask'] = 0b11000
-um_i0['xor_src'] = [[-1,-1,-1,0,1],]
-um_i0['xor_config'] = 0
 um_i1['mlinear'] = [100000]
 um_i1['ustart'] = [[0,0,0,0,0,0,0,0,0,0,0,0],]
 um_i1['ustride'] = [[0,0,0,0,1,1,0,0,8,8,0,0],]
@@ -785,8 +827,6 @@ um_i1['udim'] = [[0,0,0,0,2,3,0,0,2,3,0,0],]
 um_i1['lmwidth'] = [[1,1,8,8],]
 um_i1['lmalign'] = [[64,64,64,8],]
 um_i1['mwidth'] = [[1,1,32,32],]
-um_i1['xor_mask'] = 0
-um_i1['xor_config'] = 0
 um_o['mwrap'].fill(UmiModel.MEM_WRAP)
 um_o['mlinear'] = [300000]
 um_o['ustart'] = [[0,0,0,0,0,0,0,0,0,0,0,0],]
@@ -892,13 +932,15 @@ verf_func.append(VerfFunc4)
 n_i0 = ([0,0,0,0,0,0,0], [1,1,1,1,1,1,1])
 n_i1 = ([0,0,0,0,0,0,0], [0,0,0,0,0,0,0])
 n_o = ([0,0,0,0,0,0,0], [0,0,0,0,0,0,1])
-n_inst = ([0,0,0,0,0,0,0], [0,0,0,0,0,0,4])
+n_inst = ([0,0,0,0,0,0,0], [0,0,0,0,0,0,6])
 insts = npd.array([
 	# OOOSSSSSRDDTWWWAAAAABBBBBCCCCC
 	0b000000000111000000001000000000, # y1 (push)
-	0b010000000111000000001000010010, # 0+(t0-y2)^2 (push)
+	0b001000000111000000001001010000, # t0-y2 (push)
+	0b100000001110000000001001010010, # R0 = 0+t0*t0
 	0b000000000111000000001000000000, # x1 (push)
-	0b010000000000000100111000010010, # DRAM = t1+(t0-x2)^2 (DRAM)
+	0b001000000111000000001001010000, # t0-x2 (push)
+	0b100000000000000110001001010010, # DRAM = R0+t0*t0 (DRAM)
 ], dtype=npd.uint32)
 p = npd.empty(1, UmiModel.PCFG_DTYPE)
 a = npd.empty(1, UmiModel.ACFG_DTYPE)
@@ -925,8 +967,6 @@ um_i0['udim'] = [[0,0,0,0,2,3,0,0,0,0,2,3],]
 um_i0['lmwidth'] = [[1,1,18,34],]
 um_i0['lmalign'] = [[640,640,640,34],]
 um_i0['mwidth'] = [[1,1,H_grad,W_grad],]
-um_i0['xor_mask'] = 0
-um_i0['xor_config'] = 0
 um_o['mwrap'].fill(UmiModel.MEM_WRAP)
 um_o['mlinear'] = [300000]
 um_o['ustart'] = [[0,0,0,0,0,0,0,0,0,0,0,0],]
@@ -997,9 +1037,6 @@ um_i0['udim'] = [[0,0,0,0,0,0,0,0,0,0,1,3],]
 um_i0['lmwidth'] = [[1,4,1,125],]
 um_i0['lmalign'] = [[512,512,125,125],]
 um_i0['mwidth'] = [[1,H_ds4,4,W_ds],]
-um_i0['xor_mask'] = 0b11000
-um_i0['xor_src'] = [[-1,-1,-1,0,1],]
-um_i0['xor_config'] = 2
 um_o['mwrap'].fill(UmiModel.MEM_WRAP)
 um_o['mlinear'] = [300000]
 um_o['ustart'] = [[0,0,0,0,0,0,0,0,0,0,0,0],]

@@ -91,6 +91,9 @@ output logic               o_skip;
 `rdyack_logic(i_abofs_delay);
 logic [WBW-1:0]     i_bofs_stride [VDIM];
 logic [WBW-1:0]     i_aofs_stride [VDIM];
+logic [WBW-1:0]     global_mofs_w   [DIM];
+logic [DIM_BW-1:0]  global_bshuf_w [VDIM];
+logic [DIM_BW-1:0]  global_ashuf_w [VDIM];
 logic [ICFG_BW-1:0] o_id1;
 logic [ICFG_BW-1:0] o_id_w;
 logic o_islast_id;
@@ -105,6 +108,12 @@ assign o_islast_id = o_id1 == i_end;
 always_comb for (int i = 0; i < VDIM; i++) begin
 	i_bofs_stride[i] = (i_bofs[i] * i_bstrides_frac[o_id_w][i]) << i_bstrides_shamt[o_id_w][i];
 	i_aofs_stride[i] = (i_aofs[i] * i_astrides_frac[o_id_w][i]) << i_astrides_shamt[o_id_w][i];
+	global_bshuf_w[i] = i_global_bshufs[o_id_w][i];
+	global_ashuf_w[i] = i_global_ashufs[o_id_w][i];
+end
+
+always_comb for (int i = 0; i < DIM; i++) begin
+	global_mofs_w[i] = i_global_mofs[o_id_w][i];
 end
 
 //======================================
@@ -122,12 +131,12 @@ AcceptIf#(1) u_oacc(
 	`rdyack_connect(dst, o_mofs)
 );
 NDShufAccum#(.BW(WBW), .DIM_IN(VDIM), .DIM_OUT(DIM), .ZERO_AUG(0)) u_saccum(
-	.i_augend(i_global_mofs[o_id_w]),
+	.i_augend(global_mofs_w),
 	.o_sum(o_mofs_w),
 	.i_addend1(i_bofs_stride),
 	.i_addend2(i_aofs_stride),
-	.i_shuf1(i_global_bshufs[o_id_w]),
-	.i_shuf2(i_global_ashufs[o_id_w])
+	.i_shuf1(global_bshuf_w),
+	.i_shuf2(global_ashuf_w)
 );
 
 //======================================
@@ -141,7 +150,7 @@ NDShufAccum#(.BW(WBW), .DIM_IN(VDIM), .DIM_OUT(DIM), .ZERO_AUG(0)) u_saccum(
 `ifdef SD
 	o_skip <= 1'b0;
 `endif
-`ff_cg(o_mofs_ack || i_init_dval)
+`ff_cg((o_mofs_ack && !o_islast_id) || i_init_dval)
 	o_id <= o_id_w;
 	o_mofs <= o_mofs_w;
 `ifdef SD

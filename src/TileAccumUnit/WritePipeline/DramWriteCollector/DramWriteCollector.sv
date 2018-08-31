@@ -16,6 +16,7 @@
 // along with MIMORI.  If not, see <http://www.gnu.org/licenses/>.
 
 `include "common/define.sv"
+`include "common/TauCfg.sv"
 `include "TileAccumUnit/WritePipeline/DramWriteCollector/DramWriteCollectorAddrDecode.sv"
 `include "TileAccumUnit/WritePipeline/DramWriteCollector/DramWriteCollectorOutput.sv"
 
@@ -26,7 +27,11 @@ module DramWriteCollector(
 	i_valid,
 	`rdyack_port(alu_dat),
 	i_alu_dat,
+`ifdef VERI_TOP_DramWriteCollector
+	`rdyack2_port(dramw),
+`else
 	`rdyack_port(dramw),
+`endif
 	o_dramwa,
 	o_dramwd,
 	o_dramw_mask
@@ -49,7 +54,11 @@ input [GBW-1:0]   i_address [VSIZE];
 input [VSIZE-1:0] i_valid;
 `rdyack_input(alu_dat);
 input [DBW-1:0] i_alu_dat [VSIZE];
+`ifdef VERI_TOP_DramWriteCollector
+`rdyack2_output(dramw);
+`else
 `rdyack_output(dramw);
+`endif
 output logic [GBW-1:0]   o_dramwa;
 output logic [DBW-1:0]   o_dramwd [CSIZE];
 output logic [CSIZE-1:0] o_dramw_mask;

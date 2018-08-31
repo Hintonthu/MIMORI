@@ -28,14 +28,24 @@ package TauCfg;
 	parameter STENCIL_SIZE = 31;
 	parameter MAX_PENDING_BLOCK = 1023;
 	parameter MAX_PENDING_INST = 7;
-	// This only works for multiple TAU version
-	parameter N_TAU = 4;
-	// This only works for systolic version
-	parameter N_TAU_Y = 2;
-	parameter N_TAU_X = 2;
+`ifdef SC
+	localparam N_TAU = 1;
+`endif
+`ifdef MC
+	localparam N_TAU = 4;
+`endif
+`ifdef SD
+	localparam N_TAU_X = 2;
+	localparam N_TAU_Y = 2;
+	localparam N_TAU = N_TAU_X * N_TAU_Y;
+	localparam CN_TAU_X = $clog2(N_TAU_X);
+	localparam CN_TAU_Y = $clog2(N_TAU_Y);
+	localparam CN_TAU_X1 = $clog2(N_TAU_X+1);
+	localparam CN_TAU_Y1 = $clog2(N_TAU_Y+1);
+`endif
 	parameter SYSTOLIC_FIFO_DEPTH = 4;
 	// derived
-	localparam XOR_BW = 8; // this is a magic number for N=32
+	localparam XOR_BW = 4; // Enough for indexing 16 bits (3 or 4 are suitable in most cases)
 	localparam ICFG_BW = $clog2(N_ICFG+1);
 	localparam OCFG_BW = $clog2(N_OCFG+1);
 	localparam INST_BW = $clog2(N_INST+1);

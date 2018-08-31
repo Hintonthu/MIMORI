@@ -30,6 +30,11 @@
 `include "TileAccumUnit/TileAccumUnit.sv"
 
 module Top(
+`ifdef VERI_TOP_Top
+	n_tau,
+	n_tau_x,
+	n_tau_y,
+`endif
 	`clk_port,
 	`rdyack_port(src),
 	i_bgrid_step,    // block shape
@@ -41,9 +46,8 @@ module Top(
 	i_agrid_step,
 	i_agrid_end,
 	i_aboundary,
-	i_i0_local_xor_masks,    // TODO: document
-	i_i0_local_xor_schemes,  // TODO: document
-	i_i0_local_xor_configs,    // TODO: document
+	i_i0_local_xor_srcs,     // configure data layout in SRAM
+	i_i0_local_xor_swaps,    // configure omega network (see paper)
 	i_i0_local_boundaries,   // memory multiplier (also boundary)
 	i_i0_local_bsubsteps,    // memory offsets for a warp
 	i_i0_local_pads,         // padding after each dimension
@@ -69,9 +73,8 @@ module Top(
 	i_i0_systolic_skip,      // Can we skip the data load and obtain from neighbors
 	i_i0_systolic_axis,      // How to schedule blocks
 `endif
-	i_i1_local_xor_masks,
-	i_i1_local_xor_schemes,
-	i_i1_local_xor_configs,
+	i_i1_local_xor_srcs,
+	i_i1_local_xor_swaps,
 	i_i1_local_boundaries,
 	i_i1_local_bsubsteps,
 	i_i1_local_pads,
@@ -115,14 +118,26 @@ module Top(
 	i_consts,
 	i_const_texs,
 	i_reg_per_warp,
+`ifdef VERI_TOP_Top
+	`rdyack2_port(dramra),
+`else
 	`rdyack_port(dramra),
+`endif
 	o_dramras,
 	`rdyack_port(dramrd),
 	i_dramrds,
+`ifdef VERI_TOP_Top
+	`rdyack2_port(dramw),
+`else
 	`rdyack_port(dramw),
+`endif
 	o_dramwas,
 	o_dramwds,
 	o_dramw_masks
+`ifdef SD
+	i_i1_systolic_skip,
+	i_i1_systolic_axis,
+`endif
 );
 
 //======================================
@@ -149,20 +164,17 @@ localparam REG_ADDR = TauCfg::WARP_REG_ADDR_SPACE;
 localparam CONST_LUT = TauCfg::CONST_LUT;
 localparam CONST_TEX_LUT = TauCfg::CONST_TEX_LUT;
 localparam STSIZE = TauCfg::STENCIL_SIZE;
-`ifdef SC
-localparam N_TAU = 1;
-`endif
-`ifdef MC
 localparam N_TAU = TauCfg::N_TAU;
-`endif
 `ifdef SD
 localparam N_TAU_X = TauCfg::N_TAU_X;
 localparam N_TAU_Y = TauCfg::N_TAU_Y;
-localparam N_TAU = N_TAU_X * N_TAU_Y;
 localparam CN_TAU_X = $clog2(N_TAU_X);
 localparam CN_TAU_Y = $clog2(N_TAU_Y);
 localparam CN_TAU_X1 = $clog2(N_TAU_X+1);
 localparam CN_TAU_Y1 = $clog2(N_TAU_Y+1);
+`else
+localparam N_TAU_X = 1;
+localparam N_TAU_Y = 1;
 `endif
 // derived
 localparam ICFG_BW = $clog2(N_ICFG+1);
@@ -172,13 +184,20 @@ localparam DIM_BW = $clog2(DIM);
 localparam VDIM_BW1 = $clog2(VDIM+1);
 localparam CV_BW = $clog2(VSIZE);
 localparam CCV_BW = $clog2(CV_BW+1);
-localparam CX_BW = $clog2(XOR_BW);
 localparam REG_ABW = $clog2(REG_ADDR);
 localparam ST_BW = $clog2(STSIZE+1);
 
 //======================================
 // I/O
 //======================================
+`ifdef VERI_TOP_Top
+	output [31:0] n_tau;
+	output [31:0] n_tau_x;
+	output [31:0] n_tau_y;
+	assign n_tau = N_TAU;
+	assign n_tau_x = N_TAU_X;
+	assign n_tau_y = N_TAU_Y;
+`endif
 `clk_input;
 `rdyack_input(src);
 input [WBW-1:0]     i_bgrid_step     [VDIM];
@@ -190,9 +209,8 @@ input [CCV_BW-1:0]  i_bsub_lo_order  [VDIM];
 input [WBW-1:0]     i_agrid_step     [VDIM];
 input [WBW-1:0]     i_agrid_end      [VDIM];
 input [WBW-1:0]     i_aboundary      [VDIM];
-input [CV_BW-1:0]   i_i0_local_xor_masks      [N_ICFG];
-input [CCV_BW-1:0]  i_i0_local_xor_schemes    [N_ICFG][CV_BW];
-input [XOR_BW-1:0]  i_i0_local_xor_configs    [N_ICFG];
+input [XOR_BW-1:0]  i_i0_local_xor_srcs       [N_ICFG][CV_BW];
+input [CCV_BW-1:0]  i_i0_local_xor_swaps      [N_ICFG];
 input [LBW0-1:0]    i_i0_local_boundaries     [N_ICFG][DIM];
 input [LBW0-1:0]    i_i0_local_bsubsteps      [N_ICFG][CV_BW];
 input [CV_BW-1:0]   i_i0_local_pads           [N_ICFG][DIM];
@@ -218,9 +236,8 @@ input [LBW0-1:0]    i_i0_stencil_lut [STSIZE];
 input [N_ICFG-1:0]  i_i0_systolic_skip;
 input [VDIM_BW1-1:0] i_i0_systolic_axis;
 `endif
-input [CV_BW-1:0]   i_i1_local_xor_masks      [N_ICFG];
-input [CCV_BW-1:0]  i_i1_local_xor_schemes    [N_ICFG][CV_BW];
-input [XOR_BW-1:0]  i_i1_local_xor_configs    [N_ICFG];
+input [XOR_BW-1:0]  i_i1_local_xor_srcs       [N_ICFG][CV_BW];
+input [CCV_BW-1:0]  i_i1_local_xor_swaps      [N_ICFG];
 input [LBW1-1:0]    i_i1_local_boundaries     [N_ICFG][DIM];
 input [LBW1-1:0]    i_i1_local_bsubsteps      [N_ICFG][CV_BW];
 input [CV_BW-1:0]   i_i1_local_pads           [N_ICFG][DIM];
@@ -264,13 +281,25 @@ input [TDBW-1:0]    i_consts [CONST_LUT];
 input [TDBW-1:0]    i_const_texs [CONST_TEX_LUT];
 input [REG_ABW-1:0] i_reg_per_warp;
 output [N_TAU-1:0] dramra_rdy;
+`ifdef VERI_TOP_Top
+input  [N_TAU-1:0] dramra_canack;
+logic  [N_TAU-1:0] dramra_ack;
+assign dramra_ack = dramra_rdy & dramra_canack;
+`else
 input  [N_TAU-1:0] dramra_ack;
+`endif
 output [GBW-1:0]   o_dramras [N_TAU];
 input  [N_TAU-1:0] dramrd_rdy;
 output [N_TAU-1:0] dramrd_ack;
 input  [DBW-1:0]   i_dramrds [N_TAU][CSIZE];
 output [N_TAU-1:0] dramw_rdy;
+`ifdef VERI_TOP_Top
+input  [N_TAU-1:0] dramw_canack;
+logic  [N_TAU-1:0] dramw_ack;
+assign dramw_ack = dramw_rdy & dramw_canack;
+`else
 input  [N_TAU-1:0] dramw_ack;
+`endif
 output [GBW-1:0]   o_dramwas [N_TAU];
 output [DBW-1:0]   o_dramwds [N_TAU][CSIZE];
 output [CSIZE-1:0] o_dramw_masks [N_TAU];
@@ -433,9 +462,8 @@ TileAccumUnit u_tau(
 	.i_bgrid_step(i_bgrid_step),
 	.i_agrid_end(i_agrid_end),
 	.i_aboundary(i_aboundary),
-	.i_i0_local_xor_masks(i_i0_local_xor_masks),
-	.i_i0_local_xor_schemes(i_i0_local_xor_schemes),
-	.i_i0_local_xor_configs(i_i0_local_xor_configs),
+	.i_i0_local_xor_srcs(i_i0_local_xor_srcs),
+	.i_i0_local_xor_swaps(i_i0_local_xor_swaps),
 	.i_i0_local_boundaries(i_i0_local_boundaries),
 	.i_i0_local_bsubsteps(i_i0_local_bsubsteps),
 	.i_i0_local_pads(i_i0_local_pads),
@@ -460,9 +488,8 @@ TileAccumUnit u_tau(
 `ifdef SD
 	.i_i0_systolic_skip(i_i0_systolic_skip),
 `endif
-	.i_i1_local_xor_masks(i_i1_local_xor_masks),
-	.i_i1_local_xor_schemes(i_i1_local_xor_schemes),
-	.i_i1_local_xor_configs(i_i1_local_xor_configs),
+	.i_i1_local_xor_srcs(i_i1_local_xor_srcs),
+	.i_i1_local_xor_swaps(i_i1_local_xor_swaps),
 	.i_i1_local_boundaries(i_i1_local_boundaries),
 	.i_i1_local_bsubsteps(i_i1_local_bsubsteps),
 	.i_i1_local_pads(i_i1_local_pads),
