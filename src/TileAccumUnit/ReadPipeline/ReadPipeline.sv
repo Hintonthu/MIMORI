@@ -247,14 +247,12 @@ logic [STO_BW-1:0]  lc_syst_type;
 Broadcast#(2) u_broadcast_input(
 	`clk_connect,
 	`rdyack_connect(src, bofs),
-	.acked(),
 	.dst_rdys({brd0_lc_rdy,brd0_ch_rdy}),
 	.dst_acks({brd0_lc_ack,brd0_ch_ack})
 );
 Broadcast#(3) u_broadcast_mofs(
 	`clk_connect,
 	`rdyack_connect(src, ch_mofs_masked),
-	.acked(),
 	.dst_rdys({ch_alloc_mofs_src_rdy,ch_cmd_mofs_src_rdy,ch_addr_mofs_src_rdy}),
 	.dst_acks({ch_alloc_mofs_src_ack,ch_cmd_mofs_src_ack,ch_addr_mofs_src_ack})
 );

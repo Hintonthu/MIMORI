@@ -21,6 +21,82 @@
 `include "common/OffsetStage.sv"
 `include "common/ND.sv"
 
+module AccumBlockLooperOutputController(
+	`clk_port,
+	`rdyack_port(src),
+	`rdyack_port(dst),
+	reg_cg,
+	begs,
+	ends,
+	sel_beg,
+	sel_end,
+	selected_beg,
+	selected_end,
+	skipped
+);
+
+//======================================
+// Parameter
+//======================================
+import TauCfg::*;
+parameter BW = 1;
+localparam VDIM = TauCfg::VDIM;
+
+//======================================
+// I/O
+//======================================
+`clk_input;
+`rdyack_input(src);
+`rdyack_output(dst);
+output logic reg_cg;
+input [BW-1:0] begs [VDIM+1];
+input [BW-1:0] ends [VDIM+1];
+input [VDIM:0] sel_end;
+input [VDIM:0] sel_beg;
+output logic [BW-1:0] selected_beg;
+output logic [BW-1:0] selected_end;
+output logic skipped;
+
+//======================================
+// Internal
+//======================================
+`rdyack_logic(src0);
+logic eq;
+
+//======================================
+// Combinational
+//======================================
+assign eq = selected_beg == selected_end;
+assign reg_cg = src0_ack;
+
+//======================================
+// Submodule
+//======================================
+DeleteIf#(1) u_del(
+	.cond(eq),
+	`rdyack_connect(src, src),
+	`rdyack_connect(dst, src0),
+	.deleted(skipped)
+);
+Forward#(.SLOW(1)) u_fwd(
+	`clk_connect,
+	`rdyack_connect(src, src0),
+	`rdyack_connect(dst, dst)
+);
+IdSelect#(.BW(BW), .DIM(VDIM), .RETIRE(0)) u_s0_sel_beg(
+	.i_sel(sel_beg),
+	.i_begs(begs),
+	.i_ends(),
+	.o_dat(selected_beg)
+);
+IdSelect#(.BW(BW), .DIM(VDIM), .RETIRE(0)) u_s0_sel_end(
+	.i_sel(sel_end),
+	.i_begs(ends),
+	.i_ends(),
+	.o_dat(selected_end)
+);
+endmodule
+
 module AccumBlockLooper(
 	`clk_port,
 	`rdyack_port(src),
@@ -184,34 +260,20 @@ output logic [WBW-1:0] o_alu_aofs_end [VDIM];
 // Internal
 //======================================
 `rdyack_logic(s0_dst);
-`rdyack_logic(i0_src);
-`rdyack_logic(i1_src);
-`rdyack_logic(o_src);
-`rdyack_logic(alu_src);
-`rdyack_logic(i0_abofs_src);
-`rdyack_logic(i1_abofs_src);
-`rdyack_logic(o_abofs_src);
-`rdyack_logic(alu_abofs_src);
 `dval_logic(ofs_init); // Used only in systolic mode
 logic [WBW-1:0] s0_aofs_beg [VDIM];
 logic [WBW-1:0] s0_aofs_end_tmp [VDIM];
 logic [WBW-1:0] s0_aofs_end     [VDIM];
-logic [VDIM:0] s0_sel_beg;
+logic s0_skip_alu;
+logic s0_last_block;
 logic [VDIM:0] s0_sel_end;
+logic [VDIM:0] s0_sel_beg;
 logic [ICFG_BW-1:0] s0_i0_beg;
 logic [ICFG_BW-1:0] s0_i0_end;
 logic [ICFG_BW-1:0] s0_i1_beg;
 logic [ICFG_BW-1:0] s0_i1_end;
 logic [OCFG_BW-1:0] s0_o_beg;
 logic [OCFG_BW-1:0] s0_o_end;
-logic [INST_BW-1:0] s0_alu_beg;
-logic [INST_BW-1:0] s0_alu_end;
-logic s0_i0_eq;
-logic s0_i1_eq;
-logic s0_o_eq;
-logic s0_alu_eq;
-logic s0_skip_alu;
-logic s0_last_block;
 logic s1_alu_last_block_r;
 `ifdef SD
 logic i_i0_rmost, i_i0_lmost, i_i1_lmost, i_i1_rmost;
@@ -229,10 +291,6 @@ logic [STO_BW-1:0] o_i1_syst_type_w;
 // Combinational
 //======================================
 assign blkdone_dval = s0_skip_alu || alu_abofs_ack && s1_alu_last_block_r;
-assign s0_i0_eq = s0_i0_beg == s0_i0_end;
-assign s0_i1_eq = s0_i1_beg == s0_i1_end;
-assign s0_o_eq = s0_o_beg == s0_o_end;
-assign s0_alu_eq = s0_alu_beg == s0_alu_end;
 `ifdef SD
 always_comb begin
 	i_i0_systolic_gsize2 = (i_i0_systolic_gsize << 1) - 'b1;
@@ -289,101 +347,60 @@ OffsetStage #(.BW(WBW), .DIM(VDIM), .FROM_ZERO(1), .UNIT_STRIDE(0)) u_s0(
 Broadcast#(4) u_brd_0(
 	`clk_connect,
 	`rdyack_connect(src, s0_dst),
-	.acked(),
 	.dst_rdys({i0_src_rdy, i1_src_rdy, o_src_rdy, alu_src_rdy}),
 	.dst_acks({i0_src_ack, i1_src_ack, o_src_ack, alu_src_ack})
 );
-IgnoreIf#(1) u_ign_i0(
-	.cond(s0_i0_eq),
+AccumBlockLooperOutputController#(ICFG_BW) u_oc_i0(
+	`clk_connect,
 	`rdyack_connect(src, i0_src),
-	`rdyack_connect(dst, i0_abofs_src),
+	`rdyack_connect(dst, i0_abofs),
+	.reg_cg(i0_cg),
+	.begs(i_i0_id_begs),
+	.ends(i_i0_id_ends),
+	.sel_beg(s0_sel_beg),
+	.sel_end(s0_sel_end),
+	.selected_beg(s0_i0_beg),
+	.selected_end(s0_i0_end),
 	.skipped()
 );
-IgnoreIf#(1) u_ign_i1(
-	.cond(s0_i1_eq),
+AccumBlockLooperOutputController#(ICFG_BW) u_oc_i1(
+	`clk_connect,
 	`rdyack_connect(src, i1_src),
-	`rdyack_connect(dst, i1_abofs_src),
+	`rdyack_connect(dst, i1_abofs),
+	.reg_cg(i1_cg),
+	.begs(i_i1_id_begs),
+	.ends(i_i1_id_ends),
+	.sel_beg(s0_sel_beg),
+	.sel_end(s0_sel_end),
+	.selected_beg(s0_i1_beg),
+	.selected_end(s0_i1_end),
 	.skipped()
 );
-IgnoreIf#(1) u_ign_o(
-	.cond(s0_o_eq),
+AccumBlockLooperOutputController#(OCFG_BW) u_oc_o(
+	`clk_connect,
 	`rdyack_connect(src, o_src),
-	`rdyack_connect(dst, o_abofs_src),
+	`rdyack_connect(dst, o_abofs),
+	.reg_cg(o_cg),
+	.begs(i_o_id_begs),
+	.ends(i_o_id_ends),
+	.sel_beg(s0_sel_beg),
+	.sel_end(s0_sel_end),
+	.selected_beg(s0_o_beg),
+	.selected_end(s0_o_end),
 	.skipped()
 );
-IgnoreIf#(1) u_ign_alu(
-	.cond(s0_alu_eq),
+AccumBlockLooperOutputController#(INST_BW) u_oc_alu(
+	`clk_connect,
 	`rdyack_connect(src, alu_src),
-	`rdyack_connect(dst, alu_abofs_src),
+	`rdyack_connect(dst, alu_abofs),
+	.reg_cg(alu_cg),
+	.begs(i_inst_id_begs),
+	.ends(i_inst_id_ends),
+	.sel_beg(s0_sel_beg),
+	.sel_end(s0_sel_end),
+	.selected_beg(),
+	.selected_end(),
 	.skipped(s0_skip_alu)
-);
-ForwardSlow u_fwd_i0(
-	`clk_connect,
-	`rdyack_connect(src, i0_abofs_src),
-	`rdyack_connect(dst, i0_abofs)
-);
-ForwardSlow u_fwd_i1(
-	`clk_connect,
-	`rdyack_connect(src, i1_abofs_src),
-	`rdyack_connect(dst, i1_abofs)
-);
-ForwardSlow u_fwd_o(
-	`clk_connect,
-	`rdyack_connect(src, o_abofs_src),
-	`rdyack_connect(dst, o_abofs)
-);
-ForwardSlow u_fwd_alu(
-	`clk_connect,
-	`rdyack_connect(src, alu_abofs_src),
-	`rdyack_connect(dst, alu_abofs)
-);
-IdSelect#(.BW(ICFG_BW), .DIM(VDIM), .RETIRE(0)) u_s0_sel_i0_beg(
-	.i_sel(s0_sel_beg),
-	.i_begs(i_i0_id_begs),
-	.i_ends(),
-	.o_dat(s0_i0_beg)
-);
-IdSelect#(.BW(ICFG_BW), .DIM(VDIM), .RETIRE(0)) u_s0_sel_i0_end(
-	.i_sel(s0_sel_end),
-	.i_begs(i_i0_id_ends),
-	.i_ends(),
-	.o_dat(s0_i0_end)
-);
-IdSelect#(.BW(ICFG_BW), .DIM(VDIM), .RETIRE(0)) u_s0_sel_i1_beg(
-	.i_sel(s0_sel_beg),
-	.i_begs(i_i1_id_begs),
-	.i_ends(),
-	.o_dat(s0_i1_beg)
-);
-IdSelect#(.BW(ICFG_BW), .DIM(VDIM), .RETIRE(0)) u_s0_sel_i1_end(
-	.i_sel(s0_sel_end),
-	.i_begs(i_i1_id_ends),
-	.i_ends(),
-	.o_dat(s0_i1_end)
-);
-IdSelect#(.BW(OCFG_BW), .DIM(VDIM), .RETIRE(0)) u_s0_sel_o_beg(
-	.i_sel(s0_sel_beg),
-	.i_begs(i_o_id_begs),
-	.i_ends(),
-	.o_dat(s0_o_beg)
-);
-IdSelect#(.BW(OCFG_BW), .DIM(VDIM), .RETIRE(0)) u_s0_sel_o_end(
-	.i_sel(s0_sel_end),
-	.i_begs(i_o_id_ends),
-	.i_ends(),
-	.o_dat(s0_o_end)
-);
-IdSelect#(.BW(INST_BW), .DIM(VDIM), .RETIRE(0)) u_s0_sel_alu_beg(
-	.i_sel(s0_sel_beg),
-	.i_begs(i_inst_id_begs),
-	.i_ends(),
-	.o_dat(s0_alu_beg)
-);
-IdSelect#(.BW(INST_BW), .DIM(VDIM), .RETIRE(0)) u_s0_sel_alu_end(
-	.i_sel(s0_sel_end),
-	.i_begs(i_inst_id_ends),
-	.i_ends(),
-	.o_dat(s0_alu_end)
 );
 
 //======================================
@@ -400,7 +417,7 @@ IdSelect#(.BW(INST_BW), .DIM(VDIM), .RETIRE(0)) u_s0_sel_alu_end(
 `ifdef SD
 	o_i0_syst_type <= '0;
 `endif
-`ff_cg(i0_abofs_src_ack)
+`ff_cg(i0_cg)
 	o_i0_bofs <= i_bofs;
 	o_i0_aofs_beg <= s0_aofs_beg;
 	o_i0_aofs_end <= s0_aofs_end;
@@ -422,7 +439,7 @@ IdSelect#(.BW(INST_BW), .DIM(VDIM), .RETIRE(0)) u_s0_sel_alu_end(
 `ifdef SD
 	o_i1_syst_type <= '0;
 `endif
-`ff_cg(i1_abofs_src_ack)
+`ff_cg(i1_cg)
 	o_i1_bofs <= i_bofs;
 	o_i1_aofs_beg <= s0_aofs_beg;
 	o_i1_aofs_end <= s0_aofs_end;
@@ -441,7 +458,7 @@ IdSelect#(.BW(INST_BW), .DIM(VDIM), .RETIRE(0)) u_s0_sel_alu_end(
 	end
 	o_o_beg <= '0;
 	o_o_end <= '0;
-`ff_cg(o_abofs_src_ack)
+`ff_cg(o_cg)
 	o_o_bofs <= i_bofs;
 	o_o_aofs_beg <= s0_aofs_beg;
 	o_o_aofs_end <= s0_aofs_end;
@@ -456,7 +473,7 @@ IdSelect#(.BW(INST_BW), .DIM(VDIM), .RETIRE(0)) u_s0_sel_alu_end(
 		o_alu_aofs_end[i] <= '0;
 	end
 	s1_alu_last_block_r <= 1'b0;
-`ff_cg(alu_abofs_src_ack)
+`ff_cg(alu_cg)
 	o_alu_bofs <= i_bofs;
 	o_alu_aofs_beg <= s0_aofs_beg;
 	o_alu_aofs_end <= s0_aofs_end;

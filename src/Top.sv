@@ -134,10 +134,6 @@ module Top(
 	o_dramwas,
 	o_dramwds,
 	o_dramw_masks
-`ifdef SD
-	i_i1_systolic_skip,
-	i_i1_systolic_axis,
-`endif
 );
 
 //======================================

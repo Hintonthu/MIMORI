@@ -70,16 +70,20 @@ output logic          o_islast;
 //======================================
 logic [BW-1:0] ofs_nxt [DIM];
 logic [BW-1:0] lofs_nxt [DIM];
-`rdyack_logic(dst_raw);
+logic oreg_cg;
 
 //======================================
 // Submodule
 //======================================
-OneCycleInit u_delay(
+LoopController#(.DONE_IF(1), .HOLD_SRC(1)) u_loop(
 	`clk_connect,
 	`rdyack_connect(src, src),
-	`rdyack_connect(dst, dst_raw),
-	`dval_connect(init, init)
+	`rdyack_connect(dst, dst),
+	.loop_done_cond(o_islast),
+	.reg_cg(oreg_cg),
+	.loop_reset(init_dval),
+	.loop_is_last(),
+	.loop_is_repeat()
 );
 NDAdder#(BW, DIM, FROM_ZERO, UNIT_STRIDE) u_adder(
 	.i_restart(init_dval),
@@ -96,11 +100,6 @@ NDAdder#(BW, DIM, FROM_ZERO, UNIT_STRIDE) u_adder(
 	.o_sel_ret(o_sel_ret),
 	.o_carry(o_islast)
 );
-AcceptIf u_ac(
-	.cond(o_islast),
-	`rdyack_connect(src, dst_raw),
-	`rdyack_connect(dst, dst)
-);
 
 //======================================
 // Sequential
@@ -110,7 +109,7 @@ AcceptIf u_ac(
 		o_ofs[i] <= '0;
 		o_lofs[i] <= '0;
 	end
-`ff_cg(init_dval || dst_ack)
+`ff_cg(oreg_cg)
 	o_ofs <= ofs_nxt;
 	o_lofs <= lofs_nxt;
 `ff_end

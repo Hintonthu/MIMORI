@@ -66,11 +66,6 @@ logic block_full;
 logic block_empty;
 
 //======================================
-// Combinational
-//======================================
-assign wait_fin_ack = wait_fin_rdy && block_empty;
-
-//======================================
 // Submodule
 //======================================
 BroadcastInorder#(2) u_brd(
@@ -95,20 +90,12 @@ OffsetStage#(.BW(WBW), .DIM(VDIM), .FROM_ZERO(1), .UNIT_STRIDE(0)) u_s0(
 	.o_islast(),
 	.init_dval()
 );
-ForwardIf#(0) u_fwd_if_not_full(
-	.cond(block_full),
-	`rdyack_connect(src, s0_dst),
-	`rdyack_connect(dst, bofs)
-);
-Semaphore#(N_PENDING) u_sem_done(
+FlowControl#(N_PENDING) u_flow(
 	`clk_connect,
-	.i_inc(bofs_ack),
-	.i_dec(blkdone_dval),
-	.o_full(block_full),
-	.o_empty(block_empty),
-	.o_will_full(),
-	.o_will_empty(),
-	.o_n()
+	`rdyack_connect(src, s0_dst),
+	`rdyack_connect(dst, bofs),
+	`dval_connect(fin, blkdone),
+	`rdyack_connect(wait_all, wait_fin)
 );
 
 endmodule

@@ -272,11 +272,11 @@ IdSelect#(.BW(NCFG_BW), .DIM(VDIM), .RETIRE(1)) u_s0_sel_ret(
 	.i_ends(i_id_ends),
 	.o_dat(s01_id_ret)
 );
-IgnoreIf#(1) u_ign_01(
+DeleteIf#(1) u_ign_01(
 	.cond(s01_bypass),
 	`rdyack_connect(src, s0_dst),
 	`rdyack_connect(dst, s1_src),
-	.skipped(s01_skipped)
+	.deleted(s01_skipped)
 );
 AccumWarpLooperIndexStage#(.N_CFG(N_CFG)) u_s1_idx(
 	`clk_connect,

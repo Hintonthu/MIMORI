@@ -119,7 +119,6 @@ logic             s4_dst_pass;
 Broadcast#(2) u_brd0(
 	`clk_connect,
 	`rdyack_connect(src, mofs),
-	.acked(),
 	.dst_rdys({wait_fin_rdy,s0_src_rdy}),
 	.dst_acks({wait_fin_ack,s0_src_ack})
 );
@@ -173,7 +172,7 @@ Forward u_s4(
 	`rdyack_connect(src, s34),
 	`rdyack_connect(dst, s4_dst)
 );
-ForwardIf u_fwd_if_cmd(
+PauseIf#(0) u_fwd_if_cmd(
 	.cond(s4_dst_pass),
 	`rdyack_connect(src, s4_dst),
 	`rdyack_connect(dst, cmd)
