@@ -616,20 +616,57 @@ ReadPipeline#(.LBW(LBW1)) u_r1(
 `endif
 	.o_sramrd(i1_alu_sramrd)
 );
-DramArbiter u_arb(
+DmaPipeline u_dma(
 	`clk_connect,
-	`rdyack_connect(i0_dramra, i0_dramra),
-	.i_i0_dramra(i0_dramra),
-	`rdyack_connect(i0_dramrd, i0_dramrd),
-	.o_i0_dramrd(i0_dramrd),
-	`rdyack_connect(i1_dramra, i1_dramra),
-	.i_i1_dramra(i1_dramra),
-	`rdyack_connect(i1_dramrd, i1_dramrd),
-	.o_i1_dramrd(i1_dramrd),
-	`rdyack_connect(dramra, dramra),
-	.o_dramra(o_dramra),
-	`rdyack_connect(dramrd, dramrd),
-	.i_dramrd(i_dramrd)
+	`rdyack_connect(bofs),
+	i_bofs,
+	i_abeg,
+	i_aend,
+	i_beg,
+	i_end,
+`ifdef SD
+	i_syst_type,
+`endif
+	i_bsub_up_order,
+	i_bsub_lo_order,
+	i_aboundary,
+	i_bgrid_step,
+	i_global_linears,
+	i_global_mofs,
+	i_global_mboundaries,
+	i_global_cboundaries,
+	i_global_bshufs,
+	i_bstrides_frac,
+	i_bstrides_shamt,
+	i_global_ashufs,
+	i_astrides_frac,
+	i_astrides_shamt,
+	i_local_xor_srcs,
+	i_local_xor_swaps,
+	i_local_pads,
+	i_local_bsubsteps,
+	i_local_mboundaries,
+	i_wrap,
+	i_pad_value,
+	i_id_begs,
+	i_id_ends,
+	i_stencil,
+	i_stencil_begs,
+	i_stencil_ends,
+	i_stencil_lut,
+`ifdef SD
+	i_systolic_skip,
+`endif
+	`dval_connect(rmc_write),
+	o_rmc_write_wid,
+	o_rmc_write_whiaddr,
+	o_rmc_write_wdata
+	o_rmc_written_hiaddr0,
+	o_rmc_written_hiaddr1,
+	`rdyack_connect(dramra),
+	o_dramra,
+	`rdyack_connect(dramrd),
+	i_dramrd
 );
 
 //======================================

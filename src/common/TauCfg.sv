@@ -57,6 +57,7 @@ package TauCfg;
 	localparam ST_BW = $clog2(STENCIL_SIZE+1);
 	localparam BLOCK_PBW = $clog2(MAX_PENDING_BLOCK+1);
 	localparam INST_PBW = $clog2(MAX_PENDING_INST+1);
+	localparam MAX_LOCAL_ADDR_BW = LOCAL_ADDR_BW0 > LOCAL_ADDR_BW1 ? LOCAL_ADDR_BW0 : LOCAL_ADDR_BW1;
 
 	// Systolic flag[3:0] document
 	// [0] flag, to right
