@@ -19,6 +19,7 @@
 module ChunkHead(
 	`clk_port,
 	`rdyack_port(i_abofs),
+	i_which,
 	i_bofs,
 	i_aofs,
 	i_beg,
@@ -37,6 +38,7 @@ module ChunkHead(
 	i_systolic_skip,
 `endif
 	`rdyack_port(o_mofs),
+	o_which,
 	o_mofs,
 	o_id
 `ifdef SD
@@ -60,6 +62,7 @@ localparam DIM_BW = $clog2(DIM);
 
 `clk_input;
 `rdyack_input(i_abofs);
+input               i_which;
 input [WBW-1:0]     i_bofs [VDIM];
 input [WBW-1:0]     i_aofs [VDIM];
 input [ICFG_BW-1:0] i_beg;
@@ -78,6 +81,7 @@ input [SS_BW-1:0]   i_astrides_shamt [N_ICFG][VDIM];
 input [N_ICFG-1:0]  i_systolic_skip;
 `endif
 `rdyack_output(o_mofs);
+output                     o_which;
 output logic [WBW-1:0]     o_mofs   [DIM];
 output logic [ICFG_BW-1:0] o_id;
 `ifdef SD
@@ -143,6 +147,7 @@ NDShufAccum#(.BW(WBW), .DIM_IN(VDIM), .DIM_OUT(DIM), .ZERO_AUG(0)) u_saccum(
 // Sequential
 //======================================
 `ff_rst
+	o_which <= 1'b0;
 	o_id <= '0;
 	for (int i = 0; i < DIM; i++) begin
 		o_mofs[i] <= '0;
@@ -151,6 +156,7 @@ NDShufAccum#(.BW(WBW), .DIM_IN(VDIM), .DIM_OUT(DIM), .ZERO_AUG(0)) u_saccum(
 	o_skip <= 1'b0;
 `endif
 `ff_cg((o_mofs_ack && !o_islast_id) || i_init_dval)
+	o_which <= i_which;
 	o_id <= o_id_w;
 	o_mofs <= o_mofs_w;
 `ifdef SD
