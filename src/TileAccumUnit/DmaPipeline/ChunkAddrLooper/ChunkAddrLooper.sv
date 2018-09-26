@@ -48,7 +48,6 @@ module ChunkAddrLooper(
 //======================================
 // Parameter
 //======================================
-parameter LBW = TauCfg::LOCAL_ADDR_BW0;
 localparam GBW = TauCfg::GLOBAL_ADDR_BW;
 localparam DIM = TauCfg::DIM;
 localparam CSIZE = TauCfg::CACHE_SIZE;

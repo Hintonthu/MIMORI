@@ -69,10 +69,12 @@ module ReadPipeline(
 	i_systolic_skip,
 `endif
 	`dval_port(blkdone),
-	// Write to SRAM
+	// Tell DMA something to work
+	`rdyack_port(rp_en),
+	// DMA write to SRAM
 	`dval_port(rmc_write),
 	i_rmc_whiaddr,
-	i_rmc_write_wdata,
+	i_rmc_wdata,
 	// To systolic switch and ALU
 	`rdyack_port(sramrd),
 `ifdef SD
@@ -362,49 +364,6 @@ RemapCache#(.LBW(LBW)) u_rmc(
 	.i_whiaddr(rmc_write_whiaddr),
 	.i_wdata(rmc_write_wdata)
 );
-Semaphore#(LBUF_SIZE) u_sem_linear(
-	`clk_connect,
-	.i_inc(ch_mofs_ack),
-	.i_dec(writer_warp_linear_fifo_out_ack),
-	.o_full(linear_full),
-	.o_empty(),
-	.o_will_full(),
-	.o_will_empty(),
-	.o_n()
-);
-IgnoreIf#(0) u_ign_if_not_last_addr(
-	.cond(cal_addr_islast),
-	`rdyack_connect(src, cal_addr),
-	`rdyack_connect(dst, dramra),
-	.skipped()
-);
-/*
-Semaphore#(ALLOC_CNT) u_sem_alloc(
-	`clk_connect,
-	.i_inc(ch_alloc_mofs_dst_ack),
-	.i_dec(ch_addr_mofs_dst_ack),
-	.o_full(alloc_full),
-	.o_empty(alloc_empty),
-	.o_will_full(),
-	.o_will_empty(),
-	.o_n()
-);
-ForwardIf#(0) u_fwd_if_linear_not_full(
-	.cond(linear_full),
-	`rdyack_connect(src, ch_mofs),
-	`rdyack_connect(dst, ch_mofs_masked)
-);
-ForwardIf#(0) u_fwd_if_can_allocate(
-	.cond(alloc_full),
-	`rdyack_connect(src, ch_alloc_mofs_dst),
-	`rdyack_connect(dst, ch_alloc_mofs_dst2)
-);
-ForwardIf#(0) u_fwd_if_allocated(
-	.cond(alloc_empty),
-	`rdyack_connect(src, ch_addr_mofs_dst),
-	`rdyack_connect(dst, ch_addr_mofs_dst2)
-);
-*/
 //======================================
 // Combinational
 //======================================

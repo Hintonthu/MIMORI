@@ -29,30 +29,30 @@ module BankSramButterflyWriteIf(
 //======================================
 // Parameter
 //======================================
-parameter BW = 8;
-parameter NDATA = 32;
-parameter NBANK = 16;
-parameter XOR_BW = TauCfg::XOR_BW;
+localparam BW = TauCfg::DATA_BW;
+localparam NBANK = TauCfg::VSIZE;
+localparam CLOG2_NDATA = TauCfg::MAX_LOCAL_ADDR_BW - CV_BW;
+localparam XOR_BW = TauCfg::XOR_BW;
 localparam XOR_ADDR_BW = 1<<XOR_BW;
-localparam CLOG2_NDATA = $clog2(NDATA);
-localparam CLOG2_NBANK = $clog2(NBANK);
-localparam CCLOG2_NBANK = $clog2(CLOG2_NBANK);
+localparam NDATA = 1 << CLOG2_NDATA;
+localparam CB_BW = TauCfg::CV_BW;
+localparam CCB_BW = TauCfg::CCV_BW;
 localparam BANK_MASK = NBANK-1;
 
 //======================================
 // I/O
 //======================================
-input [XOR_BW-1:0]       i_xor_src [CLOG2_NBANK];
-input [CCLOG2_NBANK-1:0] i_xor_swap;
-input [CLOG2_NDATA-1:0]  i_hiaddr;
+input [XOR_BW-1:0]      i_xor_src [CV_BW];
+input [CCV_BW-1:0]      i_xor_swap;
+input [CLOG2_NDATA-1:0] i_hiaddr;
 input        [BW-1:0] i_data [NBANK];
 output logic [BW-1:0] o_data [NBANK];
 
 //======================================
 // Internal
 //======================================
-logic [CLOG2_NBANK-1:0] i_flags;
-logic [BW-1:0] i_bf [CLOG2_NBANK+CCLOG2_NBANK+1][NBANK];
+logic [CB_BW-1:0] i_flags;
+logic [BW-1:0] i_bf [CB_BW+CCB_BW+1][NBANK];
 // We can address at most these bits
 logic [XOR_ADDR_BW-1:0] i_addrs [NBANK];
 
@@ -63,8 +63,8 @@ always_comb begin
 	for (int i = 0; i < NBANK; ++i) begin
 		// FIXME: lint bit width error
 		// FIXME: stuck at 0
-		i_addrs[i][CLOG2_NBANK-1:0] = i;
-		i_addrs[i][XOR_ADDR_BW-2:CLOG2_NBANK] = i_hiaddr;
+		i_addrs[i][CB_BW-1:0] = i;
+		i_addrs[i][XOR_ADDR_BW-2:CB_BW] = i_hiaddr;
 		i_addrs[i][XOR_ADDR_BW-1] = 1'b0;
 	end
 end
@@ -80,17 +80,17 @@ always_comb begin
 		end
 	end
 	// Omega (LSB -> MSB)
-	for (int i = 0; i < CCLOG2_NBANK; ++i) begin
+	for (int i = 0; i < CCB_BW; ++i) begin
 		for (int j = 0; j < NBANK; ++j) begin
-			i_bf[i+CLOG2_NBANK+1][j] = (
+			i_bf[i+CB_BW+1][j] = (
 				i_xor_swap[i] ?
-				i_bf[CLOG2_NBANK+i][((j|(j<<CLOG2_NBANK))>>(1<<i))&BANK_MASK] :
-				i_bf[CLOG2_NBANK+i][j]
+				i_bf[CB_BW+i][((j|(j<<CB_BW))>>(1<<i))&BANK_MASK] :
+				i_bf[CB_BW+i][j]
 			);
 		end
 	end
 	for (int i = 0; i < NBANK; ++i) begin
-		o_data[i] = i_bf[CLOG2_NBANK+CCLOG2_NBANK][i];
+		o_data[i] = i_bf[CB_BW+CCB_BW][i];
 	end
 end
 

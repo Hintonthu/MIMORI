@@ -112,10 +112,7 @@ logic can_alloc;
 logic filling;
 logic [LBUF_SIZE-2:0] o_linears_load_nxt;
 logic [LBUF_SIZE-1:0] o_linears_load_new;
-logic [LBW-1:0]       o_linears [LBUF_SIZE];
-logic [LBW:0]         o_linear_sizes [LBUF_SIZE];
 logic [LBW:0]         o_linear_size;
-logic [LBUF_SIZE-1:0] o_false_allocs;
 logic [LBW-1:0] cur_r;
 logic [LBW-1:0] cur_w;
 logic [LBW:0] capacity_r;
@@ -150,6 +147,29 @@ SFifoCtrl#(LBUF_SIZE) u_sfifo_ctrl_linear(
 	.o_load_nxt(o_linears_load_nxt),
 	.o_load_new(o_linears_load_new)
 );
+SFifoReg1D#(.BW(LBW), .NDATA(LBUF_SIZE)) u_sfifo_linear(
+	`clk_connect,
+	.i_load_nxt(o_linears_load_nxt),
+	.i_load_new(o_linears_load_new),
+	.i_data(cur_r),
+	.o_data(o_linear)
+);
+SFifoReg1D#(.BW(LBW), .NDATA(LBUF_SIZE)) u_sfifo_linear_size(
+	`clk_connect,
+	.i_load_nxt(o_linears_load_nxt),
+	.i_load_new(o_linears_load_new),
+	.i_data(asize),
+	.o_data(o_linear_size)
+);
+`ifdef SD
+SFifoReg0D#(.NDATA(LBUF_SIZE)) u_sfifo_false_alloc(
+	`clk_connect,
+	.i_load_nxt(o_linears_load_nxt),
+	.i_load_new(o_linears_load_new),
+	.i_data(i_false_alloc),
+	.o_data(o_false_alloc)
+);
+`endif
 PauseIf#(0) u_pause_output_when_filling(
 	.cond(filling),
 	`rdyack_connect(src, fifo_out),
@@ -219,47 +239,6 @@ end
 	cur_r <= '0;
 `ff_cg(alloc_ack)
 	cur_r <= cur_w;
-`ff_end
-
-genvar gi;
-generate for (gi = 0; gi < LBUF_SIZE-1; gi++) begin: warp_linear_fifo
-always_ff @(posedge i_clk or negedge i_rst) begin
-	if (!i_rst) begin
-		o_linears[gi] <= '0;
-		o_linear_sizes[gi] <= '0;
-`ifdef SD
-		o_false_allocs[gi] <= 1'b0;
-`endif
-	end else if (o_linears_load_nxt[gi] || o_linears_load_new[gi]) begin
-		if (o_linears_load_new[gi]) begin
-			o_linears[gi] <= cur_r;
-			o_linear_sizes[gi] <= asize;
-`ifdef SD
-			o_false_allocs[gi] <= i_false_alloc;
-`endif
-		end else begin
-			o_linears[gi] <= o_linears[gi+1];
-			o_linear_sizes[gi] <= o_linear_sizes[gi+1];
-`ifdef SD
-			o_false_allocs[gi] <= o_false_allocs[gi+1];
-`endif
-		end
-	end
-end
-end endgenerate
-
-`ff_rst
-	o_linears[LBUF_SIZE-1] <= '0;
-	o_linear_sizes[LBUF_SIZE-1] <= '0;
-`ifdef SD
-	o_linear_sizes[LBUF_SIZE-1] <= '0;
-`endif
-`ff_cg(o_linears_load_new[LBUF_SIZE-1])
-	o_linears[LBUF_SIZE-1] <= cur_r;
-	o_linear_sizes[LBUF_SIZE-1] <= asize;
-`ifdef SD
-	o_false_allocs[LBUF_SIZE-1] <= i_false_alloc;
-`endif
 `ff_end
 
 `ifdef VERI_TOP_Allocator

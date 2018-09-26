@@ -108,8 +108,7 @@ module TileAccumUnit(
 	i_o_astrides_shamt,
 	i_o_id_begs,
 	i_o_id_ends,
-	i_inst_id_begs,
-	i_inst_id_ends,
+	i_inst_id_begs, i_inst_id_ends,
 	i_insts,
 	i_consts,
 	i_const_texs,
@@ -326,6 +325,12 @@ logic [WBW-1:0]     abl_i1_aofs [VDIM];
 logic [WBW-1:0]     abl_i1_aend [VDIM];
 logic [ICFG_BW-1:0] abl_i1_beg;
 logic [ICFG_BW-1:0] abl_i1_end;
+`rdyack_logic(abl_dma_abofs);
+logic               abl_dma_which;
+logic [WBW-1:0]     abl_dma_bofs [VDIM];
+logic [WBW-1:0]     abl_dma_aofs [VDIM];
+logic [ICFG_BW-1:0] abl_dma_beg;
+logic [ICFG_BW-1:0] abl_dma_end;
 `rdyack_logic(abl_o_abofs);
 logic [WBW-1:0]     abl_o_bofs [VDIM];
 logic [WBW-1:0]     abl_o_aofs [VDIM];
@@ -353,6 +358,7 @@ logic [DBW-1:0] i1_dramrd [CSIZE];
 `rdyack_logic(i1_alu_sramrd2);
 logic [STO_BW-1:0] abl_i0_syst_type;
 logic [STO_BW-1:0] abl_i1_syst_type;
+logic [STO_BW-1:0] abl_dma_syst_type;
 logic [STO_BW-1:0] i0_alu_syst_type;
 logic [STO_BW-1:0] i1_alu_syst_type;
 `endif
@@ -438,6 +444,16 @@ AccumBlockLooper u_abl(
 	.o_i1_end(abl_i1_end),
 `ifdef SD
 	.o_i1_syst_type(abl_i1_syst_type),
+`endif
+	`rdyack_connect(dma_abofs, abl_dma_abofs),
+`endif
+	.o_dma_which(abl_dma_which),
+	.o_dma_bofs(abl_dma_bofs),
+	.o_dma_aofs(abl_dma_aofs),
+	.o_dma_beg(abl_dma_beg),
+	.o_dma_end(abl_dma_end),
+`ifdef SD
+	.o_dma_syst_type(abl_dma_syst_type),
 `endif
 	`rdyack_connect(o_abofs, abl_o_abofs),
 	.o_o_bofs(abl_o_bofs),
@@ -554,10 +570,10 @@ ReadPipeline#(.LBW(LBW0)) u_r0(
 	.i_systolic_skip(i_i0_systolic_skip),
 `endif
 	`dval_connect(blkdone, blkdone),
-	`rdyack_connect(dramra, i0_dramra),
-	.o_dramra(i0_dramra),
-	`rdyack_connect(dramrd, i0_dramrd),
-	.i_dramrd(i0_dramrd),
+	`dval_connect(rp_en, rp_dma_en0),
+	`dval_connect(rmc_write, dma_rmc_write0),
+	.i_rmc_whiaddr(dma_rmc_whiaddr0),
+	.i_rmc_wdata(dma_rmc_wdata),
 	`rdyack_connect(sramrd, i0_alu_sramrd),
 `ifdef SD
 	.o_syst_type(i0_alu_syst_type),
@@ -606,10 +622,10 @@ ReadPipeline#(.LBW(LBW1)) u_r1(
 	.i_systolic_skip(i_i1_systolic_skip),
 `endif
 	`dval_connect(blkdone, blkdone),
-	`rdyack_connect(dramra, i1_dramra),
-	.o_dramra(i1_dramra),
-	`rdyack_connect(dramrd, i1_dramrd),
-	.i_dramrd(i1_dramrd),
+	`dval_connect(rp_en, rp_dma_en1),
+	`dval_connect(rmc_write, dma_rmc_write1),
+	.i_rmc_whiaddr(dma_rmc_whiaddr1),
+	.i_rmc_wdata(dma_rmc_wdata),
 	`rdyack_connect(sramrd, i1_alu_sramrd),
 `ifdef SD
 	.o_syst_type(i1_alu_syst_type),
@@ -619,54 +635,47 @@ ReadPipeline#(.LBW(LBW1)) u_r1(
 DmaPipeline u_dma(
 	`clk_connect,
 	`rdyack_connect(bofs),
-	i_bofs,
-	i_abeg,
-	i_aend,
-	i_beg,
-	i_end,
+	.i_which(abl_dma_which),
+	.i_bofs(abl_dma_bofs),
+	.i_abeg(abl_dma_abeg),
+	.i_aend(abl_dma_aend),
+	.i_beg(abl_dma_beg),
+	.i_end(abl_dma_end),
 `ifdef SD
-	i_syst_type,
+	.i_syst_type(abl_dma_syst_type),
 `endif
-	i_bsub_up_order,
-	i_bsub_lo_order,
-	i_aboundary,
-	i_bgrid_step,
-	i_global_linears,
-	i_global_mofs,
-	i_global_mboundaries,
-	i_global_cboundaries,
-	i_global_bshufs,
-	i_bstrides_frac,
-	i_bstrides_shamt,
-	i_global_ashufs,
-	i_astrides_frac,
-	i_astrides_shamt,
-	i_local_xor_srcs,
-	i_local_xor_swaps,
-	i_local_pads,
-	i_local_bsubsteps,
-	i_local_mboundaries,
-	i_wrap,
-	i_pad_value,
-	i_id_begs,
-	i_id_ends,
-	i_stencil,
-	i_stencil_begs,
-	i_stencil_ends,
-	i_stencil_lut,
+	.i_bgrid_step(),
+	.i_global_linears(),
+	.i_global_mofs(),
+	.i_global_mboundaries(),
+	.i_global_cboundaries(),
+	.i_global_bshufs(),
+	.i_bstrides_frac(),
+	.i_bstrides_shamt(),
+	.i_global_ashufs(),
+	.i_astrides_frac(),
+	.i_astrides_shamt(),
+	.i_local_pads(),
+	.i_local_bsubsteps(),
+	.i_local_mboundaries(),
+	.i_wrap(),
+	.i_pad_value(),
+	.i_id_begs(),
+	.i_id_ends(),
 `ifdef SD
-	i_systolic_skip,
+	.i_systolic_skip(),
 `endif
-	`dval_connect(rmc_write),
-	o_rmc_write_wid,
-	o_rmc_write_whiaddr,
-	o_rmc_write_wdata
-	o_rmc_written_hiaddr0,
-	o_rmc_written_hiaddr1,
-	`rdyack_connect(dramra),
-	o_dramra,
-	`rdyack_connect(dramrd),
-	i_dramrd
+	`rdyack_connect(rp_en0, rp_dma_en0),
+	`rdyack_connect(rp_en1, rp_dma_en1),
+	`dval_connect(rmc_write0, dma_rmc_write0),
+	`dval_connect(rmc_write1, dma_rmc_write1),
+	.o_rmc_whiaddr0(dma_rmc_whiaddr0),
+	.o_rmc_whiaddr1(dma_rmc_whiaddr1),
+	.o_rmc_wdata(dma_rmc_wdata),
+	`rdyack_connect(dramra, dramra),
+	.o_dramra(o_dramra),
+	`rdyack_connect(dramrd, dramrd),
+	.i_dramrd(i_dramrd)
 );
 
 //======================================

@@ -26,15 +26,18 @@ module SramWriteCollector(
 `endif
 	i_padv,
 	`rdyack_port(cmd),
+	i_which,
 	i_cmd_type,
 	i_cmd_islast,
 	i_cmd_addrofs,
 	i_cmd_len,
 	`rdyack_port(dramrd),
 	i_dramrd,
-	`dval_port(w),
+	`dval_port(w0),
+	`dval_port(w1),
 	o_id,
-	o_hiaddr,
+	o_hiaddr0,
+	o_hiaddr1,
 	o_data
 );
 
@@ -72,21 +75,24 @@ input               i_skip;
 `endif
 input [DBW-1:0]     i_padv;
 `rdyack_input(cmd);
+input              i_which;
 input [1:0]        i_cmd_type;
 input              i_cmd_islast;
 input [CC_BW-1:0]  i_cmd_addrofs;
 input [CV_BW1-1:0] i_cmd_len;
 `rdyack_input(dramrd);
 input [DBW-1:0] i_dramrd [CSIZE];
-`dval_output(w);
+`dval_output(w0);
+`dval_output(w1);
 output logic [ICFG_BW-1:0]   o_id;
-output logic [LBW-CV_BW-1:0] o_hiaddr;
+output logic [LBW-CV_BW-1:0] o_hiaddr0;
+output logic [LBW-CV_BW-1:0] o_hiaddr1;
 output logic [DBW-1:0]       o_data [VSIZE];
 
 //======================================
 // Internal
 //======================================
-typedef enum {FREE = 0, RUN, COMMIT, FSM_N} Fsm;
+typedef enum {FREE = 0, RUN, FSM_N} Fsm;
 logic [FSM_N-1:0] fsm_r;
 logic [FSM_N-1:0] fsm_w;
 logic [CSIZE*DBW-1:0] data_1d;
@@ -118,12 +124,11 @@ logic [VSIZE-1:0] wmask;
 //======================================
 // Combinational
 //======================================
-assign done_linear_rdy = fsm_r[COMMIT];
 assign wmask = (~('1<<i_cmd_len)) << filled_r[CV_BW-1:0];
 always_comb begin
 	fsm_w = '0;
 	collected = 1'b0;
-	alloc_linear_ack = 1'b0;
+	alloc_ack = 1'b0;
 	enable_buf_write = 1'b0;
 	cmd_ack = 1'b0;
 	dramrd_ack = 1'b0;
@@ -133,12 +138,12 @@ always_comb begin
 	cmd_handled_w = cmd_handled_r;
 	unique case(1'b1)
 		fsm_r[FREE]: begin
-			if (alloc_linear_rdy) begin
-				alloc_linear_ack = 1'b1;
+			if (alloc_rdy) begin
+				alloc_ack = 1'b1;
 				filled_w = '0;
 `ifdef SD
 				if (i_skip) begin
-					fsm_w[COMMIT] = 1'b1;
+					fsm_w[FREE] = 1'b1;
 				end else begin
 					fsm_w[RUN] = 1'b1;
 				end
@@ -158,7 +163,7 @@ always_comb begin
 				dramrd_ack = dramrd_rdy && cmd_ack && i_cmd_islast;
 				if (fill_done) begin
 					filled_w = '0;
-					fsm_w[COMMIT] = 1'b1;
+					fsm_w[FREE] = 1'b1;
 				end else begin
 					filled_w = filled_nxt;
 					fsm_w[RUN] = 1'b1;
@@ -166,9 +171,6 @@ always_comb begin
 			end else begin
 				fsm_w[RUN] = 1'b1;
 			end
-		end
-		fsm_r[COMMIT]: begin
-			fsm_w[FREE] = 1'b1;
 		end
 	endcase
 end
@@ -219,7 +221,7 @@ end
 	o_id <= '0;
 	size_r <= '0;
 	padv_r <= '0;
-`ff_cg(alloc_linear_ack)
+`ff_cg(alloc_ack)
 	o_id <= i_id;
 	size_r <= i_size;
 	padv_r <= i_padv;
@@ -228,7 +230,7 @@ end
 `ff_rst
 	filled_r <= '0;
 	cmd_handled_r <= '0;
-`ff_cg(alloc_linear_ack || enable_buf_write)
+`ff_cg(alloc_ack || enable_buf_write)
 	filled_r <= filled_w;
 	cmd_handled_r <= cmd_handled_w;
 `ff_end

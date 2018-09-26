@@ -290,8 +290,18 @@ output logic [WBW-1:0] o_alu_aofs_end [VDIM];
 //======================================
 // Internal
 //======================================
+`rdyack_logic(i0_src);
+`rdyack_logic(i1_src);
+`rdyack_logic(dma_src);
+`rdyack_logic(dma_src1);
+`rdyack_logic(o_src);
+`rdyack_logic(alu_src);
 `rdyack_logic(s0_dst);
 `dval_logic(ofs_init); // Used only in systolic mode
+logic i0_cg, i1_cg, o_cg, dma_cg, alu_cg;
+logic               i_which;
+logic [ICFG_BW-1:0] i_dma_id_begs [VDIM+1];
+logic [ICFG_BW-1:0] i_dma_id_ends [VDIM+1];
 logic [WBW-1:0] s0_aofs_beg [VDIM];
 logic [WBW-1:0] s0_aofs_end_tmp [VDIM];
 logic [WBW-1:0] s0_aofs_end     [VDIM];
@@ -303,6 +313,8 @@ logic [ICFG_BW-1:0] s0_i0_beg;
 logic [ICFG_BW-1:0] s0_i0_end;
 logic [ICFG_BW-1:0] s0_i1_beg;
 logic [ICFG_BW-1:0] s0_i1_end;
+logic [ICFG_BW-1:0] s0_dma_beg;
+logic [ICFG_BW-1:0] s0_dma_end;
 logic [OCFG_BW-1:0] s0_o_beg;
 logic [OCFG_BW-1:0] s0_o_end;
 logic s1_alu_last_block_r;
@@ -311,11 +323,17 @@ logic i_i0_rmost, i_i0_lmost, i_i1_lmost, i_i1_rmost;
 logic [CN_TAU_X:0] i_i0_systolic_gsize2;
 logic [CN_TAU_X:0] i0_systolic_cnt_r;
 logic [CN_TAU_X:0] i0_systolic_cnt_w;
+logic [CN_TAU_X:0] dma0_systolic_cnt_r;
+logic [CN_TAU_X:0] dma0_systolic_cnt_w;
 logic [CN_TAU_Y:0] i_i1_systolic_gsize2;
 logic [CN_TAU_Y:0] i1_systolic_cnt_r;
 logic [CN_TAU_Y:0] i1_systolic_cnt_w;
+logic [CN_TAU_Y:0] dma1_systolic_cnt_r;
+logic [CN_TAU_Y:0] dma1_systolic_cnt_w;
 logic [STO_BW-1:0] o_i0_syst_type_w;
 logic [STO_BW-1:0] o_i1_syst_type_w;
+logic [STO_BW-1:0] dma_0_syst_type_w;
+logic [STO_BW-1:0] dma_1_syst_type_w;
 `endif
 
 //======================================
@@ -332,13 +350,6 @@ always_comb begin
 	i_i1_lmost = i_i1_systolic_idx == '0;
 	i_i1_rmost = (i_i1_systolic_idx+'b1) == i_i1_systolic_gsize;
 end
-
-// dma0_systolic_cnt_w
-// dma0_systolic_cnt_r
-// dma1_systolic_cnt_w
-// dma1_systolic_cnt_r
-// dma0_syst_type_w
-// dma1_syst_type_w
 
 always_comb begin
 	i0_systolic_cnt_w = ofs_init_dval || (i0_systolic_cnt_r == i_i0_systolic_gsize2) ? 'b0 : (i0_systolic_cnt_r + 'b1);
@@ -368,6 +379,11 @@ always_comb begin
 	end
 end
 
+always_comb begin
+	i_dma_id_begs = i_which ? i_i0_id_begs : i_i0_id_ends;
+	i_dma_id_ends = i_which ? i_i1_id_begs : i_i1_id_ends;
+end
+
 //======================================
 // Submodule
 //======================================
@@ -387,7 +403,7 @@ OffsetStage #(.BW(WBW), .DIM(VDIM), .FROM_ZERO(1), .UNIT_STRIDE(0)) u_s0(
 	.o_islast(s0_last_block),
 	`dval_connect(init, ofs_init)
 );
-Broadcast#(4) u_brd_0(
+Broadcast#(5) u_brd_0(
 	`clk_connect,
 	`rdyack_connect(src, s0_dst),
 	.dst_rdys({i0_src_rdy, i1_src_rdy, dma_src_rdy, o_src_rdy, alu_src_rdy}),
@@ -406,15 +422,10 @@ AccumBlockLooperOutputController#(ICFG_BW) u_oc_i0(
 	.selected_end(s0_i0_end),
 	.skipped()
 );
-// Select them
-// i_dma_id_begs
-// i_dma_id_ends
-// s0_dma_beg
-// s0_dma_end
 AccumBlockLooperOutputController#(ICFG_BW) u_oc_i1(
 	`clk_connect,
 	`rdyack_connect(src, i1_src),
-	`rdyack_connect(dst, dma_abofs_0),
+	`rdyack_connect(dst, i1_abofs),
 	.reg_cg(i1_cg),
 	.begs(i_i1_id_begs),
 	.ends(i_i1_id_ends),
@@ -425,14 +436,14 @@ AccumBlockLooperOutputController#(ICFG_BW) u_oc_i1(
 	.skipped()
 );
 RepeatIf#(0) u_repeat_dma(
-	.cond(o_dma_which),
-	`rdyack_port(src, dma_abofs0),
-	`rdyack_port(dst, dma_abofs),
+	.cond(i_which),
+	`rdyack_connect(src, dma_src),
+	`rdyack_connect(dst, dma_src1),
 	.repeated()
 );
 AccumBlockLooperOutputController#(ICFG_BW) u_oc_dma(
 	`clk_connect,
-	`rdyack_connect(src, dma_src),
+	`rdyack_connect(src, dma_src1),
 	`rdyack_connect(dst, dma_abofs),
 	.reg_cg(dma_cg),
 	.begs(i_dma_id_begs),
@@ -518,6 +529,7 @@ AccumBlockLooperOutputController#(INST_BW) u_oc_alu(
 `ff_end
 
 `ff_rst
+	o_dma_which <= 1'b0;
 	for (int i = 0; i < VDIM; i++) begin
 		o_dma_bofs[i] <= '0;
 		o_dma_aofs[i] <= '0;
@@ -525,23 +537,25 @@ AccumBlockLooperOutputController#(INST_BW) u_oc_alu(
 	o_dma_beg <= '0;
 	o_dma_end <= '0;
 `ff_cg(dma_cg)
+	o_dma_which <= i_which;
 	o_dma_bofs <= i_bofs;
 	o_dma_aofs <= s0_aofs_beg;
 	o_dma_beg <= s0_i1_beg;
 	o_dma_end <= s0_i1_end;
 `ff_end
 
-`ifdef SD
 `ff_rst
-	o_dma_which <= 1'b0;
-`ff_cg(dma_abofs_ack)
-	o_dma_which <= o_dma_which_w;
+	i_which <= 1'b0;
+`ff_cg(dma_src1_ack)
+	i_which <= !i_which;
 `ff_end
 
+`ifdef SD
+// TODO
 `ff_rst
 	o_dma_syst_type <= '0;
-`ff_cg(dma_cg || dma_repeated)
-	o_dma_syst_type <= o_dma_syst_type_w[o_dma_which_w];
+`ff_cg(x)
+	o_dma_syst_type <= i_dma_which];
 `ff_end
 `endif
 
