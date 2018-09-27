@@ -99,19 +99,20 @@ output logic o_data;
 
 logic [NDATA-1:0] data_r;
 assign o_data = data_r[0];
+genvar gi;
 for (gi = 0; gi < NDATA-1; gi++) begin: fifo_storage
 	always_ff @(posedge i_clk or negedge i_rst) begin
 		if (!i_rst) begin
 			data_r[gi] <= '0;
-		end else if (load_nxt[gi] || load_new[gi]) begin
-			data_r[gi] <= load_new[gi] ? i_data : data_r[gi+1];
+		end else if (i_load_nxt[gi] || i_load_new[gi]) begin
+			data_r[gi] <= i_load_new[gi] ? i_data : data_r[gi+1];
 		end
 	end
 end
 
 `ff_rst
 	data_r[NDATA-1] <= '0;
-`ff_cg(load_new[NDATA-1])
+`ff_cg(i_load_new[NDATA-1])
 	data_r[NDATA-1] <= i_data;
 `ff_end
 endmodule
@@ -133,19 +134,20 @@ output logic [BW-1:0] o_data;
 
 logic [BW-1:0] data_r [NDATA];
 assign o_data = data_r[0];
+genvar gi;
 for (gi = 0; gi < NDATA-1; gi++) begin: fifo_storage
 	always_ff @(posedge i_clk or negedge i_rst) begin
 		if (!i_rst) begin
 			data_r[gi] <= '0;
-		end else if (load_nxt[gi] || load_new[gi]) begin
-			data_r[gi] <= load_new[gi] ? i_data : data_r[gi+1];
+		end else if (i_load_nxt[gi] || i_load_new[gi]) begin
+			data_r[gi] <= i_load_new[gi] ? i_data : data_r[gi+1];
 		end
 	end
 end
 
 `ff_rst
 	data_r[NDATA-1] <= '0;
-`ff_cg(load_new[NDATA-1])
+`ff_cg(i_load_new[NDATA-1])
 	data_r[NDATA-1] <= i_data;
 `ff_end
 endmodule
@@ -168,15 +170,16 @@ output logic [BW-1:0] o_data [D0];
 
 logic [BW-1:0] data_r [NDATA][D0];
 assign o_data = data_r[0];
+genvar gi;
 for (gi = 0; gi < NDATA-1; gi++) begin: fifo_storage
 	always_ff @(posedge i_clk or negedge i_rst) begin
 		if (!i_rst) begin
 			for (int i = 0; i < D0; i++) begin
 				data_r[gi][i] <= '0;
 			end
-		end else if (load_nxt[gi] || load_new[gi]) begin
+		end else if (i_load_nxt[gi] || i_load_new[gi]) begin
 			for (int i = 0; i < D0; i++) begin
-				data_r[gi][i] <= load_new[gi][i] ? i_data[i] : data_r[gi+1][i];
+				data_r[gi][i] <= i_load_new[gi] ? i_data[i] : data_r[gi+1][i];
 			end
 		end
 	end
@@ -184,11 +187,11 @@ end
 
 `ff_rst
 	for (int i = 0; i < D0; i++) begin
-		data_r[gi][i] <= '0;
+		data_r[NDATA-1][i] <= '0;
 	end
-`ff_cg(load_new[NDATA-1])
+`ff_cg(i_load_new[NDATA-1])
 	for (int i = 0; i < D0; i++) begin
-		data_r[gi][i] <= i_data[i];
+		data_r[NDATA-1][i] <= i_data[i];
 	end
 `ff_end
 endmodule
@@ -212,6 +215,7 @@ output logic [BW-1:0] o_data [D0][D1];
 
 logic [BW-1:0] data_r [NDATA][D0][D1];
 assign o_data = data_r[0];
+genvar gi;
 for (gi = 0; gi < NDATA-1; gi++) begin: fifo_storage
 	always_ff @(posedge i_clk or negedge i_rst) begin
 		if (!i_rst) begin
@@ -220,10 +224,10 @@ for (gi = 0; gi < NDATA-1; gi++) begin: fifo_storage
 					data_r[gi][i][j] <= '0;
 				end
 			end
-		end else if (load_nxt[gi] || load_new[gi]) begin
+		end else if (i_load_nxt[gi] || i_load_new[gi]) begin
 			for (int i = 0; i < D0; i++) begin
 				for (int j = 0; j < D1; j++) begin
-					data_r[gi][i][j] <= load_new[gi][i][j] ? i_data[i][j] : data_r[gi+1][i][j];
+					data_r[gi][i][j] <= i_load_new[gi] ? i_data[i][j] : data_r[gi+1][i][j];
 				end
 			end
 		end
@@ -233,13 +237,13 @@ end
 `ff_rst
 	for (int i = 0; i < D0; i++) begin
 		for (int j = 0; j < D1; j++) begin
-			data_r[gi][i][j] <= '0;
+			data_r[NDATA-1][i][j] <= '0;
 		end
 	end
-`ff_cg(load_new[NDATA-1])
+`ff_cg(i_load_new[NDATA-1])
 	for (int i = 0; i < D0; i++) begin
 		for (int j = 0; j < D1; j++) begin
-			data_r[gi][i][j] <= i_data[i][j];
+			data_r[NDATA-1][i][j] <= i_data[i][j];
 		end
 	end
 `ff_end
@@ -294,8 +298,8 @@ generate if (IMPL == 0 && NDATA >= 2) begin: fifo_reg
 	);
 	SFifoReg1D u_reg(
 		`clk_connect,
-		.o_load_nxt(load_nxt),
-		.o_load_new(load_new)
+		.i_load_nxt(load_nxt),
+		.i_load_new(load_new),
 		.i_data(i_data),
 		.o_data(o_data)
 	);

@@ -1,4 +1,4 @@
-// Copyright 2016 Yu Sheng Lin
+// Copyright 2016,2018 Yu Sheng Lin
 
 // This file is part of MIMORI.
 
@@ -21,9 +21,6 @@ module SramWriteCollector(
 	`rdyack_port(alloc),
 	i_id,
 	i_size,
-`ifdef SD
-	i_skip,
-`endif
 	i_padv,
 	`rdyack_port(cmd),
 	i_which,
@@ -44,7 +41,9 @@ module SramWriteCollector(
 //======================================
 // Parameter
 //======================================
-parameter LBW = TauCfg::LOCAL_ADDR_BW0;
+localparam LBW = TauCfg::MAX_LOCAL_ADDR_BW;
+localparam LBW0 = TauCfg::LOCAL_ADDR_BW0;
+localparam LBW1 = TauCfg::LOCAL_ADDR_BW1;
 localparam DBW = TauCfg::DATA_BW;
 localparam N_ICFG = TauCfg::N_ICFG;
 localparam VSIZE = TauCfg::VSIZE;
@@ -70,9 +69,6 @@ localparam [READ_DIFF_BW-1:0] READ_PAD_ZERO = 0;
 `rdyack_input(alloc);
 input [ICFG_BW-1:0] i_id;
 input [LBW:0]       i_size;
-`ifdef SD
-input               i_skip;
-`endif
 input [DBW-1:0]     i_padv;
 `rdyack_input(cmd);
 input              i_which;
@@ -84,10 +80,10 @@ input [CV_BW1-1:0] i_cmd_len;
 input [DBW-1:0] i_dramrd [CSIZE];
 `dval_output(w0);
 `dval_output(w1);
-output logic [ICFG_BW-1:0]   o_id;
-output logic [LBW-CV_BW-1:0] o_hiaddr0;
-output logic [LBW-CV_BW-1:0] o_hiaddr1;
-output logic [DBW-1:0]       o_data [VSIZE];
+output logic [ICFG_BW-1:0]    o_id;
+output logic [LBW0-CV_BW-1:0] o_hiaddr0;
+output logic [LBW1-CV_BW-1:0] o_hiaddr1;
+output logic [DBW-1:0]        o_data [VSIZE];
 
 //======================================
 // Internal
@@ -99,6 +95,8 @@ logic [CSIZE*DBW-1:0] data_1d;
 logic [CSIZE*DBW-1:0] data_1d_shiftr;
 logic [VSIZE*DBW-1:0] data_1d_shiftl;
 logic [DBW-1:0] data_w [VSIZE];
+logic [LBW0-CV_BW-1:0] o_hiaddr0_w;
+logic [LBW1-CV_BW-1:0] o_hiaddr1_w;
 logic [LBW-1:0] cur_r;
 logic [LBW-1:0] cur_w;
 logic [CV_BW1-1:0] cmd_handled_r;
@@ -141,15 +139,7 @@ always_comb begin
 			if (alloc_rdy) begin
 				alloc_ack = 1'b1;
 				filled_w = '0;
-`ifdef SD
-				if (i_skip) begin
-					fsm_w[FREE] = 1'b1;
-				end else begin
-					fsm_w[RUN] = 1'b1;
-				end
-`else
 				fsm_w[RUN] = 1'b1;
-`endif
 			end else begin
 				fsm_w[FREE] = 1'b1;
 			end
@@ -246,12 +236,33 @@ always_ff @(posedge i_clk or negedge i_rst) begin
 end
 end endgenerate
 
+logic w0_dval_w;
+logic w1_dval_w;
+always_comb begin
+	w0_dval_w = collected && !i_which;
+	w1_dval_w = collected &&  i_which;
+end
+
 `ff_rst
 	fsm_r <= 'b1 << FREE;
-	w_dval <= 1'b0;
+	w0_dval <= 1'b0;
+	w1_dval <= 1'b0;
 `ff_nocg
 	fsm_r <= fsm_w;
-	w_dval <= collected;
+	w0_dval <= w0_dval_w;
+	w1_dval <= w1_dval_w;
+`ff_end
+
+`ff_rst
+	o_hiaddr0 <= 'b0;
+`ff_cg(w0_dval_w)
+	o_hiaddr0 <= o_hiaddr0 + 'b1;
+`ff_end
+
+`ff_rst
+	o_hiaddr1 <= 'b0;
+`ff_cg(w1_dval_w)
+	o_hiaddr1 <= o_hiaddr1 + 'b1;
 `ff_end
 
 endmodule
