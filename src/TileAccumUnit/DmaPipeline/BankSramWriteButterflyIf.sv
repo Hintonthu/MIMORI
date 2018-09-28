@@ -31,13 +31,15 @@ module BankSramButterflyWriteIf(
 //======================================
 localparam BW = TauCfg::DATA_BW;
 localparam NBANK = TauCfg::VSIZE;
-localparam CLOG2_NDATA = TauCfg::MAX_LOCAL_ADDR_BW - CV_BW;
 localparam XOR_BW = TauCfg::XOR_BW;
-localparam XOR_ADDR_BW = 1<<XOR_BW;
-localparam NDATA = 1 << CLOG2_NDATA;
+// derived from global
+localparam CLOG2_NDATA = TauCfg::MAX_LOCAL_ADDR_BW - CV_BW;
 localparam CB_BW = TauCfg::CV_BW;
 localparam CCB_BW = TauCfg::CCV_BW;
+// derived
 localparam BANK_MASK = NBANK-1;
+localparam XOR_ADDR_BW = 1<<XOR_BW;
+localparam NDATA = 1 << CLOG2_NDATA;
 
 //======================================
 // I/O
@@ -74,7 +76,7 @@ always_comb begin
 		i_bf[0][i] = i_data[i];
 	end
 	// Butterfly (LSB -> MSB)
-	for (int i = 0; i < CLOG2_NBANK; ++i) begin
+	for (int i = 0; i < CB_BW; ++i) begin
 		for (int j = 0; j < NBANK; ++j) begin
 			i_bf[i+1][j] = i_addrs[j][i_xor_src[i]] ? i_bf[i][j^(1<<i)] : i_bf[i][j];
 		end

@@ -29,13 +29,11 @@ module DmaPipeline(
 	i_which, // 0 or 1
 	i_bofs,
 	i_abeg,
-	i_aend,
 	i_beg,
 	i_end,
 `ifdef SD
 	i_syst_type,
 `endif
-	i_i0_bgrid_step,
 	i_i0_global_linears,
 	i_i0_global_mofs,
 	i_i0_global_mboundaries,
@@ -49,16 +47,12 @@ module DmaPipeline(
 	i_i0_local_xor_srcs,
 	i_i0_local_xor_swaps,
 	i_i0_local_pads,
-	i_i0_local_bsubsteps,
 	i_i0_local_mboundaries,
 	i_i0_wraps,
 	i_i0_pad_values,
-	i_i0_id_begs,
-	i_i0_id_ends,
 `ifdef SD
 	i_i0_systolic_skip,
 `endif
-	i_i1_bgrid_step,
 	i_i1_global_linears,
 	i_i1_global_mofs,
 	i_i1_global_mboundaries,
@@ -72,12 +66,9 @@ module DmaPipeline(
 	i_i1_local_xor_srcs,
 	i_i1_local_xor_swaps,
 	i_i1_local_pads,
-	i_i1_local_bsubsteps,
 	i_i1_local_mboundaries,
 	i_i1_wraps,
 	i_i1_pad_values,
-	i_i1_id_begs,
-	i_i1_id_ends,
 `ifdef SD
 	i_i1_systolic_skip,
 `endif
@@ -121,7 +112,7 @@ localparam CCV_BW = TauCfg::CCV_BW;
 localparam CX_BW = TauCfg::CX_BW;
 localparam DIM_BW = TauCfg::DIM_BW;
 // derived
-localparam HBW = LBW-CV_BW;
+localparam HBW = MAX_LBW-CV_BW;
 localparam CC_BW = $clog2(CSIZE);
 localparam CV_BW1 = $clog2(VSIZE+1);
 
@@ -133,13 +124,11 @@ localparam CV_BW1 = $clog2(VSIZE+1);
 inpug               i_which;
 input [WBW-1:0]     i_bofs [VDIM];
 input [WBW-1:0]     i_abeg [VDIM];
-input [WBW-1:0]     i_aend [VDIM];
 input [ICFG_BW-1:0] i_beg;
 input [ICFG_BW-1:0] i_end;
 `ifdef SD
 input [STO_BW-1:0]  i_syst_type;
 `endif
-input [WBW-1:0]     i_i0_bgrid_step     [VDIM];
 input [GBW-1:0]     i_i0_global_linears     [N_ICFG];
 input [WBW-1:0]     i_i0_global_mofs        [N_ICFG][DIM];
 input [GBW-1:0]     i_i0_global_mboundaries [N_ICFG][DIM];
@@ -153,16 +142,12 @@ input [SS_BW-1:0]   i_i0_astrides_shamt     [N_ICFG][VDIM];
 input [XOR_BW-1:0]  i_i0_local_xor_srcs     [N_ICFG][CV_BW];
 input [CCV_BW-1:0]  i_i0_local_xor_swaps    [N_ICFG];
 input [CV_BW-1:0]   i_i0_local_pads         [N_ICFG][DIM];
-input [LBW-1:0]     i_i0_local_bsubsteps    [N_ICFG][CV_BW];
 input [LBW-1:0]     i_i0_local_mboundaries  [N_ICFG][DIM];
 input [N_ICFG-1:0]  i_i0_wraps;
 input [DBW-1:0]     i_i0_pad_values [N_ICFG];
-input [ICFG_BW-1:0] i_i0_id_begs [VDIM+1];
-input [ICFG_BW-1:0] i_i0_id_ends [VDIM+1];
 `ifdef SD
 input [N_ICFG-1:0]  i_i0_systolic_skip;
 `endif
-input [WBW-1:0]     i_i1_bgrid_step     [VDIM];
 input [GBW-1:0]     i_i1_global_linears     [N_ICFG];
 input [WBW-1:0]     i_i1_global_mofs        [N_ICFG][DIM];
 input [GBW-1:0]     i_i1_global_mboundaries [N_ICFG][DIM];
@@ -176,12 +161,9 @@ input [SS_BW-1:0]   i_i1_astrides_shamt     [N_ICFG][VDIM];
 input [XOR_BW-1:0]  i_i1_local_xor_srcs     [N_ICFG][CV_BW];
 input [CCV_BW-1:0]  i_i1_local_xor_swaps    [N_ICFG];
 input [CV_BW-1:0]   i_i1_local_pads         [N_ICFG][DIM];
-input [LBW-1:0]     i_i1_local_bsubsteps    [N_ICFG][CV_BW];
 input [LBW-1:0]     i_i1_local_mboundaries  [N_ICFG][DIM];
 input [N_ICFG-1:0]  i_i1_wraps;
 input [DBW-1:0]     i_i1_pad_values [N_ICFG];
-input [ICFG_BW-1:0] i_i1_id_begs [VDIM+1];
-input [ICFG_BW-1:0] i_i1_id_ends [VDIM+1];
 `ifdef SD
 input [N_ICFG-1:0]  i_i1_systolic_skip;
 `endif
@@ -240,7 +222,8 @@ always_comb begin
 	end
 end
 
-logic [WBW-1:0] ch_mofs[DIM];
+logic [WBW-1:0]     ch_mofs [DIM];
+logic [ICFG_BW-1:0] ch_mid;
 ChunkHead u_chunk_head(
 	`clk_connect,
 	`rdyack_connect(i_abofs, bofs),
@@ -400,13 +383,13 @@ logic [GBW-1:0]     ch_addr_global_cboundary [DIM];
 always_comb begin
 	if (ch_addr_which) begin
 		ch_addr_global_linear    = i_i1_global_linears[ch_addr_mid];
-		ch_addr_wrap             = i_i1_wrap[ch_addr_mid];
+		ch_addr_wrap             = i_i1_wraps[ch_addr_mid];
 		ch_addr_local_pad        = i_i1_local_pads[ch_addr_mid][i];
 		ch_addr_global_mboundary = i_i1_global_mboundaries[ch_addr_mid][i];
 		ch_addr_global_cboundary = i_i1_global_cboundaries[ch_addr_mid][i];
 	end else begin
 		ch_addr_global_linear    = i_i0_global_linears[ch_addr_mid];
-		ch_addr_wrap             = i_i0_wrap[ch_addr_mid];
+		ch_addr_wrap             = i_i0_wraps[ch_addr_mid];
 		ch_addr_local_pad        = i_i0_local_pads[ch_addr_mid][i];
 		ch_addr_global_mboundary = i_i0_global_mboundaries[ch_addr_mid][i];
 		ch_addr_global_cboundary = i_i0_global_cboundaries[ch_addr_mid][i];
@@ -490,7 +473,8 @@ ChunkAddrLooper u_cal_cmd(
 //======================================================
 // SramWriteCollector
 logic [DBW-1:0]     ch_alloc_pad_value;
-logic [MAX_LBW-1:0] ch_alloc_size;
+logic [MAX_LBW:0]   ch_alloc_size;
+logic [ICFG_BW-1:0] rmc_wif_id;
 always_comb begin
 	if (ch_alloc_which) begin
 		ch_alloc_size      = i_i1_local_mboundaries[ch_alloc_mid][0];
@@ -516,23 +500,23 @@ SramWriteCollector u_swc(
 	.i_dramrd(i_dramrd),
 	`dval_connect(w0, rmc_write0),
 	`dval_connect(w1, rmc_write1),
-	.o_id(swc_wif_id),
+	.o_id(rmc_wif_id),
 	.o_hiaddr0(o_rmc_whiaddr0),
 	.o_hiaddr1(o_rmc_whiaddr1),
 	.o_data(o_rmc_wdata0)
 );
 // BankSramButterflyWriteIf
-logic [XOR_BW-1:0]  rmc_xor_wsrc[CV_BW];
-logic [CCV_BW-1:0]  rmc_xor_wswap;
-logic [MAX_LBW-1:0] rmc_whiaddr;
+logic [XOR_BW-1:0] rmc_xor_wsrc [CV_BW];
+logic [CCV_BW-1:0] rmc_xor_wswap;
+logic [HBW-1:0]    rmc_whiaddr;
 always_comb begin
 	priority if (w0) begin
-		rmc_xor_wsrc    = i_i1_local_xor_srcs[swc_wif_id];
-		rmc_xor_wswap   = i_i1_local_xor_swaps[swc_wif_id];
+		rmc_xor_wsrc    = i_i1_local_xor_srcs[rmc_wif_id];
+		rmc_xor_wswap   = i_i1_local_xor_swaps[rmc_wif_id];
 		rmc_whiaddr = o_rmc_whiaddr1;
 	end else begin
-		rmc_xor_wsrc    = i_i0_local_xor_srcs[swc_wif_id];
-		rmc_xor_wswap   = i_i0_local_xor_swaps[swc_wif_id];
+		rmc_xor_wsrc    = i_i0_local_xor_srcs[rmc_wif_id];
+		rmc_xor_wswap   = i_i0_local_xor_swaps[rmc_wif_id];
 		rmc_whiaddr = o_rmc_whiaddr0;
 	end
 end
