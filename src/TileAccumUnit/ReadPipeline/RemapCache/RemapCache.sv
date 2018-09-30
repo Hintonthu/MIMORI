@@ -17,7 +17,6 @@
 
 `include "common/SRAM.sv"
 `include "TileAccumUnit/ReadPipeline/RemapCache/BankSramReadIf.sv"
-`include "TileAccumUnit/ReadPipeline/RemapCache/BankSramWriteButterflyIf.sv"
 
 module RemapCache(
 	`clk_port,
@@ -101,7 +100,6 @@ input [DBW-1:0]     i_wdata [VSIZE];
 logic [VSIZE-1:0] sram_re;
 logic [HBW-1:0] sram_ra [VSIZE];
 logic [DBW-1:0] sram_rd [VSIZE];
-logic [DBW-1:0] sram_wd [VSIZE];
 logic [XOR_BW-1:0] xor_rsrc [CV_BW];
 
 //======================================
@@ -152,7 +150,7 @@ SRAMTwoPort #(.BW(DBW), .NDATA(NDATA)) u_dp_sram(
 	.i_we(wad_dval),
 	.i_re(sram_re[gi]),
 	.i_waddr(i_whiaddr),
-	.i_wdata(sram_wd[gi]),
+	.i_wdata(i_wdata[gi]),
 	.i_raddr(sram_ra[gi]),
 	.o_rdata(sram_rd[gi])
 );

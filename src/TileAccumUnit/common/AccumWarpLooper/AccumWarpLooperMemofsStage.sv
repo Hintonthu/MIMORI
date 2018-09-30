@@ -91,7 +91,6 @@ logic [WBW-1:0] bofs_stride [VDIM];
 logic [WBW-1:0] aofs_stride [VDIM];
 `rdyack_logic(s0);
 logic [WBW-1:0]     s0_mofs_nd_r  [DIM];
-logic [ABW-1:0]     s0_mofs_nd_rz [DIM];
 logic [WBW-1:0]     s0_mofs_nd_w  [DIM];
 logic [ABW-1:0]     s0_mult_r [DIM-1];
 logic [ABW-1:0]     s0_linear_r;
@@ -109,17 +108,13 @@ always_comb for (int i = 0; i < VDIM; i++) begin
 	aofs_stride[i] = (i_aofs[i] * i_astride_frac[i]) << i_astride_shamt[i];
 end
 
-always_comb for (int i = 0; i < DIM; i++) begin
-	// lint error for bit width mismatch
-	s0_mofs_nd_rz[i] = s0_mofs_nd_r[i];
-end
-
+typedef logic [ABW-1:0] ABW_BW_T;
 always_comb begin
 	o_linear_w = '0;
 	for (int i = 0; i < DIM-1; i++) begin
-		o_linear_w = o_linear_w + s0_mofs_nd_rz[i] * s0_mult_r[i];
+		o_linear_w = o_linear_w + ABW_BW_T'(s0_mofs_nd_r[i]) * s0_mult_r[i];
 	end
-	o_linear_w = o_linear_w + s0_linear_r + s0_mofs_nd_rz[DIM-1];
+	o_linear_w = o_linear_w + s0_linear_r + ABW_BW_T'(s0_mofs_nd_r[DIM-1]);
 end
 
 //======================================

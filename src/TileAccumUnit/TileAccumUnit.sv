@@ -211,7 +211,7 @@ input [WBW-1:0]     i_agrid_end      [VDIM];
 input [WBW-1:0]     i_aboundary      [VDIM];
 input [XOR_BW-1:0]  i_i0_local_xor_srcs     [N_ICFG][CV_BW];
 input [CCV_BW-1:0]  i_i0_local_xor_swaps    [N_ICFG];
-input [LBW0-1:0]    i_i0_local_boundaries   [N_ICFG][DIM];
+input [LBW0  :0]    i_i0_local_boundaries   [N_ICFG][DIM];
 input [LBW0-1:0]    i_i0_local_bsubsteps    [N_ICFG][CV_BW];
 input [CV_BW-1:0]   i_i0_local_pads         [N_ICFG][DIM];
 input [WBW-1:0]     i_i0_global_starts      [N_ICFG][DIM];
@@ -237,7 +237,7 @@ input [N_ICFG-1:0]  i_i0_systolic_skip;
 `endif
 input [XOR_BW-1:0]  i_i1_local_xor_srcs     [N_ICFG][CV_BW];
 input [CCV_BW-1:0]  i_i1_local_xor_swaps    [N_ICFG];
-input [LBW1-1:0]    i_i1_local_boundaries   [N_ICFG][DIM];
+input [LBW1  :0]    i_i1_local_boundaries   [N_ICFG][DIM];
 input [LBW1-1:0]    i_i1_local_bsubsteps    [N_ICFG][CV_BW];
 input [CV_BW-1:0]   i_i1_local_pads         [N_ICFG][DIM];
 input [WBW-1:0]     i_i1_global_starts      [N_ICFG][DIM];
@@ -638,32 +638,48 @@ DmaPipeline u_dma(
 	.i_which(abl_dma_which),
 	.i_bofs(abl_dma_bofs),
 	.i_abeg(abl_dma_abeg),
-	.i_aend(abl_dma_aend),
 	.i_beg(abl_dma_beg),
 	.i_end(abl_dma_end),
 `ifdef SD
-	.i_syst_type(abl_dma_syst_type),
+	.i_syst_type(abl_syst_type),
 `endif
-	.i_bgrid_step(),
-	.i_global_linears(),
-	.i_global_mofs(),
-	.i_global_mboundaries(),
-	.i_global_cboundaries(),
-	.i_global_bshufs(),
-	.i_bstrides_frac(),
-	.i_bstrides_shamt(),
-	.i_global_ashufs(),
-	.i_astrides_frac(),
-	.i_astrides_shamt(),
-	.i_local_pads(),
-	.i_local_bsubsteps(),
-	.i_local_mboundaries(),
-	.i_wrap(),
-	.i_pad_value(),
-	.i_id_begs(),
-	.i_id_ends(),
+	.i_i0_global_linears(i_i0_global_linears),
+	.i_i0_global_mofs(i_i0_global_starts),
+	.i_i0_global_mboundaries(i_i0_global_boundaries),
+	.i_i0_global_cboundaries(i_i0_global_cboundaries),
+	.i_i0_global_bshufs(i_i0_global_bshufs),
+	.i_i0_bstrides_frac(i_i0_bstrides_frac),
+	.i_i0_bstrides_shamt(i_i0_bstrides_shamt),
+	.i_i0_global_ashufs(i_i0_global_ashufs),
+	.i_i0_astrides_frac(i_i0_astrides_frac),
+	.i_i0_astrides_shamti_i0_astrides_shamt),
+	.i_i0_local_xor_srcs(i_i0_local_xor_srcs),
+	.i_i0_local_xor_swaps(i_i0_local_xor_swaps),
+	.i_i0_local_pads(i_i0_local_pads),
+	.i_i0_local_mboundaries(i_i0_local_boundaries),
+	.i_i0_wraps(i_i0_wrap),
+	.i_i0_pad_values(i_i0_pad_value),
 `ifdef SD
-	.i_systolic_skip(),
+	.i_i0_systolic_skip(i_i0_systolic_skip),
+`endif
+	.i_i1_global_linears(i_i1_global_linears),
+	.i_i1_global_mofs(i_i1_global_starts),
+	.i_i1_global_mboundaries(i_i1_global_boundaries),
+	.i_i1_global_cboundaries(i_i1_global_cboundaries),
+	.i_i1_global_bshufs(i_i1_global_bshufs),
+	.i_i1_bstrides_frac(i_i1_bstrides_frac),
+	.i_i1_bstrides_shamt(i_i1_bstrides_shamt),
+	.i_i1_global_ashufs(i_i1_global_ashufs),
+	.i_i1_astrides_frac(i_i1_astrides_frac),
+	.i_i1_astrides_shamti_i1_astrides_shamt),
+	.i_i1_local_xor_srcs(i_i1_local_xor_srcs),
+	.i_i1_local_xor_swaps(i_i1_local_xor_swaps),
+	.i_i1_local_pads(i_i1_local_pads),
+	.i_i1_local_mboundaries(i_i1_local_boundaries),
+	.i_i1_wraps(i_i1_wrap),
+	.i_i1_pad_values(i_i1_pad_value),
+`ifdef SD
+	.i_i1_systolic_skip(i_i1_systolic_skip),
 `endif
 	`rdyack_connect(rp_en0, rp_dma_en0),
 	`rdyack_connect(rp_en1, rp_dma_en1),

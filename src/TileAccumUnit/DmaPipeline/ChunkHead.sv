@@ -122,7 +122,7 @@ end
 //======================================
 // Submodule
 //======================================
-LoopController#(.DONE_IF(), .HOLD_SRC(1)) u_lc(
+LoopController#(.DONE_IF(1), .HOLD_SRC(1)) u_lc(
 	`clk_connect,
 	`rdyack_connect(src, i_abofs),
 	`rdyack_connect(dst, o_mofs),

@@ -21,11 +21,8 @@
 `include "common/Controllers.sv"
 `include "TileAccumUnit/common/AccumWarpLooper/AccumWarpLooper.sv"
 `include "TileAccumUnit/ReadPipeline/Allocator.sv"
-`include "TileAccumUnit/ReadPipeline/ChunkAddrLooper/ChunkAddrLooper.sv"
-`include "TileAccumUnit/ReadPipeline/ChunkHead.sv"
 `include "TileAccumUnit/ReadPipeline/LinearCollector.sv"
 `include "TileAccumUnit/ReadPipeline/RemapCache/RemapCache.sv"
-`include "TileAccumUnit/ReadPipeline/SramWriteCollector.sv"
 
 module ReadPipeline(
 	`clk_port,
@@ -72,9 +69,9 @@ module ReadPipeline(
 	// Tell DMA something to work
 	`rdyack_port(rp_en),
 	// DMA write to SRAM
-	`dval_port(rmc_write),
-	i_rmc_whiaddr,
-	i_rmc_wdata,
+	`dval_port(dma_write),
+	i_dma_whiaddr,
+	i_dma_wdata,
 	// To systolic switch and ALU
 	`rdyack_port(sramrd),
 `ifdef SD
@@ -143,7 +140,7 @@ input [XOR_BW-1:0]  i_local_xor_srcs     [N_ICFG][CV_BW];
 input [CCV_BW-1:0]  i_local_xor_swaps    [N_ICFG];
 input [CV_BW-1:0]   i_local_pads         [N_ICFG][DIM];
 input [LBW-1:0]     i_local_bsubsteps    [N_ICFG][CV_BW];
-input [LBW-1:0]     i_local_mboundaries  [N_ICFG][DIM];
+input [LBW  :0]     i_local_mboundaries  [N_ICFG][DIM];
 input [N_ICFG-1:0]  i_wrap;
 input [DBW-1:0]     i_pad_value [N_ICFG];
 input [ICFG_BW-1:0] i_id_begs [VDIM+1];
@@ -156,10 +153,9 @@ input [LBW-1:0]     i_stencil_lut [STSIZE];
 input [N_ICFG-1:0]  i_systolic_skip;
 `endif
 `dval_input(blkdone);
-`rdyack_output(dramra);
-output [GBW-1:0] o_dramra;
-`rdyack_input(dramrd);
-input [DBW-1:0] i_dramrd [CSIZE];
+`dval_input(dma_write);
+input [LBW-CV_BW-1:0] i_dma_whiaddr;
+input [DBW-1:0]       i_dma_wdata [VSIZE];
 `rdyack_output(sramrd);
 `ifdef SD
 output [STO_BW-1:0] o_syst_type;
@@ -167,93 +163,64 @@ output [STO_BW-1:0] o_syst_type;
 output [DBW-1:0] o_sramrd [VSIZE];
 
 //======================================
-// Internal
+// Broadcast input
 //======================================
-logic [LBW:0] i_local_sizes [N_ICFG];
-`rdyack_logic(brd0_lc);
-`rdyack_logic(brd0_ch);
-`rdyack_logic(ch_mofs);
-`rdyack_logic(ch_mofs_masked);    // -> cmd, addr, alloc
-`rdyack_logic(cal_writer_cmd);
-`dval_logic(rmc_alloc_free_id);
-logic [WBW-1:0]     ch_mofs      [DIM];
-logic [GBW-1:0]     ch_mofs_sext [DIM];
-logic [ICFG_BW-1:0] ch_mid;
-`rdyack_logic(ch_alloc_mofs_src); // broadcast
-`rdyack_logic(ch_cmd_mofs_src);   // broadcast
-`rdyack_logic(ch_addr_mofs_src);  // broadcast
-`rdyack_logic(ch_alloc_mofs_dst); // pipeline
-`rdyack_logic(ch_alloc_mofs_dst2);// if alloc counter < MAX
-logic [ICFG_BW-1:0] ch_alloc_mid;
-`rdyack_logic(ch_cmd_mofs_dst);   // pipeline
-logic [CV_BW-1:0]   ch_cmd_local_pad [DIM];
-logic [GBW-1:0]     ch_cmd_global_mboundary [DIM];
-logic [GBW-1:0]     ch_cmd_global_cboundary [DIM];
-logic [GBW-1:0]     ch_cmd_mofs [DIM];
-logic [ICFG_BW-1:0] ch_cmd_mid;
-`rdyack_logic(ch_addr_mofs_dst);  // pipeline
-`rdyack_logic(ch_addr_mofs_dst2); // if alloc counter > 0
-logic [CV_BW-1:0]   ch_addr_local_pad [DIM];
-logic [GBW-1:0]     ch_addr_global_mboundary [DIM];
-logic [GBW-1:0]     ch_addr_global_cboundary [DIM];
-logic [GBW-1:0]     ch_addr_mofs [DIM];
-logic [ICFG_BW-1:0] ch_addr_mid;
-`rdyack_logic(cal_cmd);
-`rdyack_logic(cal_addr);
-logic cal_addr_islast;
-`rdyack_logic(alloc_writer_linear);
-logic [LBW-1:0]     alloc_writer_linear;
-logic [ICFG_BW-1:0] alloc_writer_linear_id;
-`rdyack_logic(rmc_alloc_free_id);
-logic [ICFG_BW-1:0] rmc_alloc_free_id;
-`rdyack_logic(writer_warp_linear_fifo_in);
-`rdyack_logic(writer_warp_linear_fifo_out);
-logic [LBW-1:0]     writer_linear;
-logic [LBW-1:0]     writer_warp_linear [LBUF_SIZE];
-logic [LBUF_SIZE-2:0] linear_load_nxt;
-logic [LBUF_SIZE-1:0] linear_load_new;
-logic alloc_empty;
-logic alloc_full;
-logic linear_full;
-`rdyack_logic(warp_rmc_addrval);
-logic [ICFG_BW-1:0] warp_rmc_id;
-logic [LBW-1:0]     warp_rmc_addr [VSIZE];
-logic               warp_rmc_retire;
-`rdyack_logic(cal_writer);
-logic [1:0]        cal_writer_type;
-logic              cal_writer_islast;
-logic [CC_BW-1:0]  cal_writer_addrofs;
-logic [CV_BW1-1:0] cal_writer_len;
-`rdyack_logic(lc_warp);
-logic [WBW-1:0] lc_bofs         [VDIM];
-logic [WBW-1:0] lc_abeg         [VDIM];
-logic [WBW-1:0] lc_aend         [VDIM];
-logic [LBW-1:0] lc_warp_linears [N_ICFG];
-`dval_logic(rmc_write);
-logic [ICFG_BW-1:0]   rmc_write_wid;
-logic [LBW-CV_BW-1:0] rmc_write_whiaddr;
-logic [DBW-1:0]       rmc_write_wdata [VSIZE];
-`ifdef SD
-logic               ch_skip;
-`rdyack_logic(ch_cmd_mofs_src2);  // broadcast
-`rdyack_logic(ch_addr_mofs_src2); // broadcast
-logic               ch_alloc_false_alloc;
-logic               rmc_alloc_false_alloc;
-logic [STO_BW-1:0]  warp_rmc_syst_type;
-logic [STO_BW-1:0]  lc_syst_type;
-`endif
+// Allocate space and generate address
+// LinearCollector stops after AccumWarpLooper, so we only wait this two
+`rdyack_logic(brd_lc);
+`rdyack_logic(brd_alloc);
+Broadcast#(2) u_broadcast_input(
+	`clk_connect,
+	`rdyack_connect(src, bofs),
+	.dst_rdys({brd_lc_rdy,brd_alloc_rdy}),
+	.dst_acks({brd_lc_ack,brd_alloc_ack})
+);
 
 //======================================
-// Submodule
+// Allocate space, notify DMA,
+// and send to LinearCollector upon ready
 //======================================
-Forward u_fwd_alloc(
+`rdyack_logic(alloc_lc);
+logic [LBW-1:0] alloc_lc_linear;
+`dval_logic(rmc_alloc_free_id);
+logic [ICFG_BW-1:0] rmc_alloc_free_id;
+`ifdef SD
+logic               rmc_alloc_false_alloc;
+`endif
+Allocator#(.LBW(LBW)) u_alloc(
 	`clk_connect,
-	`rdyack_connect(src, ch_alloc_mofs_src),
-	`rdyack_connect(dst, ch_alloc_mofs_dst)
+	.i_local_mboundaries(i_local_mboundaries),
+	`rdyack_connect(alloc, brd_alloc),
+	.i_beg_id(i_beg),
+	.i_end_id(i_end),
+`ifdef SD
+	.i_syst_type(i_syst_type),
+	.i_systolic_skip(i_systolic_skip),
+`endif
+	`rdyack_connect(linear, alloc_lc),
+	.o_linear(alloc_lc_linear),
+	`rdyack_connect(allocated, rp_en),
+	`dval_connect(free, rmc_alloc_free_id),
+	.i_free_id(rmc_alloc_free_id)
+`ifdef SD
+	, .i_false_free(rmc_alloc_false_alloc)
+`endif
 );
+//======================================
+// Collect and launch AccumWarpLooper
+//======================================
+// Use input information to know what to collect
+`rdyack_logic(lc_awl);
+logic [WBW-1:0] lc_awl_bofs    [VDIM];
+logic [WBW-1:0] lc_awl_abeg    [VDIM];
+logic [WBW-1:0] lc_awl_aend    [VDIM];
+logic [LBW-1:0] lc_awl_linears [N_ICFG];
+`ifdef SD
+logic [STO_BW-1:0]  lc_awl_syst_type;
+`endif
 LinearCollector#(.LBW(LBW)) u_linear_col(
 	`clk_connect,
-	`rdyack_connect(range, brd0_lc),
+	`rdyack_connect(range, brd_lc),
 	.i_bofs(i_bofs),
 	.i_abeg(i_abeg),
 	.i_aend(i_aend),
@@ -262,28 +229,34 @@ LinearCollector#(.LBW(LBW)) u_linear_col(
 `ifdef SD
 	.i_syst_type(i_syst_type),
 `endif
-	`rdyack_connect(src_linear, writer_warp_linear_fifo_out),
-	.i_linear(writer_warp_linear[0]),
-	`rdyack_connect(dst_linears, lc_warp),
-	.o_bofs(lc_bofs),
-	.o_abeg(lc_abeg),
-	.o_aend(lc_aend),
+	`rdyack_connect(src_linear, alloc_lc),
+	.i_linear(alloc_lc_linear),
+	`rdyack_connect(dst_linears, lc_awl),
+	.o_bofs(lc_awl_bofs),
+	.o_abeg(lc_awl_abeg),
+	.o_aend(lc_awl_aend),
 `ifdef SD
-	.o_syst_type(lc_syst_type),
+	.o_syst_type(lc_awl_syst_type),
 `endif
-	.o_linears(lc_warp_linears)
+	.o_linears(lc_awl_linears)
 );
-// TODO: this works without large modification, but for low power, AG can be turned off
+`rdyack_logic(awl_rmc_addrval);
+logic [ICFG_BW-1:0] awl_rmc_id;
+logic [LBW-1:0]     awl_rmc_addr [VSIZE];
+logic               awl_rmc_retire;
+`ifdef SD
+logic [STO_BW-1:0]  awl_rmc_syst_type;
+`endif
 AccumWarpLooper #(.N_CFG(N_ICFG), .ABW(LBW), .STENCIL(1), .USE_LOFS(1)) u_awl(
 	`clk_connect,
-	`rdyack_connect(abofs, lc_warp),
-	.i_bofs(lc_bofs),
-	.i_abeg(lc_abeg),
-	.i_aend(lc_aend),
+	`rdyack_connect(abofs, lc_awl),
+	.i_bofs(lc_awl_bofs),
+	.i_abeg(lc_awl_abeg),
+	.i_aend(lc_awl_aend),
 `ifdef SD
-	.i_syst_type(lc_syst_type),
+	.i_syst_type(lc_awl_syst_type),
 `endif
-	.i_linears(lc_warp_linears),
+	.i_linears(lc_awl_linears),
 	.i_bboundary(),
 	.i_bsubofs(),
 	.i_bsub_up_order(i_bsub_up_order),
@@ -307,78 +280,45 @@ AccumWarpLooper #(.N_CFG(N_ICFG), .ABW(LBW), .STENCIL(1), .USE_LOFS(1)) u_awl(
 `ifdef SD
 	.i_systolic_skip(i_systolic_skip),
 `endif
-	`rdyack_connect(addrval, warp_rmc_addrval),
-	.o_id(warp_rmc_id),
-	.o_address(warp_rmc_addr),
+	`rdyack_connect(addrval, awl_rmc_addrval),
+	.o_id(awl_rmc_id),
+	.o_address(awl_rmc_addr),
 	.o_valid(),
-	.o_retire(warp_rmc_retire)
+	.o_retire(awl_rmc_retire)
 `ifdef SD
 	,
-	.o_syst_type(warp_rmc_syst_type)
+	.o_syst_type(awl_rmc_syst_type)
 `endif
 );
-Allocator#(.LBW(LBW)) u_alloc(
-	`clk_connect,
-	.i_sizes(i_local_sizes),
-	`rdyack_connect(alloc, ch_alloc_mofs_dst2),
-	.i_alloc_id(ch_alloc_mid),
-`ifdef SD
-	.i_false_alloc(ch_alloc_false_alloc),
-`endif
-	`rdyack_connect(linear, alloc_writer_linear),
-	.o_linear(alloc_writer_linear),
-	.o_linear_id(alloc_writer_linear_id),
-`ifdef SD
-	.o_false_alloc(alloc_writer_false_alloc),
-`endif
-	`dval_connect(free, rmc_alloc_free_id),
-	.i_free_id(rmc_alloc_free_id),
-`ifdef SD
-	.i_false_free(rmc_alloc_false_alloc),
-`endif
-	`dval_connect(blkdone, blkdone)
-);
-// TODO: See AccumWarpLooper
+
+//======================================
+// Buffer (accept data; addr -> data)
+//======================================
 RemapCache#(.LBW(LBW)) u_rmc(
 	`clk_connect,
 	.i_xor_srcs(i_local_xor_srcs),
 	.i_xor_swaps(i_local_xor_swaps),
-	`rdyack_connect(ra, warp_rmc_addrval),
-	.i_rid(warp_rmc_id),
-	.i_raddr(warp_rmc_addr),
-	.i_retire(warp_rmc_retire),
+	`rdyack_connect(ra, awl_rmc_addrval),
+	.i_rid(awl_rmc_id),
+	.i_raddr(awl_rmc_addr),
+	.i_retire(awl_rmc_retire),
 `ifdef SD
-	.i_syst_type(warp_rmc_syst_type),
+	.i_syst_type(awl_rmc_syst_type),
 `endif
 	`rdyack_connect(rd, sramrd),
 `ifdef SD
 	.o_syst_type(o_syst_type),
 `endif
 	.o_rdata(o_sramrd),
+	`dval_connect(we, dma_write),
 	`dval_connect(free, rmc_alloc_free_id),
 `ifdef SD
 	.o_false_alloc(rmc_alloc_false_alloc),
 `endif
 	.o_free_id(rmc_alloc_free_id),
-	`dval_connect(wad, rmc_write),
-	.i_whiaddr(rmc_write_whiaddr),
-	.i_wdata(rmc_write_wdata)
+	`dval_connect(wad, dma_write),
+	.i_whiaddr(i_dma_whiaddr),
+	.i_wdata(i_dma_wdata)
 );
-//======================================
-// Combinational
-//======================================
-always_comb for (int i = 0; i < N_ICFG; i++) begin
-	i_local_sizes[i] = i_local_mboundaries[i][0];
-end
-
-always_comb for (int i = 0; i < DIM; i++) begin
-	ch_mofs_sext[i] = $signed(ch_mofs[i]);
-	ch_cmd_local_pad[i] = i_local_pads[ch_cmd_mid][i];
-	ch_cmd_global_mboundary[i] = i_global_mboundaries[ch_cmd_mid][i];
-	ch_cmd_global_cboundary[i] = i_global_cboundaries[ch_cmd_mid][i];
-	ch_addr_local_pad[i] = i_local_pads[ch_addr_mid][i];
-	ch_addr_global_mboundary[i] = i_global_mboundaries[ch_addr_mid][i];
-	ch_addr_global_cboundary[i] = i_global_cboundaries[ch_addr_mid][i];
-end
 
 endmodule
