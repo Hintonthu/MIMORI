@@ -525,11 +525,16 @@ logic [XOR_BW-1:0] rmc_xor_wsrc [CV_BW];
 logic [CCV_BW-1:0] rmc_xor_wswap;
 logic [HBW-1:0]    rmc_whiaddr;
 always_comb begin
+	/*
+	  systemverilog 2012 equivelent (it doesn't work)
+	  unique0 if (rmc_write1_dval) begin
+	  end else if (rmc_write0_dval) begin
+	*/
 	if (rmc_write1_dval) begin
 		rmc_xor_wsrc    = i_i1_local_xor_srcs[rmc_wif_id];
 		rmc_xor_wswap   = i_i1_local_xor_swaps[rmc_wif_id];
 		rmc_whiaddr     = o_rmc_whiaddr1;
-	end else begin // if (rmc_write0_dval)
+	end else begin
 		rmc_xor_wsrc    = i_i0_local_xor_srcs[rmc_wif_id];
 		rmc_xor_wswap   = i_i0_local_xor_swaps[rmc_wif_id];
 		rmc_whiaddr     = o_rmc_whiaddr0;
