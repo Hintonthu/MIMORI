@@ -19,6 +19,7 @@
 module ChunkHead(
 	`clk_port,
 	`rdyack_port(i_abofs),
+	i_which,
 	i_bofs,
 	i_aofs,
 	i_beg,
@@ -37,6 +38,7 @@ module ChunkHead(
 	i_systolic_skip,
 `endif
 	`rdyack_port(o_mofs),
+	o_which,
 	o_mofs,
 	o_id
 `ifdef SD
@@ -60,6 +62,7 @@ localparam DIM_BW = $clog2(DIM);
 
 `clk_input;
 `rdyack_input(i_abofs);
+input               i_which;
 input [WBW-1:0]     i_bofs [VDIM];
 input [WBW-1:0]     i_aofs [VDIM];
 input [ICFG_BW-1:0] i_beg;
@@ -78,6 +81,7 @@ input [SS_BW-1:0]   i_astrides_shamt [N_ICFG][VDIM];
 input [N_ICFG-1:0]  i_systolic_skip;
 `endif
 `rdyack_output(o_mofs);
+output logic               o_which;
 output logic [WBW-1:0]     o_mofs   [DIM];
 output logic [ICFG_BW-1:0] o_id;
 `ifdef SD
@@ -87,8 +91,7 @@ output logic               o_skip;
 //======================================
 // Internal
 //======================================
-`dval_logic(i_init);
-`rdyack_logic(i_abofs_delay);
+logic loop_init;
 logic [WBW-1:0]     i_bofs_stride [VDIM];
 logic [WBW-1:0]     i_aofs_stride [VDIM];
 logic [WBW-1:0]     global_mofs_w   [DIM];
@@ -103,7 +106,7 @@ logic [WBW-1:0]     o_mofs_w [DIM];
 // Combinational
 //======================================
 assign o_id1 = o_id + 'b1;
-assign o_id_w = i_init_dval ? i_beg : o_id1;
+assign o_id_w = loop_init ? i_beg : o_id1;
 assign o_islast_id = o_id1 == i_end;
 always_comb for (int i = 0; i < VDIM; i++) begin
 	i_bofs_stride[i] = (i_bofs[i] * i_bstrides_frac[o_id_w][i]) << i_bstrides_shamt[o_id_w][i];
@@ -119,16 +122,15 @@ end
 //======================================
 // Submodule
 //======================================
-OneCycleInit u_istage(
+LoopController#(.DONE_IF(1), .HOLD_SRC(1)) u_lc(
 	`clk_connect,
 	`rdyack_connect(src, i_abofs),
-	`rdyack_connect(dst, i_abofs_delay),
-	`dval_connect(init, i_init)
-);
-AcceptIf#(1) u_oacc(
-	.cond(o_islast_id),
-	`rdyack_connect(src, i_abofs_delay),
-	`rdyack_connect(dst, o_mofs)
+	`rdyack_connect(dst, o_mofs),
+	.loop_done_cond(o_islast_id),
+	.reg_cg(loop_cg),
+	.loop_reset(loop_init),
+	.loop_is_last(),
+	.loop_is_repeat()
 );
 NDShufAccum#(.BW(WBW), .DIM_IN(VDIM), .DIM_OUT(DIM), .ZERO_AUG(0)) u_saccum(
 	.i_augend(global_mofs_w),
@@ -143,6 +145,7 @@ NDShufAccum#(.BW(WBW), .DIM_IN(VDIM), .DIM_OUT(DIM), .ZERO_AUG(0)) u_saccum(
 // Sequential
 //======================================
 `ff_rst
+	o_which <= 1'b0;
 	o_id <= '0;
 	for (int i = 0; i < DIM; i++) begin
 		o_mofs[i] <= '0;
@@ -150,7 +153,8 @@ NDShufAccum#(.BW(WBW), .DIM_IN(VDIM), .DIM_OUT(DIM), .ZERO_AUG(0)) u_saccum(
 `ifdef SD
 	o_skip <= 1'b0;
 `endif
-`ff_cg((o_mofs_ack && !o_islast_id) || i_init_dval)
+`ff_cg(loop_cg)
+	o_which <= i_which;
 	o_id <= o_id_w;
 	o_mofs <= o_mofs_w;
 `ifdef SD

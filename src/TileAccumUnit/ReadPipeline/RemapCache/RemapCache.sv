@@ -17,7 +17,6 @@
 
 `include "common/SRAM.sv"
 `include "TileAccumUnit/ReadPipeline/RemapCache/BankSramReadIf.sv"
-`include "TileAccumUnit/ReadPipeline/RemapCache/BankSramWriteButterflyIf.sv"
 
 module RemapCache(
 	`clk_port,
@@ -45,7 +44,6 @@ module RemapCache(
 `endif
 	o_free_id,
 	`dval_port(wad),
-	i_wid,
 	i_whiaddr,
 	i_wdata
 );
@@ -93,7 +91,6 @@ output               o_false_alloc;
 `endif
 output [ICFG_BW-1:0] o_free_id;
 `dval_input(wad);
-input [ICFG_BW-1:0] i_wid;
 input [HBW-1:0]     i_whiaddr;
 input [DBW-1:0]     i_wdata [VSIZE];
 
@@ -103,16 +100,13 @@ input [DBW-1:0]     i_wdata [VSIZE];
 logic [VSIZE-1:0] sram_re;
 logic [HBW-1:0] sram_ra [VSIZE];
 logic [DBW-1:0] sram_rd [VSIZE];
-logic [DBW-1:0] sram_wd [VSIZE];
 logic [XOR_BW-1:0] xor_rsrc [CV_BW];
-logic [XOR_BW-1:0] xor_wsrc [CV_BW];
 
 //======================================
 // Combinational
 //======================================
 always_comb for (int i = 0; i < CV_BW; i++) begin
 	xor_rsrc[i] = i_xor_srcs[i_rid][i];
-	xor_wsrc[i] = i_xor_srcs[i_wid][i];
 end
 
 //======================================
@@ -149,18 +143,6 @@ BankSramReadIf #(
 	.i_sram_rdata(sram_rd)
 );
 
-BankSramButterflyWriteIf #(
-	.BW(DBW),
-	.NDATA(NDATA),
-	.NBANK(VSIZE)
-) u_wif (
-	.i_xor_src(xor_wsrc),
-	.i_xor_swap(i_xor_swaps[i_wid]),
-	.i_hiaddr(i_whiaddr),
-	.i_data(i_wdata),
-	.o_data(sram_wd)
-);
-
 genvar gi;
 generate for (gi = 0; gi < VSIZE; gi++) begin: sram
 SRAMTwoPort #(.BW(DBW), .NDATA(NDATA)) u_dp_sram(
@@ -168,7 +150,7 @@ SRAMTwoPort #(.BW(DBW), .NDATA(NDATA)) u_dp_sram(
 	.i_we(wad_dval),
 	.i_re(sram_re[gi]),
 	.i_waddr(i_whiaddr),
-	.i_wdata(sram_wd[gi]),
+	.i_wdata(i_wdata[gi]),
 	.i_raddr(sram_ra[gi]),
 	.o_rdata(sram_rd[gi])
 );

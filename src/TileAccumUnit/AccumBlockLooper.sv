@@ -118,6 +118,7 @@ module AccumBlockLooper(
 	i_o_id_ends,
 	i_inst_id_begs,
 	i_inst_id_ends,
+	// ReadPipeline 0
 `ifdef VERI_TOP_AccumBlockLooper
 	`rdyack2_port(i0_abofs),
 `else
@@ -131,6 +132,7 @@ module AccumBlockLooper(
 `ifdef SD
 	o_i0_syst_type, // See SystolicSwitch.sv
 `endif
+	// ReadPipeline 1
 `ifdef VERI_TOP_AccumBlockLooper
 	`rdyack2_port(i1_abofs),
 `else
@@ -144,6 +146,21 @@ module AccumBlockLooper(
 `ifdef SD
 	o_i1_syst_type,
 `endif
+	// DMA
+`ifdef VERI_TOP_AccumBlockLooper
+	`rdyack2_port(dma_abofs),
+`else
+	`rdyack_port(dma_abofs),
+`endif
+	o_dma_which, // 0 or 1
+	o_dma_bofs,
+	o_dma_aofs,
+	o_dma_beg,
+	o_dma_end,
+`ifdef SD
+	o_dma_syst_type,
+`endif
+	// WritePipeline
 `ifdef VERI_TOP_AccumBlockLooper
 	`rdyack2_port(o_abofs),
 `else
@@ -154,6 +171,7 @@ module AccumBlockLooper(
 	o_o_aofs_end,
 	o_o_beg,
 	o_o_end,
+	// AluPipeline
 `ifdef VERI_TOP_AccumBlockLooper
 	`rdyack2_port(alu_abofs),
 `else
@@ -237,6 +255,19 @@ output logic [ICFG_BW-1:0] o_i1_end;
 output logic [STO_BW-1:0]  o_i1_syst_type;
 `endif
 `ifdef VERI_TOP_AccumBlockLooper
+`rdyack2_output(dma_abofs);
+`else
+`rdyack_output(dma_abofs);
+`endif
+output logic               o_dma_which;
+output logic [WBW-1:0]     o_dma_bofs [VDIM];
+output logic [WBW-1:0]     o_dma_aofs [VDIM];
+output logic [ICFG_BW-1:0] o_dma_beg;
+output logic [ICFG_BW-1:0] o_dma_end;
+`ifdef SD
+output logic [STO_BW-1:0]  o_dma_syst_type;
+`endif
+`ifdef VERI_TOP_AccumBlockLooper
 `rdyack2_output(o_abofs);
 `else
 `rdyack_output(o_abofs);
@@ -259,8 +290,18 @@ output logic [WBW-1:0] o_alu_aofs_end [VDIM];
 //======================================
 // Internal
 //======================================
+`rdyack_logic(i0_src);
+`rdyack_logic(i1_src);
+`rdyack_logic(dma_src);
+`rdyack_logic(dma_src1);
+`rdyack_logic(o_src);
+`rdyack_logic(alu_src);
 `rdyack_logic(s0_dst);
 `dval_logic(ofs_init); // Used only in systolic mode
+logic i0_cg, i1_cg, o_cg, dma_cg, alu_cg;
+logic               i_which;
+logic [ICFG_BW-1:0] i_dma_id_begs [VDIM+1];
+logic [ICFG_BW-1:0] i_dma_id_ends [VDIM+1];
 logic [WBW-1:0] s0_aofs_beg [VDIM];
 logic [WBW-1:0] s0_aofs_end_tmp [VDIM];
 logic [WBW-1:0] s0_aofs_end     [VDIM];
@@ -272,6 +313,8 @@ logic [ICFG_BW-1:0] s0_i0_beg;
 logic [ICFG_BW-1:0] s0_i0_end;
 logic [ICFG_BW-1:0] s0_i1_beg;
 logic [ICFG_BW-1:0] s0_i1_end;
+logic [ICFG_BW-1:0] s0_dma_beg;
+logic [ICFG_BW-1:0] s0_dma_end;
 logic [OCFG_BW-1:0] s0_o_beg;
 logic [OCFG_BW-1:0] s0_o_end;
 logic s1_alu_last_block_r;
@@ -280,11 +323,17 @@ logic i_i0_rmost, i_i0_lmost, i_i1_lmost, i_i1_rmost;
 logic [CN_TAU_X:0] i_i0_systolic_gsize2;
 logic [CN_TAU_X:0] i0_systolic_cnt_r;
 logic [CN_TAU_X:0] i0_systolic_cnt_w;
+logic [CN_TAU_X:0] dma0_systolic_cnt_r;
+logic [CN_TAU_X:0] dma0_systolic_cnt_w;
 logic [CN_TAU_Y:0] i_i1_systolic_gsize2;
 logic [CN_TAU_Y:0] i1_systolic_cnt_r;
 logic [CN_TAU_Y:0] i1_systolic_cnt_w;
+logic [CN_TAU_Y:0] dma1_systolic_cnt_r;
+logic [CN_TAU_Y:0] dma1_systolic_cnt_w;
 logic [STO_BW-1:0] o_i0_syst_type_w;
 logic [STO_BW-1:0] o_i1_syst_type_w;
+logic [STO_BW-1:0] dma_0_syst_type_w;
+logic [STO_BW-1:0] dma_1_syst_type_w;
 `endif
 
 //======================================
@@ -292,6 +341,7 @@ logic [STO_BW-1:0] o_i1_syst_type_w;
 //======================================
 assign blkdone_dval = s0_skip_alu || alu_abofs_ack && s1_alu_last_block_r;
 `ifdef SD
+assign o_dma_which_w = !o_dma_which;
 always_comb begin
 	i_i0_systolic_gsize2 = (i_i0_systolic_gsize << 1) - 'b1;
 	i_i1_systolic_gsize2 = (i_i1_systolic_gsize << 1) - 'b1;
@@ -304,6 +354,8 @@ end
 always_comb begin
 	i0_systolic_cnt_w = ofs_init_dval || (i0_systolic_cnt_r == i_i0_systolic_gsize2) ? 'b0 : (i0_systolic_cnt_r + 'b1);
 	i1_systolic_cnt_w = ofs_init_dval || (i1_systolic_cnt_r == i_i1_systolic_gsize2) ? 'b0 : (i1_systolic_cnt_r + 'b1);
+	dma0_systolic_cnt_w = ofs_init_dval || (dma0_systolic_cnt_r == i_i0_systolic_gsize2) ? 'b0 : (dma0_systolic_cnt_r + 'b1);
+	dma1_systolic_cnt_w = ofs_init_dval || (dma1_systolic_cnt_r == i_i1_systolic_gsize2) ? 'b0 : (dma1_systolic_cnt_r + 'b1);
 `define DetectSystolicType(target,cur,idx,bound,lmost,rmost)\
 	unique if (cur == idx || cur == bound - idx) begin\
 		target = `FROM_SELF | (rmost ? `TO_EMPTY : `TO_RIGHT) | (lmost ? `TO_EMPTY : `TO_LEFT);\
@@ -315,6 +367,8 @@ always_comb begin
 	// bit mismatch lint error here
 	`DetectSystolicType(o_i0_syst_type_w, i0_systolic_cnt_r, i_i0_systolic_idx, i_i0_systolic_gsize2, i_i0_lmost, i_i0_rmost);
 	`DetectSystolicType(o_i1_syst_type_w, i1_systolic_cnt_r, i_i1_systolic_idx, i_i1_systolic_gsize2, i_i1_lmost, i_i1_rmost);
+	`DetectSystolicType(dma0_syst_type_w, dma0_systolic_cnt_r, i_i0_systolic_idx, i_i0_systolic_gsize2, i_i0_lmost, i_i0_rmost);
+	`DetectSystolicType(dma1_syst_type_w, dma1_systolic_cnt_r, i_i1_systolic_idx, i_i1_systolic_gsize2, i_i1_lmost, i_i1_rmost);
 end
 `endif
 
@@ -323,6 +377,11 @@ always_comb begin
 		s0_aofs_end_tmp[i] = s0_aofs_beg[i] + i_agrid_step[i];
 		s0_aofs_end[i] = s0_aofs_end_tmp[i] > i_aboundary[i] ? i_aboundary[i] : s0_aofs_end_tmp[i];
 	end
+end
+
+always_comb begin
+	i_dma_id_begs = i_which ? i_i1_id_begs : i_i0_id_begs;
+	i_dma_id_ends = i_which ? i_i1_id_ends : i_i0_id_ends;
 end
 
 //======================================
@@ -344,11 +403,11 @@ OffsetStage #(.BW(WBW), .DIM(VDIM), .FROM_ZERO(1), .UNIT_STRIDE(0)) u_s0(
 	.o_islast(s0_last_block),
 	`dval_connect(init, ofs_init)
 );
-Broadcast#(4) u_brd_0(
+Broadcast#(5) u_brd_0(
 	`clk_connect,
 	`rdyack_connect(src, s0_dst),
-	.dst_rdys({i0_src_rdy, i1_src_rdy, o_src_rdy, alu_src_rdy}),
-	.dst_acks({i0_src_ack, i1_src_ack, o_src_ack, alu_src_ack})
+	.dst_rdys({i0_src_rdy, i1_src_rdy, dma_src_rdy, o_src_rdy, alu_src_rdy}),
+	.dst_acks({i0_src_ack, i1_src_ack, dma_src_ack, o_src_ack, alu_src_ack})
 );
 AccumBlockLooperOutputController#(ICFG_BW) u_oc_i0(
 	`clk_connect,
@@ -374,6 +433,25 @@ AccumBlockLooperOutputController#(ICFG_BW) u_oc_i1(
 	.sel_end(s0_sel_end),
 	.selected_beg(s0_i1_beg),
 	.selected_end(s0_i1_end),
+	.skipped()
+);
+RepeatIf#(0) u_repeat_dma(
+	.cond(i_which),
+	`rdyack_connect(src, dma_src),
+	`rdyack_connect(dst, dma_src1),
+	.repeated()
+);
+AccumBlockLooperOutputController#(ICFG_BW) u_oc_dma(
+	`clk_connect,
+	`rdyack_connect(src, dma_src1),
+	`rdyack_connect(dst, dma_abofs),
+	.reg_cg(dma_cg),
+	.begs(i_dma_id_begs),
+	.ends(i_dma_id_ends),
+	.sel_beg(s0_sel_beg),
+	.sel_end(s0_sel_end),
+	.selected_beg(s0_dma_beg),
+	.selected_end(s0_dma_end),
 	.skipped()
 );
 AccumBlockLooperOutputController#(OCFG_BW) u_oc_o(
@@ -449,6 +527,37 @@ AccumBlockLooperOutputController#(INST_BW) u_oc_alu(
 	o_i1_syst_type <= o_i1_syst_type_w;
 `endif
 `ff_end
+
+`ff_rst
+	o_dma_which <= 1'b0;
+	for (int i = 0; i < VDIM; i++) begin
+		o_dma_bofs[i] <= '0;
+		o_dma_aofs[i] <= '0;
+	end
+	o_dma_beg <= '0;
+	o_dma_end <= '0;
+`ff_cg(dma_cg)
+	o_dma_which <= i_which;
+	o_dma_bofs <= i_bofs;
+	o_dma_aofs <= s0_aofs_beg;
+	o_dma_beg <= s0_dma_beg;
+	o_dma_end <= s0_dma_end;
+`ff_end
+
+`ff_rst
+	i_which <= 1'b0;
+`ff_cg(dma_src1_ack)
+	i_which <= !i_which;
+`ff_end
+
+`ifdef SD
+// TODO
+`ff_rst
+	o_dma_syst_type <= '0;
+`ff_cg(x)
+	o_dma_syst_type <= ????;
+`ff_end
+`endif
 
 `ff_rst
 	for (int i = 0; i < VDIM; i++) begin

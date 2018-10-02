@@ -132,7 +132,7 @@ always_comb begin
 		i_bf_loaddr[CLOG2_NBANK][i] = i_bf_loaddr_x2[i][2*CLOG2_NBANK-1 -: CLOG2_NBANK];
 	end
 	// Butterfly (MSB -> LSB)
-	// FIXME: stuck at 1
+	// FIXME: a clean way to stuck at 1
 	i_ren[CLOG2_NBANK] = '1;
 	for (int i = CLOG2_NBANK-1; i >= 0; --i) begin
 		for (int j = 0; j < NBANK; ++j) begin

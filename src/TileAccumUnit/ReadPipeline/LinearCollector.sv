@@ -95,7 +95,7 @@ end
 //======================================
 // Submodule
 //======================================
-ForwardSlow u_fwd(
+Forward#(.SLOW(1)) u_fwd(
 	`clk_connect,
 	`rdyack_connect(src, range),
 	`rdyack_connect(dst, brd)
