@@ -33,9 +33,9 @@ localparam BW = TauCfg::DATA_BW;
 localparam NBANK = TauCfg::VSIZE;
 localparam XOR_BW = TauCfg::XOR_BW;
 // derived from global
-localparam CLOG2_NDATA = TauCfg::MAX_LOCAL_ADDR_BW - CV_BW;
 localparam CB_BW = TauCfg::CV_BW;
 localparam CCB_BW = TauCfg::CCV_BW;
+localparam CLOG2_NDATA = TauCfg::MAX_LOCAL_ADDR_BW - CB_BW;
 // derived
 localparam BANK_MASK = NBANK-1;
 localparam XOR_ADDR_BW = 1<<XOR_BW;
@@ -44,8 +44,8 @@ localparam NDATA = 1 << CLOG2_NDATA;
 //======================================
 // I/O
 //======================================
-input [XOR_BW-1:0]      i_xor_src [CV_BW];
-input [CCV_BW-1:0]      i_xor_swap;
+input [XOR_BW-1:0]      i_xor_src [CB_BW];
+input [CCB_BW-1:0]      i_xor_swap;
 input [CLOG2_NDATA-1:0] i_hiaddr;
 input        [BW-1:0] i_data [NBANK];
 output logic [BW-1:0] o_data [NBANK];

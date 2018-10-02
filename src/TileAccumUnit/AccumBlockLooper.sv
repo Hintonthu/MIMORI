@@ -380,8 +380,8 @@ always_comb begin
 end
 
 always_comb begin
-	i_dma_id_begs = i_which ? i_i0_id_begs : i_i0_id_ends;
-	i_dma_id_ends = i_which ? i_i1_id_begs : i_i1_id_ends;
+	i_dma_id_begs = i_which ? i_i0_id_begs : i_i0_id_begs;
+	i_dma_id_ends = i_which ? i_i1_id_ends : i_i1_id_ends;
 end
 
 //======================================
@@ -555,7 +555,7 @@ AccumBlockLooperOutputController#(INST_BW) u_oc_alu(
 `ff_rst
 	o_dma_syst_type <= '0;
 `ff_cg(x)
-	o_dma_syst_type <= i_dma_which];
+	o_dma_syst_type <= ????;
 `ff_end
 `endif
 

@@ -255,13 +255,13 @@ end
 
 `ff_rst
 	o_hiaddr0 <= 'b0;
-`ff_cg(w0_dval_w)
+`ff_cg(w0_dval)
 	o_hiaddr0 <= o_hiaddr0 + 'b1;
 `ff_end
 
 `ff_rst
 	o_hiaddr1 <= 'b0;
-`ff_cg(w1_dval_w)
+`ff_cg(w1_dval)
 	o_hiaddr1 <= o_hiaddr1 + 'b1;
 `ff_end
 

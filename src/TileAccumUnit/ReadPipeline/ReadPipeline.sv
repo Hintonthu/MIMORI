@@ -39,10 +39,6 @@ module ReadPipeline(
 	i_bsub_lo_order,
 	i_aboundary,
 	i_bgrid_step,
-	i_global_linears,
-	i_global_mofs,
-	i_global_mboundaries,
-	i_global_cboundaries,
 	i_global_bshufs,
 	i_bstrides_frac,
 	i_bstrides_shamt,
@@ -51,11 +47,8 @@ module ReadPipeline(
 	i_astrides_shamt,
 	i_local_xor_srcs,
 	i_local_xor_swaps,
-	i_local_pads,
 	i_local_bsubsteps,
 	i_local_mboundaries,
-	i_wrap,
-	i_pad_value,
 	i_id_begs,
 	i_id_ends,
 	i_stencil,
@@ -65,7 +58,6 @@ module ReadPipeline(
 `ifdef SD
 	i_systolic_skip,
 `endif
-	`dval_port(blkdone),
 	// Tell DMA something to work
 	`rdyack_port(rp_en),
 	// DMA write to SRAM
@@ -126,10 +118,6 @@ input [CCV_BW-1:0]  i_bsub_up_order  [VDIM];
 input [CCV_BW-1:0]  i_bsub_lo_order  [VDIM];
 input [WBW-1:0]     i_aboundary      [VDIM];
 input [WBW-1:0]     i_bgrid_step     [VDIM];
-input [GBW-1:0]     i_global_linears     [N_ICFG];
-input [WBW-1:0]     i_global_mofs        [N_ICFG][DIM];
-input [GBW-1:0]     i_global_mboundaries [N_ICFG][DIM];
-input [GBW-1:0]     i_global_cboundaries [N_ICFG][DIM];
 input [DIM_BW-1:0]  i_global_bshufs      [N_ICFG][VDIM];
 input [SF_BW-1:0]   i_bstrides_frac      [N_ICFG][VDIM];
 input [SS_BW-1:0]   i_bstrides_shamt     [N_ICFG][VDIM];
@@ -138,11 +126,8 @@ input [SF_BW-1:0]   i_astrides_frac      [N_ICFG][VDIM];
 input [SS_BW-1:0]   i_astrides_shamt     [N_ICFG][VDIM];
 input [XOR_BW-1:0]  i_local_xor_srcs     [N_ICFG][CV_BW];
 input [CCV_BW-1:0]  i_local_xor_swaps    [N_ICFG];
-input [CV_BW-1:0]   i_local_pads         [N_ICFG][DIM];
 input [LBW-1:0]     i_local_bsubsteps    [N_ICFG][CV_BW];
 input [LBW  :0]     i_local_mboundaries  [N_ICFG][DIM];
-input [N_ICFG-1:0]  i_wrap;
-input [DBW-1:0]     i_pad_value [N_ICFG];
 input [ICFG_BW-1:0] i_id_begs [VDIM+1];
 input [ICFG_BW-1:0] i_id_ends [VDIM+1];
 input               i_stencil;
@@ -152,7 +137,7 @@ input [LBW-1:0]     i_stencil_lut [STSIZE];
 `ifdef SD
 input [N_ICFG-1:0]  i_systolic_skip;
 `endif
-`dval_input(blkdone);
+`rdyack_output(rp_en);
 `dval_input(dma_write);
 input [LBW-CV_BW-1:0] i_dma_whiaddr;
 input [DBW-1:0]       i_dma_wdata [VSIZE];
@@ -180,16 +165,27 @@ Broadcast#(2) u_broadcast_input(
 // Allocate space, notify DMA,
 // and send to LinearCollector upon ready
 //======================================
+logic [HBW:0] i_local_sizes [N_ICFG];
 `rdyack_logic(alloc_lc);
 logic [LBW-1:0] alloc_lc_linear;
 `dval_logic(rmc_alloc_free_id);
 logic [ICFG_BW-1:0] rmc_alloc_free_id;
 `ifdef SD
 logic               rmc_alloc_false_alloc;
+logic [LBW-1:0] lc_awl_linears [N_ICFG];
 `endif
+
+logic [LBW-1:0] i_local_mboundaries2 [N_ICFG][DIM];
+always_comb for (int i = 0; i < N_ICFG; i++) begin
+	i_local_sizes[i] = i_local_mboundaries[i][0][LBW-:(HBW+1)];
+	for (int j = 0; j < DIM; j++) begin
+		i_local_mboundaries2[i][j] = i_local_mboundaries[i][j][LBW-1:0];
+	end
+end
+
 Allocator#(.LBW(LBW)) u_alloc(
 	`clk_connect,
-	.i_local_mboundaries(i_local_mboundaries),
+	.i_sizes(i_local_sizes),
 	`rdyack_connect(alloc, brd_alloc),
 	.i_beg_id(i_beg),
 	.i_end_id(i_end),
@@ -200,6 +196,7 @@ Allocator#(.LBW(LBW)) u_alloc(
 	`rdyack_connect(linear, alloc_lc),
 	.o_linear(alloc_lc_linear),
 	`rdyack_connect(allocated, rp_en),
+	`dval_connect(we, dma_write),
 	`dval_connect(free, rmc_alloc_free_id),
 	.i_free_id(rmc_alloc_free_id)
 `ifdef SD
@@ -270,7 +267,7 @@ AccumWarpLooper #(.N_CFG(N_ICFG), .ABW(LBW), .STENCIL(1), .USE_LOFS(1)) u_awl(
 	.i_astrides_frac(i_astrides_frac),
 	.i_astrides_shamt(i_astrides_shamt),
 	.i_mofs_bsubsteps(i_local_bsubsteps),
-	.i_mboundaries(i_local_mboundaries),
+	.i_mboundaries(i_local_mboundaries2),
 	.i_id_begs(i_id_begs),
 	.i_id_ends(i_id_ends),
 	.i_stencil(i_stencil),
@@ -310,7 +307,6 @@ RemapCache#(.LBW(LBW)) u_rmc(
 	.o_syst_type(o_syst_type),
 `endif
 	.o_rdata(o_sramrd),
-	`dval_connect(we, dma_write),
 	`dval_connect(free, rmc_alloc_free_id),
 `ifdef SD
 	.o_false_alloc(rmc_alloc_false_alloc),

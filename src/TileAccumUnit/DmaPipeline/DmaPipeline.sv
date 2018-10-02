@@ -121,7 +121,7 @@ localparam CV_BW1 = $clog2(VSIZE+1);
 //======================================
 `clk_input;
 `rdyack_input(bofs);
-inpug               i_which;
+input               i_which;
 input [WBW-1:0]     i_bofs [VDIM];
 input [WBW-1:0]     i_abeg [VDIM];
 input [ICFG_BW-1:0] i_beg;
@@ -142,7 +142,7 @@ input [SS_BW-1:0]   i_i0_astrides_shamt     [N_ICFG][VDIM];
 input [XOR_BW-1:0]  i_i0_local_xor_srcs     [N_ICFG][CV_BW];
 input [CCV_BW-1:0]  i_i0_local_xor_swaps    [N_ICFG];
 input [CV_BW-1:0]   i_i0_local_pads         [N_ICFG][DIM];
-input [LBW-1:0]     i_i0_local_mboundaries  [N_ICFG][DIM];
+input [LBW0:0]      i_i0_local_mboundaries  [N_ICFG][DIM];
 input [N_ICFG-1:0]  i_i0_wraps;
 input [DBW-1:0]     i_i0_pad_values [N_ICFG];
 `ifdef SD
@@ -161,7 +161,7 @@ input [SS_BW-1:0]   i_i1_astrides_shamt     [N_ICFG][VDIM];
 input [XOR_BW-1:0]  i_i1_local_xor_srcs     [N_ICFG][CV_BW];
 input [CCV_BW-1:0]  i_i1_local_xor_swaps    [N_ICFG];
 input [CV_BW-1:0]   i_i1_local_pads         [N_ICFG][DIM];
-input [LBW-1:0]     i_i1_local_mboundaries  [N_ICFG][DIM];
+input [LBW1:0]      i_i1_local_mboundaries  [N_ICFG][DIM];
 input [N_ICFG-1:0]  i_i1_wraps;
 input [DBW-1:0]     i_i1_pad_values [N_ICFG];
 `ifdef SD
@@ -384,15 +384,21 @@ always_comb begin
 	if (ch_addr_which) begin
 		ch_addr_global_linear    = i_i1_global_linears[ch_addr_mid];
 		ch_addr_wrap             = i_i1_wraps[ch_addr_mid];
-		ch_addr_local_pad        = i_i1_local_pads[ch_addr_mid][i];
-		ch_addr_global_mboundary = i_i1_global_mboundaries[ch_addr_mid][i];
-		ch_addr_global_cboundary = i_i1_global_cboundaries[ch_addr_mid][i];
 	end else begin
 		ch_addr_global_linear    = i_i0_global_linears[ch_addr_mid];
 		ch_addr_wrap             = i_i0_wraps[ch_addr_mid];
-		ch_addr_local_pad        = i_i0_local_pads[ch_addr_mid][i];
-		ch_addr_global_mboundary = i_i0_global_mboundaries[ch_addr_mid][i];
-		ch_addr_global_cboundary = i_i0_global_cboundaries[ch_addr_mid][i];
+	end
+end
+
+always_comb for (int i = 0; i < DIM; i++) begin
+	if (ch_addr_which) begin
+		ch_addr_local_pad[i]        = i_i1_local_pads[ch_addr_mid][i];
+		ch_addr_global_mboundary[i] = i_i1_global_mboundaries[ch_addr_mid][i];
+		ch_addr_global_cboundary[i] = i_i1_global_cboundaries[ch_addr_mid][i];
+	end else begin
+		ch_addr_local_pad[i]        = i_i0_local_pads[ch_addr_mid][i];
+		ch_addr_global_mboundary[i] = i_i0_global_mboundaries[ch_addr_mid][i];
+		ch_addr_global_cboundary[i] = i_i0_global_cboundaries[ch_addr_mid][i];
 	end
 end
 
@@ -401,6 +407,7 @@ logic cal_addr_ialast;
 ChunkAddrLooper u_cal_addr(
 	`clk_connect,
 	`rdyack_connect(mofs, ch_addr1),
+	.i_which(),
 	.i_mofs(ch_addr_mofs),
 	.i_mpad(ch_addr_local_pad),
 	.i_mbound(ch_addr_global_mboundary),
@@ -408,6 +415,7 @@ ChunkAddrLooper u_cal_addr(
 	.i_maddr(ch_addr_global_linear),
 	.i_wrap(ch_addr_wrap),
 	`rdyack_connect(cmd, cal_addr),
+	.o_which(),
 	.o_cmd_type(),
 	.o_cmd_islast(cal_addr_islast),
 	.o_cmd_addr(o_dramra),
@@ -431,17 +439,23 @@ logic [GBW-1:0]     ch_cmd_global_mboundary [DIM];
 logic [GBW-1:0]     ch_cmd_global_cboundary [DIM];
 always_comb begin
 	if (ch_cmd_which) begin
-		ch_cmd_global_linear    = i_i1_global_linears[ch_cmd_mid];
-		ch_cmd_wrap             = i_i1_wrap[ch_cmd_mid];
-		ch_cmd_local_pad        = i_i1_local_pads[ch_cmd_mid][i];
-		ch_cmd_global_mboundary = i_i1_global_mboundaries[ch_cmd_mid][i];
-		ch_cmd_global_cboundary = i_i1_global_cboundaries[ch_cmd_mid][i];
+		ch_cmd_global_linear = i_i1_global_linears[ch_cmd_mid];
+		ch_cmd_wrap          = i_i1_wraps[ch_cmd_mid];
 	end else begin
-		ch_cmd_global_linear    = i_i0_global_linears[ch_cmd_mid];
-		ch_cmd_wrap             = i_i0_wrap[ch_cmd_mid];
-		ch_cmd_local_pad        = i_i0_local_pads[ch_cmd_mid][i];
-		ch_cmd_global_mboundary = i_i0_global_mboundaries[ch_cmd_mid][i];
-		ch_cmd_global_cboundary = i_i0_global_cboundaries[ch_cmd_mid][i];
+		ch_cmd_global_linear = i_i0_global_linears[ch_cmd_mid];
+		ch_cmd_wrap          = i_i0_wraps[ch_cmd_mid];
+	end
+end
+
+always_comb for (int i = 0; i < DIM; i++) begin
+	if (ch_cmd_which) begin
+		ch_cmd_local_pad[i]        = i_i1_local_pads[ch_cmd_mid][i];
+		ch_cmd_global_mboundary[i] = i_i1_global_mboundaries[ch_cmd_mid][i];
+		ch_cmd_global_cboundary[i] = i_i1_global_cboundaries[ch_cmd_mid][i];
+	end else begin
+		ch_cmd_local_pad[i]        = i_i0_local_pads[ch_cmd_mid][i];
+		ch_cmd_global_mboundary[i] = i_i0_global_mboundaries[ch_cmd_mid][i];
+		ch_cmd_global_cboundary[i] = i_i0_global_cboundaries[ch_cmd_mid][i];
 	end
 end
 
@@ -484,6 +498,7 @@ always_comb begin
 		ch_alloc_pad_value = i_i0_pad_values[ch_alloc_mid];
 	end
 end
+logic [DBW-1:0] o_rmc_wdata0 [VSIZE];
 SramWriteCollector u_swc(
 	`clk_connect,
 	`rdyack_connect(alloc, ch_alloc1),
@@ -510,14 +525,14 @@ logic [XOR_BW-1:0] rmc_xor_wsrc [CV_BW];
 logic [CCV_BW-1:0] rmc_xor_wswap;
 logic [HBW-1:0]    rmc_whiaddr;
 always_comb begin
-	priority if (w0) begin
+	if (rmc_write1_dval) begin
 		rmc_xor_wsrc    = i_i1_local_xor_srcs[rmc_wif_id];
 		rmc_xor_wswap   = i_i1_local_xor_swaps[rmc_wif_id];
-		rmc_whiaddr = o_rmc_whiaddr1;
-	end else begin
+		rmc_whiaddr     = o_rmc_whiaddr1;
+	end else begin // if (rmc_write0_dval)
 		rmc_xor_wsrc    = i_i0_local_xor_srcs[rmc_wif_id];
 		rmc_xor_wswap   = i_i0_local_xor_swaps[rmc_wif_id];
-		rmc_whiaddr = o_rmc_whiaddr0;
+		rmc_whiaddr     = o_rmc_whiaddr0;
 	end
 end
 BankSramButterflyWriteIf u_wif(

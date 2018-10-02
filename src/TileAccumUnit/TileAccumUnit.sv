@@ -24,6 +24,7 @@
 `include "TileAccumUnit/AccumBlockLooper.sv"
 `include "TileAccumUnit/DramArbiter.sv"
 `include "TileAccumUnit/AluPipeline/AluPipeline.sv"
+`include "TileAccumUnit/DmaPipeline/DmaPipeline.sv"
 `include "TileAccumUnit/ReadPipeline/ReadPipeline.sv"
 `include "TileAccumUnit/WritePipeline/WritePipeline.sv"
 
@@ -182,6 +183,8 @@ localparam CCV_BW = $clog2(CV_BW+1);
 localparam CX_BW = $clog2(XOR_BW);
 localparam REG_ABW = $clog2(REG_ADDR);
 localparam ST_BW = $clog2(STSIZE+1);
+localparam HBW0 = LBW0-CV_BW;
+localparam HBW1 = LBW1-CV_BW;
 `ifdef SD
 localparam CN_TAU_X = $clog2(N_TAU_X);
 localparam CN_TAU_Y = $clog2(N_TAU_Y);
@@ -353,6 +356,9 @@ logic [DBW-1:0] i0_dramrd [CSIZE];
 logic [GBW-1:0] i1_dramra;
 `rdyack_logic(i1_dramrd);
 logic [DBW-1:0] i1_dramrd [CSIZE];
+logic [HBW0-1:0] dma_rmc_whiaddr0;
+logic [HBW1-1:0] dma_rmc_whiaddr1;
+logic [DBW-1:0] dma_rmc_wdata [VSIZE];
 `ifdef SD
 `rdyack_logic(i0_alu_sramrd2);
 `rdyack_logic(i1_alu_sramrd2);
@@ -444,7 +450,7 @@ AccumBlockLooper u_abl(
 	.o_i1_end(abl_i1_end),
 `ifdef SD
 	.o_i1_syst_type(abl_i1_syst_type),
-`endif
+	`else
 	`rdyack_connect(dma_abofs, abl_dma_abofs),
 `endif
 	.o_dma_which(abl_dma_which),
@@ -543,10 +549,6 @@ ReadPipeline#(.LBW(LBW0)) u_r0(
 	.i_bsub_lo_order(i_bsub_lo_order),
 	.i_aboundary(i_aboundary),
 	.i_bgrid_step(i_bgrid_step),
-	.i_global_linears(i_i0_global_linears),
-	.i_global_mofs(i_i0_global_starts),
-	.i_global_mboundaries(i_i0_global_boundaries),
-	.i_global_cboundaries(i_i0_global_cboundaries),
 	.i_global_bshufs(i_i0_global_bshufs),
 	.i_bstrides_frac(i_i0_bstrides_frac),
 	.i_bstrides_shamt(i_i0_bstrides_shamt),
@@ -555,11 +557,8 @@ ReadPipeline#(.LBW(LBW0)) u_r0(
 	.i_astrides_shamt(i_i0_astrides_shamt),
 	.i_local_xor_srcs(i_i0_local_xor_srcs),
 	.i_local_xor_swaps(i_i0_local_xor_swaps),
-	.i_local_pads(i_i0_local_pads),
 	.i_local_bsubsteps(i_i0_local_bsubsteps),
 	.i_local_mboundaries(i_i0_local_boundaries),
-	.i_wrap(i_i0_wrap),
-	.i_pad_value(i_i0_pad_value),
 	.i_id_begs(i_i0_id_begs),
 	.i_id_ends(i_i0_id_ends),
 	.i_stencil(i_i0_stencil),
@@ -569,11 +568,10 @@ ReadPipeline#(.LBW(LBW0)) u_r0(
 `ifdef SD
 	.i_systolic_skip(i_i0_systolic_skip),
 `endif
-	`dval_connect(blkdone, blkdone),
-	`dval_connect(rp_en, rp_dma_en0),
-	`dval_connect(rmc_write, dma_rmc_write0),
-	.i_rmc_whiaddr(dma_rmc_whiaddr0),
-	.i_rmc_wdata(dma_rmc_wdata),
+	`rdyack_connect(rp_en, rp_dma_en0),
+	`dval_connect(dma_write, dma_rmc_write0),
+	.i_dma_whiaddr(dma_rmc_whiaddr0),
+	.i_dma_wdata(dma_rmc_wdata),
 	`rdyack_connect(sramrd, i0_alu_sramrd),
 `ifdef SD
 	.o_syst_type(i0_alu_syst_type),
@@ -595,10 +593,6 @@ ReadPipeline#(.LBW(LBW1)) u_r1(
 	.i_bsub_lo_order(i_bsub_lo_order),
 	.i_aboundary(i_aboundary),
 	.i_bgrid_step(i_bgrid_step),
-	.i_global_linears(i_i1_global_linears),
-	.i_global_mofs(i_i1_global_starts),
-	.i_global_mboundaries(i_i1_global_boundaries),
-	.i_global_cboundaries(i_i1_global_cboundaries),
 	.i_global_bshufs(i_i1_global_bshufs),
 	.i_bstrides_frac(i_i1_bstrides_frac),
 	.i_bstrides_shamt(i_i1_bstrides_shamt),
@@ -607,11 +601,8 @@ ReadPipeline#(.LBW(LBW1)) u_r1(
 	.i_astrides_shamt(i_i1_astrides_shamt),
 	.i_local_xor_srcs(i_i1_local_xor_srcs),
 	.i_local_xor_swaps(i_i1_local_xor_swaps),
-	.i_local_pads(i_i1_local_pads),
 	.i_local_bsubsteps(i_i1_local_bsubsteps),
 	.i_local_mboundaries(i_i1_local_boundaries),
-	.i_wrap(i_i1_wrap),
-	.i_pad_value(i_i1_pad_value),
 	.i_id_begs(i_i1_id_begs),
 	.i_id_ends(i_i1_id_ends),
 	.i_stencil(i_i1_stencil),
@@ -621,11 +612,10 @@ ReadPipeline#(.LBW(LBW1)) u_r1(
 `ifdef SD
 	.i_systolic_skip(i_i1_systolic_skip),
 `endif
-	`dval_connect(blkdone, blkdone),
-	`dval_connect(rp_en, rp_dma_en1),
-	`dval_connect(rmc_write, dma_rmc_write1),
-	.i_rmc_whiaddr(dma_rmc_whiaddr1),
-	.i_rmc_wdata(dma_rmc_wdata),
+	`rdyack_connect(rp_en, rp_dma_en1),
+	`dval_connect(dma_write, dma_rmc_write1),
+	.i_dma_whiaddr(dma_rmc_whiaddr1),
+	.i_dma_wdata(dma_rmc_wdata),
 	`rdyack_connect(sramrd, i1_alu_sramrd),
 `ifdef SD
 	.o_syst_type(i1_alu_syst_type),
@@ -634,10 +624,10 @@ ReadPipeline#(.LBW(LBW1)) u_r1(
 );
 DmaPipeline u_dma(
 	`clk_connect,
-	`rdyack_connect(bofs),
+	`rdyack_connect(bofs, abl_dma_abofs),
 	.i_which(abl_dma_which),
 	.i_bofs(abl_dma_bofs),
-	.i_abeg(abl_dma_abeg),
+	.i_abeg(abl_dma_aofs),
 	.i_beg(abl_dma_beg),
 	.i_end(abl_dma_end),
 `ifdef SD
@@ -652,7 +642,7 @@ DmaPipeline u_dma(
 	.i_i0_bstrides_shamt(i_i0_bstrides_shamt),
 	.i_i0_global_ashufs(i_i0_global_ashufs),
 	.i_i0_astrides_frac(i_i0_astrides_frac),
-	.i_i0_astrides_shamti_i0_astrides_shamt),
+	.i_i0_astrides_shamt(i_i0_astrides_shamt),
 	.i_i0_local_xor_srcs(i_i0_local_xor_srcs),
 	.i_i0_local_xor_swaps(i_i0_local_xor_swaps),
 	.i_i0_local_pads(i_i0_local_pads),
@@ -671,7 +661,7 @@ DmaPipeline u_dma(
 	.i_i1_bstrides_shamt(i_i1_bstrides_shamt),
 	.i_i1_global_ashufs(i_i1_global_ashufs),
 	.i_i1_astrides_frac(i_i1_astrides_frac),
-	.i_i1_astrides_shamti_i1_astrides_shamt),
+	.i_i1_astrides_shamt(i_i1_astrides_shamt),
 	.i_i1_local_xor_srcs(i_i1_local_xor_srcs),
 	.i_i1_local_xor_swaps(i_i1_local_xor_swaps),
 	.i_i1_local_pads(i_i1_local_pads),
