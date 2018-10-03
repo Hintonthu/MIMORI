@@ -24,7 +24,7 @@ verf_func = list()
 
 def ImportFunction(mod_name):
 	# somewhat ugly...
-	m = import_module("."+mod_name, package="UmiModel.sample")
+	m = import_module("."+mod_name, package=__name__)
 	sample_conf.append(m.cfg)
 	verf_func.append(m.VerfFunc)
 

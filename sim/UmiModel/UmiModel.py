@@ -369,9 +369,10 @@ class UmiModel(object):
 		self.sram_cur[which] = new_addr[-1]
 		return linear
 
-	"""
-		Important functions
-	"""
+	#################
+	# Hardware model
+	#################
+
 	def CreateBlockTransaction(self):
 		return self._CountBlockRoutine(self.pcfg['local'][0], self.pcfg['end'][0])
 
@@ -381,21 +382,32 @@ class UmiModel(object):
 		n_aofs, aofs_beg = self._CountBlockRoutine(glb_alocal, glb_aend)
 		aofs_end = npd.fmin(self.acfg['local']+aofs_beg, self.acfg['total'])
 		l, r = UmiModel._SelRangeIdx(aofs_beg, glb_alocal, glb_aend)
-		def Extract(nums):
-			a_range = UmiModel._SelRangeSel(l, r, nums)
+		a_range_i0  = UmiModel._SelRangeSel(l, r, self.n_i0)
+		a_range_i1  = UmiModel._SelRangeSel(l, r, self.n_i1)
+		a_range_o   = UmiModel._SelRangeSel(l, r, self.n_o)
+		a_range_alu = UmiModel._SelRangeSel(l, r, self.n_inst)
+		a_range_dma = npd.reshape(npd.hstack((a_range_i0, a_range_i1)), (-1,2))
+		aofs_beg2 = npd.repeat(aofs_beg, 2, 0)
+		aofs_end2 = npd.repeat(aofs_end, 2, 0)
+		def Extract(a_range, a_beg, a_end, dma=False):
 			diff_id = a_range[:,0] != a_range[:,1]
 			n_trim = npd.count_nonzero(diff_id)
 			bofs_trim = npd.broadcast_to(bofs, (n_trim, self.VDIM))
-			aofs_beg_trim = aofs_beg[diff_id]
-			aofs_end_trim = aofs_end[diff_id]
+			aofs_beg_trim = a_beg[diff_id]
+			aofs_end_trim = a_end[diff_id]
 			beg_trim = a_range[diff_id,0]
 			end_trim = a_range[diff_id,1]
-			return n_trim, bofs_trim, aofs_beg_trim, aofs_end_trim, beg_trim, end_trim
+			dma_which = None
+			if dma:
+				zero_one = npd.bitwise_and(npi.arange(a_range.shape[0]), 1)
+				dma_which = zero_one[diff_id]
+			return n_trim, bofs_trim, aofs_beg_trim, aofs_end_trim, beg_trim, end_trim, dma_which
 		return (
-			Extract(self.n_i0) +
-			Extract(self.n_i1) +
-			Extract(self.n_o) +
-			Extract(self.n_inst)
+			Extract(a_range_i0, aofs_beg, aofs_end),
+			Extract(a_range_i1, aofs_beg, aofs_end),
+			Extract(a_range_dma, aofs_beg2, aofs_end2, True),
+			Extract(a_range_o, aofs_beg, aofs_end),
+			Extract(a_range_alu, aofs_beg, aofs_end),
 		)
 
 	def CreateAccumTransaction(self, abeg, aend):

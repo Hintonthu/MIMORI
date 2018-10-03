@@ -17,6 +17,7 @@
 # along with MIMORI.  If not, see <http://www.gnu.org/licenses/>.
 
 from .. import UmiModel, npi, npd, newaxis, i16
+from ..UmiModel import MemorySpace
 
 n_i0 = ([0,0,0,0,0,0,0], [1,1,1,1,1,1,1])
 n_i1 = ([0,0,0,0,0,0,0], [0,0,0,0,0,0,0])
