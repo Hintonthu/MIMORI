@@ -19,7 +19,7 @@ from nicotb.protocol import TwoWire
 from itertools import repeat
 from collections import deque
 from UmiModel import UmiModel, default_sample_conf, default_verf_func, npi, npd, newaxis
-from UmiModel import DramRespChan
+from UmiModel.ramulator import DramRespChan
 
 def main():
 	# init

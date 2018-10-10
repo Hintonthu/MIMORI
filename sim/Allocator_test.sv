@@ -1,4 +1,4 @@
-// Copyright (C) 2017, Yu Sheng Lin, johnjohnlys@media.ee.ntu.edu.tw
+// Copyright (C) 2017-2018, Yu Sheng Lin, johnjohnlys@media.ee.ntu.edu.tw
 
 // This file is part of MIMORI.
 
@@ -19,8 +19,9 @@
 
 module Allocator_test;
 
-logic i_clk, i_rst, linear_canack;
+logic i_clk, i_rst, linear_canack, allocated_canack;
 `rdyack_logic(alloc);
+`rdyack_logic(allocated);
 `rdyack_logic(linear);
 `Pos(rst_out, i_rst)
 `PosIf(ck_ev, i_clk, i_rst)
@@ -41,9 +42,11 @@ initial begin
 end
 
 assign linear_ack = linear_rdy && linear_canack;
+assign allocated_ack = allocated_rdy && allocated_canack;
 Allocator dut(
 	`clk_connect,
 	`rdyack_connect(alloc, alloc),
+	`rdyack_connect(allocated, allocated),
 	`rdyack_connect(linear, linear)
 );
 

@@ -13,4 +13,4 @@ for f in wrapped:
 	setattr(npi, f, partial(getattr(npd, f), dtype=npd.int32))
 
 from .UmiModel import *
-from .ramulator import *
+from .sample import *

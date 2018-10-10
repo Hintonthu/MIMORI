@@ -55,9 +55,6 @@ module Allocator(
 `ifdef SD
 	, i_false_free
 `endif
-`ifdef VERI_TOP_Allocator
-	, lbw, capacity
-`endif
 );
 
 //======================================
@@ -102,11 +99,6 @@ input [ICFG_BW-1:0] i_free_id;
 `ifdef SD
 input               i_false_free;
 `endif
-`ifdef VERI_TOP_Allocator
-output logic [31:0]  lbw;
-output logic [HBW:0] capacity;
-`endif
-
 
 //======================================
 // Allocate multiple linears
@@ -179,7 +171,7 @@ always_comb begin
 end
 Semaphore#(LBUF_SIZE) u_sem_linear(
 	`clk_connect,
-	.i_inc(alloc_ack),
+	.i_inc(cnt_ack),
 	.i_dec(allocated_ack),
 	.o_full(linear_full),
 	.o_empty(linear_empty),
@@ -292,10 +284,5 @@ end
 `ff_cg(linear_ack||we_dval)
 	valid_num_r <= valid_num_w;
 `ff_end
-
-`ifdef VERI_TOP_Allocator
-assign lbw = LBW;
-assign capacity = capacity_r;
-`endif
 
 endmodule
