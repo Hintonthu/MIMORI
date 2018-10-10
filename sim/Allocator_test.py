@@ -20,83 +20,145 @@ from nicotb.utils import Scoreboard, BusGetter, Stacker
 from nicotb.primitives import Semaphore
 from nicotb.protocol import OneWire, TwoWire
 from itertools import repeat
-from UmiModel import UmiModel, default_sample_conf, npi, npd, newaxis
+from UmiModel import UmiModel, npi, npd, newaxis
 from Response import Response
 
 def main():
-	cfg = default_sample_conf
-	sizes = npi.array([10, 300, 1000])
+	VSIZE = 32
+	sizes_hi = npi.array([5, 1, 10])
+	sizes = sizes_hi * VSIZE
+	N_TEST = 200
 	N_CFG = sizes.shape[0]
+	LBW = 11
+	LMASK = (1<<LBW)-1
 	# bus
-	sem = Semaphore(0)
-	lbw_bus, const_bus, cap_bus = CreateBuses((
-		(("dut", "LBW"),),
-		(
-			("dut", "blkdone_dval"),
-			(None , "i_sizes", (N_CFG,)),
-		),
-		(("dut", "capacity_r"),),
-	))
 	(
 		alloc_rdy, alloc_ack,
 		linear_rdy, linear_ack,
+		alloced_rdy, alloced_ack,
+		we_dval,
 		free_dval,
 	) = CreateBuses((
 		(("alloc_rdy",),),
 		(("alloc_ack",),),
 		(("linear_rdy",),),
 		(("linear_canack",),),
+		(("allocated_rdy",),),
+		(("allocated_canack",),),
+		(("dut","we_dval"),),
 		(("dut","free_dval"),),
 	))
-	lbw_bus.Read()
-	BW = lbw_bus.value[0]
-	alloc_bus, linear_bus, free_bus = CreateBuses((
-		(("dut", "i_alloc_id",),),
+	size_bus, alloc_bus, linear_bus, alloced_bus, we_bus, free_bus = CreateBuses((
+		(("dut", "i_sizes", (N_CFG,)),),
 		(
-			("dut", "o_linear",),
-			("dut", "o_linear_id",),
+			("dut", "i_beg_id",),
+			(None , "i_end_id",),
 		),
+		(("dut", "o_linear",),),
+		tuple(),
+		tuple(),
 		(("dut", "i_free_id",),),
 	))
-	# get configs
-	N_TEST = 100
-	ids = npd.random.randint(N_CFG, size=N_TEST)
-	linears = npi.cumsum(sizes[ids]) & ((1<<BW)-1)
+	size_bus.value = sizes_hi
+	size_bus.Write()
+	ids0 = npd.random.randint(N_CFG+1, size=N_TEST)
+	ids1 = npd.random.randint(N_CFG+1, size=N_TEST)
+	rg = npd.vstack((npd.fmin(ids0, ids1), npd.fmax(ids0, ids1))).T
+	rg = rg[ids0 != ids1]
+	flat_ids = UmiModel._FlatRangeNorep(rg)
+	N_ANS = flat_ids.size
+	# init
+	sem = Semaphore(0)
+	space = (1<<LBW) // VSIZE
+	allocated = 0
+	valid_data = 0
+	alc_ptr = 0
+	ado_ptr = 0
+	free_ptr = 0
+	# init
+	linears = npi.cumsum(sizes[flat_ids]) & LMASK
 	linears = npd.roll(linears, 1)
 	linears[0] = 0
-	# init
-	const_bus.values[0][0] = 0
-	npd.copyto(const_bus.values[1], sizes)
-	const_bus.Write()
+	# testbench
 	scb = Scoreboard("Allocator")
 	test = scb.GetTest("test")
 	yield rst_out_ev
 	yield ck_ev
-	f_master = OneWire.Master(free_dval, free_bus, ck_ev, callbacks=[lambda x: sem.ReleaseNB()])
-	resp = Response(f_master.SendIter, ck_ev, B=10)
-	lc = Stacker(N_TEST, callbacks=[test.Get])
+	lc = Stacker(N_ANS, callbacks=[test.Get])
 	bg = BusGetter(callbacks=[lc.Get])
-	a_master = TwoWire.Master(alloc_rdy, alloc_ack, alloc_bus, ck_ev)
-	a_slave = TwoWire.Slave(
-		linear_rdy, linear_ack, linear_bus, ck_ev,
-		callbacks=[bg.Get, lambda d: resp.Append((d.values[1].copy(),))]
+	# allocate a range
+	def AllocateRange(d):
+		nonlocal space, allocated
+		sz_rg = sizes_hi[d.i_beg_id[0]:d.i_end_id[0]]
+		space -= npd.sum(sz_rg)
+		allocated += d.i_end_id[0] - d.i_beg_id[0]
+		assert space >= 0
+	a_master = TwoWire.Master(
+		alloc_rdy, alloc_ack, alloc_bus, ck_ev,
+		callbacks=[AllocateRange]
 	)
-	test.Expect((linears[:,newaxis], ids[:,newaxis]))
+	# something is allocated
+	def AllocateOut(d):
+		nonlocal allocated, alc_ptr
+		allocated -= 1
+		for i in range(sizes_hi[flat_ids[alc_ptr]]):
+			w_resp.Append(we_bus)
+		alc_ptr += 1
+	alloced_slave = TwoWire.Slave(
+		alloced_rdy, alloced_ack, alloced_bus, ck_ev,
+		callbacks=[AllocateOut]
+	)
+	# a write is done
+	def GetData(d):
+		nonlocal valid_data
+		valid_data += 1
+	w_master = OneWire.Master(
+		we_dval, we_bus, ck_ev,
+		callbacks=[GetData],
+		A=1, B=2
+	)
+	# output address
+	def AddressOut(d):
+		nonlocal valid_data, ado_ptr
+		idx = flat_ids[ado_ptr]
+		valid_data -= sizes_hi[idx]
+		assert valid_data >= 0
+		f_resp.Append((idx,))
+		ado_ptr += 1
+		bg.Get(d)
+	l_slave = TwoWire.Slave(
+		linear_rdy, linear_ack, linear_bus, ck_ev,
+		callbacks=[AddressOut]
+	)
+	# free
+	def Free(d):
+		nonlocal space, free_ptr
+		sem.ReleaseNB()
+		space += sizes_hi[flat_ids[free_ptr]]
+		free_ptr += 1
+	f_master = OneWire.Master(free_dval, free_bus, ck_ev, callbacks=[Free])
+
+	w_resp = Response(w_master.SendIter, ck_ev, B=2)
+	f_resp = Response(f_master.SendIter, ck_ev, B=50)
+	test.Expect((linears[:,newaxis],))
 
 	# start simulation
 	data_bus = a_master.values
-	def TheIter():
+	def TheIter(ids):
 		for ID in ids:
-			data_bus.i_alloc_id = ID
+			data_bus.i_beg_id[0] = ID[0]
+			data_bus.i_end_id[0] = ID[1]
 			yield data_bus
-	yield from a_master.SendIter(((i,) for i in ids))
+	yield from a_master.SendIter(TheIter(rg))
+	yield from sem.Acquire(N_ANS)
 
-	yield from sem.Acquire(N_TEST)
 	for i in range(5):
 		yield ck_ev
+	assert ado_ptr == N_ANS
+	assert alc_ptr == N_ANS
+	assert free_ptr == N_ANS
+	assert space*VSIZE == (1<<LBW)
 	assert lc.is_clean
-	cap_bus.Read()
-	assert cap_bus.value[0] == (1<<BW)
 	FinishSim()
 
 rst_out_ev, ck_ev = CreateEvents(["rst_out", "ck_ev"])

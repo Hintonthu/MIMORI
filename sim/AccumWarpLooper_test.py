@@ -30,14 +30,17 @@ def main():
 	n_bofs, bofs = cfg.CreateBlockTransaction()
 	for i in range(n_bofs):
 		(
-			n_i0, bofs_i0, abeg_i0, aend_i0, abeg_id_i0, aend_id_i0,
-		) = cfg.CreateAccumBlockTransaction(bofs[i])[:6]
+			n_i0, bofs_i0, abeg_i0, aend_i0, abeg_id_i0, aend_id_i0, dummy
+		) = cfg.CreateAccumBlockTransaction(bofs[i])[0]
 		for j in range(n_i0):
 			(
 				n_aofs_i0, agofs_i0, alofs_i0,
 				rt_i_i0, rg_li_i0, rg_ri_i0
 			) = cfg.CreateAccumTransaction(abeg_i0[j], aend_i0[j])
-			linear_i0 = cfg.AllocSram(0, abeg_id_i0[j], aend_id_i0[j])
+			print(abeg_id_i0[j])
+			print(aend_id_i0[j])
+			cfg.AllocSram(0, abeg_id_i0[j], aend_id_i0[j])
+			linear_i0 = cfg.umcfg_i0['local_adr'][:,0]
 			accum_idx_i0, warpid_i0, rg_flat_i0, rt_flat_i0 = cfg.CreateAccumWarpTransaction(
 				abeg_i0[j], aend_i0[j],
 				rt_i_i0, rg_li_i0, rg_ri_i0,

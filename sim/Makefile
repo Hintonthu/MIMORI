@@ -30,7 +30,8 @@ wc:
 	make COVERAGE=$(COV) WriteCollector
 
 chal:
-	make COVERAGE=$(COV) ChunkAddrLooper
+	-TEST0=0 make COVERAGE=$(COV) ChunkAddrLooper
+	-        make COVERAGE=$(COV) ChunkAddrLooper
 
 abl:
 	make COVERAGE=$(COV) AccumBlockLooper

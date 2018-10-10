@@ -79,6 +79,7 @@ def TrailingZeros(i):
 
 class UmiModel(object):
 	MEM_PAD, MEM_WRAP = range(2)
+	N_TAU = 4
 	VSIZE = 32
 	DIM = 4
 	VDIM = 6
@@ -95,8 +96,6 @@ class UmiModel(object):
 	DRAM_ALIGN = 8
 	DRAM_ALIGN_MASK = DRAM_ALIGN-1
 	VSIZE_MASK = VSIZE-1
-	LBW_MASK0 = (1<<LBW0)-1
-	LBW_MASK1 = (1<<LBW1)-1
 	# please check define.sv
 	limits = {
 		"const": 4,
@@ -135,6 +134,7 @@ class UmiModel(object):
 		'lmpad', 'lmsize', # derived from lmwidth, lmalign
 		'vlinear', # precomputed vector addresses local/global for I/O
 		'xor_src', 'xor_swap', # XOR scheme: TODO document
+		'local_adr', # Internal status
 	], [
 		DIM,1,2*VDIM,2*VDIM,2*VDIM,DIM,DIM,
 		1,1,
@@ -145,6 +145,7 @@ class UmiModel(object):
 		DIM,1,
 		VSIZE,
 		LG_VSIZE,1,
+		N_TAU,
 	])
 	# cmd_type 0: fill addr[ofs:ofs+len] to SRAM
 	# cmd_type 1: repeat addr[ofs] len times to SRAM
@@ -207,7 +208,8 @@ class UmiModel(object):
 			npi.arange(rg[i,0], rg[i,1]) for i in range(rg.shape[0])
 		])
 
-	def _CalStride(self, um, is_local):
+	@staticmethod
+	def _CalStride(um, is_local):
 		mul = npd.copy(um['lmalign'] if is_local else um['mboundary'])
 		mul = npd.roll(mul, -1, axis=1)
 		mul[:,-1] = 1
@@ -254,13 +256,14 @@ class UmiModel(object):
 		n_ref = ref_ofs.shape[0]
 		return n_ref, ref_ofs
 
-	def _InitUmcfg(self, umcfg, n, is_local, xor_fallback):
+	@staticmethod
+	def _InitUmcfg(umcfg, n, v_nd, is_local, xor_fallback):
 		# layout of umcfg
 		#   aaaapppp
 		n_total = n[1][-1]
 		assert n_total == umcfg.shape[0]
 		# Calaulate memory shape cumsum (multiplier, boundary)
-		umcfg['mboundary'] = self._CalMemBound(umcfg['mwidth'])
+		umcfg['mboundary'] = UmiModel._CalMemBound(umcfg['mwidth'])
 		if is_local:
 			umcfg['lmsize'] = umcfg['lmalign'][:,0]
 			# Calaulate pad of local memory
@@ -272,7 +275,7 @@ class UmiModel(object):
 			umcfg['mboundary_lmwidth'][:,:-1] *= umcfg['mboundary'][:,1:]
 		# Calculate vector related
 		if is_local:
-			umcfg['vlinear'] = npd.dot(self._CalStride(umcfg, True), self.v_nd.T)
+			umcfg['vlinear'] = npd.dot(UmiModel._CalStride(umcfg, True), v_nd)
 			# if true, then use the value provided by users
 			if not xor_fallback:
 				idx = npi.ones(UmiModel.LG_VSIZE) << npi.arange(UmiModel.LG_VSIZE)
@@ -280,7 +283,7 @@ class UmiModel(object):
 					# use i:i+1 to pass by reference
 					UmiModel._CalXor(umcfg['vlinear'][i,idx], umcfg['xor_src'][i,:], umcfg['xor_swap'][i:i+1])
 		else:
-			umcfg['vlinear'] = npd.dot(self._CalStride(umcfg, False), self.v_nd.T)
+			umcfg['vlinear'] = npd.dot(UmiModel._CalStride(umcfg, False), v_nd)
 		for i in range(n_total):
 			for j in range(UmiModel.VDIM*2):
 				s, f = ExtractUFloat(umcfg['ustride'][i,j], UmiModel.STRIDE_EXP_BW)
@@ -295,9 +298,10 @@ class UmiModel(object):
 			ums[idx,umcfg['udim'][:,UmiModel.VDIM+i]] += umcfg['ustart'][:,UmiModel.VDIM+i]
 		return umcfg
 
-	def _InitApcfg(self, pcfg, acfg):
+	@staticmethod
+	def _InitApcfg(pcfg, acfg):
 		# Init
-		VDIM = self.VDIM
+		VDIM = UmiModel.VDIM
 		# Convert some values
 		pcfg['end'] = ((pcfg['total']-1)//pcfg['local']+1)*pcfg['local']
 		acfg['end'] = ((acfg['total']-1)//acfg['local']+1)*acfg['local']
@@ -310,7 +314,7 @@ class UmiModel(object):
 		pf = pcfg['vshuf'][0]
 		plv = pcfg['lg_vsize'][0]
 		plf = pcfg['lg_vshuf'][0]
-		for i in range(self.VDIM):
+		for i in range(UmiModel.VDIM):
 			plv[i] = Clog2(pv[i], True)
 			plf[i] = Clog2(pf[i], True)
 		v_nd = npi.indices(pv).reshape((VDIM, -1)).T << plf
@@ -337,18 +341,15 @@ class UmiModel(object):
 	def __init__(self, pcfg, acfg, umcfg_i0, umcfg_i1, umcfg_o, insts, n_i0, n_i1, n_o, n_inst, xor_fallback=False):
 		# convert to internal format
 		# v_nd_shuf, v_nd = head of warp, warp sub idx
-		self.pcfg, self.acfg, self.warp_nd, self.v_nd = self._InitApcfg(pcfg, acfg)
+		self.pcfg, self.acfg, self.warp_nd, self.v_nd = UmiModel._InitApcfg(pcfg, acfg)
 		self.sram_cur = [0, 0]
 		self.n_i0 = self._CvtRange(n_i0)
 		self.n_i1 = self._CvtRange(n_i1)
-		self.sram_linear = [
-			npi.empty(self.n_i0[1][-1]),
-			npi.empty(self.n_i1[1][-1]),
-		]
-		self.umcfg_i0 = self._InitUmcfg(umcfg_i0, n_i0, is_local=True, xor_fallback=xor_fallback)
-		self.umcfg_i1 = self._InitUmcfg(umcfg_i1, n_i1, is_local=True, xor_fallback=xor_fallback)
+		v_ndT = self.v_nd.T
+		self.umcfg_i0 = self._InitUmcfg(umcfg_i0, n_i0, v_ndT, is_local=True, xor_fallback=xor_fallback)
+		self.umcfg_i1 = self._InitUmcfg(umcfg_i1, n_i1, v_ndT, is_local=True, xor_fallback=xor_fallback)
 		self.n_o = self._CvtRange(n_o)
-		self.umcfg_o = self._InitUmcfg(umcfg_o, n_o, is_local=False, xor_fallback=True) # True is not used
+		self.umcfg_o = self._InitUmcfg(umcfg_o, n_o, v_ndT, is_local=False, xor_fallback=True) # True is not used
 		self.n_inst = self._CvtRange(n_inst)
 		self.insts = insts
 		self.n_reg = 1
@@ -361,13 +362,20 @@ class UmiModel(object):
 		assert len(a.shape) == 1 and l <= limit
 		self.luts[name] = (l, a)
 
-	def AllocSram(self, which, beg, end):
-		linear = self.sram_linear[which]
-		um = self.umcfg_i0['lmsize'] if which == 0 else self.umcfg_i1['lmsize']
-		new_addr = npi.cumsum(npd.insert(um[beg:end], 0, self.sram_cur[which])) & UmiModel.LBW_MASK
+	def AllocSram(self, which, beg, end, tau=0):
+		if which:
+			linear = self.umcfg_i1['local_adr'][tau,:]
+			msz = self.umcfg_i1['lmsize']
+			bw = UmiModel.LBW1
+		else:
+			linear = self.umcfg_i0['local_adr'][tau,:]
+			msz = self.umcfg_i0['lmsize']
+			bw = UmiModel.LBW0
+		MASK = (1<<bw)-1
+		base = self.sram_cur[which]
+		new_addr = npi.cumsum(npd.insert(msz[beg:end], 0, base)) & MASK
 		linear[beg:end] = new_addr[:-1]
 		self.sram_cur[which] = new_addr[-1]
-		return linear
 
 	#################
 	# Hardware model

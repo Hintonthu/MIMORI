@@ -38,11 +38,11 @@ def main():
 	TEST0 = not getenv("TEST0") is None
 	print(f"Testing {0 if TEST0 else 1}...")
 	TEST_UMCFG = cfg.umcfg_i0 if TEST0 else cfg.umcfg_i1
-	OFS = 0 if TEST0 else 6
+	OFS = int(bool(TEST0))
 	for i in range(n_bofs):
 		(
-			n_i, bofs_i, abeg_i, aend_i, abeg_id_i, aend_id_i,
-		) = cfg.CreateAccumBlockTransaction(bofs[i])[OFS:OFS+6]
+			n_i, bofs_i, abeg_i, aend_i, abeg_id_i, aend_id_i, dummy
+		) = cfg.CreateAccumBlockTransaction(bofs[i])[OFS]
 		for j in range(n_i):
 			# only use the first one
 			TEST_ABMOFS = cfg.CreateChunkHead(bofs_i[j], abeg_i[j], abeg_id_i[j], aend_id_i[j], TEST_UMCFG)[0]
