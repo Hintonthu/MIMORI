@@ -222,6 +222,7 @@ always_comb begin
 	end
 end
 
+logic               ch_which;
 logic [WBW-1:0]     ch_mofs [DIM];
 logic [ICFG_BW-1:0] ch_mid;
 ChunkHead u_chunk_head(
@@ -403,7 +404,7 @@ always_comb for (int i = 0; i < DIM; i++) begin
 end
 
 `rdyack_logic(cal_addr);
-logic cal_addr_ialast;
+logic cal_addr_islast;
 ChunkAddrLooper u_cal_addr(
 	`clk_connect,
 	`rdyack_connect(mofs, ch_addr1),
@@ -460,6 +461,7 @@ always_comb for (int i = 0; i < DIM; i++) begin
 end
 
 `rdyack_logic(cal_swc);
+logic              cmd_swc_which;
 logic [1:0]        cmd_swc_type;
 logic              cmd_swc_islast;
 logic [CC_BW-1:0]  cmd_swc_addrofs;

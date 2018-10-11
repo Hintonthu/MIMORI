@@ -92,6 +92,7 @@ output logic               o_skip;
 // Internal
 //======================================
 logic loop_init;
+logic loop_cg;
 logic [WBW-1:0]     i_bofs_stride [VDIM];
 logic [WBW-1:0]     i_aofs_stride [VDIM];
 logic [WBW-1:0]     global_mofs_w   [DIM];
