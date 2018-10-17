@@ -332,8 +332,8 @@ logic [CN_TAU_Y:0] dma1_systolic_cnt_r;
 logic [CN_TAU_Y:0] dma1_systolic_cnt_w;
 logic [STO_BW-1:0] o_i0_syst_type_w;
 logic [STO_BW-1:0] o_i1_syst_type_w;
-logic [STO_BW-1:0] dma_0_syst_type_w;
-logic [STO_BW-1:0] dma_1_syst_type_w;
+logic [STO_BW-1:0] dma0_syst_type_w;
+logic [STO_BW-1:0] dma1_syst_type_w;
 `endif
 
 //======================================
@@ -341,7 +341,6 @@ logic [STO_BW-1:0] dma_1_syst_type_w;
 //======================================
 assign blkdone_dval = s0_skip_alu || alu_abofs_ack && s1_alu_last_block_r;
 `ifdef SD
-assign o_dma_which_w = !o_dma_which;
 always_comb begin
 	i_i0_systolic_gsize2 = (i_i0_systolic_gsize << 1) - 'b1;
 	i_i1_systolic_gsize2 = (i_i1_systolic_gsize << 1) - 'b1;
@@ -364,11 +363,10 @@ always_comb begin
 	end else begin\
 		target = `FROM_RIGHT | (lmost ? `TO_EMPTY : `TO_LEFT);\
 	end
-	// bit mismatch lint error here
-	`DetectSystolicType(o_i0_syst_type_w, i0_systolic_cnt_r, i_i0_systolic_idx, i_i0_systolic_gsize2, i_i0_lmost, i_i0_rmost);
-	`DetectSystolicType(o_i1_syst_type_w, i1_systolic_cnt_r, i_i1_systolic_idx, i_i1_systolic_gsize2, i_i1_lmost, i_i1_rmost);
-	`DetectSystolicType(dma0_syst_type_w, dma0_systolic_cnt_r, i_i0_systolic_idx, i_i0_systolic_gsize2, i_i0_lmost, i_i0_rmost);
-	`DetectSystolicType(dma1_syst_type_w, dma1_systolic_cnt_r, i_i1_systolic_idx, i_i1_systolic_gsize2, i_i1_lmost, i_i1_rmost);
+	`DetectSystolicType(o_i0_syst_type_w, i0_systolic_cnt_r, {1'b0,i_i0_systolic_idx}, i_i0_systolic_gsize2, i_i0_lmost, i_i0_rmost);
+	`DetectSystolicType(o_i1_syst_type_w, i1_systolic_cnt_r, {1'b0,i_i1_systolic_idx}, i_i1_systolic_gsize2, i_i1_lmost, i_i1_rmost);
+	`DetectSystolicType(dma0_syst_type_w, dma0_systolic_cnt_r, {1'b0,i_i0_systolic_idx}, i_i0_systolic_gsize2, i_i0_lmost, i_i0_rmost);
+	`DetectSystolicType(dma1_syst_type_w, dma1_systolic_cnt_r, {1'b0,i_i1_systolic_idx}, i_i1_systolic_gsize2, i_i1_lmost, i_i1_rmost);
 end
 `endif
 
@@ -551,11 +549,10 @@ AccumBlockLooperOutputController#(INST_BW) u_oc_alu(
 `ff_end
 
 `ifdef SD
-// TODO
 `ff_rst
 	o_dma_syst_type <= '0;
-`ff_cg(x)
-	o_dma_syst_type <= ????;
+`ff_cg(dma_src1_ack)
+	o_dma_syst_type <= i_which ? dma1_syst_type_w : dma0_syst_type_w;
 `ff_end
 `endif
 
@@ -593,9 +590,13 @@ AccumBlockLooperOutputController#(INST_BW) u_oc_alu(
 `ff_rst
 	i0_systolic_cnt_r <= '0;
 	i1_systolic_cnt_r <= '0;
+	dma0_systolic_cnt_r <= '0;
+	dma1_systolic_cnt_r <= '0;
 `ff_cg(ofs_init_dval || s0_dst_ack)
 	i0_systolic_cnt_r <= i0_systolic_cnt_w;
 	i1_systolic_cnt_r <= i1_systolic_cnt_w;
+	dma0_systolic_cnt_r <= dma0_systolic_cnt_w;
+	dma1_systolic_cnt_r <= dma1_systolic_cnt_w;
 `ff_end
 `endif
 

@@ -172,6 +172,7 @@ localparam STSIZE = TauCfg::STENCIL_SIZE;
 `ifdef SD
 localparam N_TAU_X = TauCfg::N_TAU_X;
 localparam N_TAU_Y = TauCfg::N_TAU_Y;
+localparam STO_BW = TauCfg::STO_BW;
 `endif
 // derived
 localparam ICFG_BW = $clog2(N_ICFG+1);
@@ -454,9 +455,8 @@ AccumBlockLooper u_abl(
 	.o_i1_end(abl_i1_end),
 `ifdef SD
 	.o_i1_syst_type(abl_i1_syst_type),
-	`else
-	`rdyack_connect(dma_abofs, abl_dma_abofs),
 `endif
+	`rdyack_connect(dma_abofs, abl_dma_abofs),
 	.o_dma_which(abl_dma_which),
 	.o_dma_bofs(abl_dma_bofs),
 	.o_dma_aofs(abl_dma_aofs),
@@ -635,7 +635,7 @@ DmaPipeline u_dma(
 	.i_beg(abl_dma_beg),
 	.i_end(abl_dma_end),
 `ifdef SD
-	.i_syst_type(abl_syst_type),
+	.i_syst_type(abl_dma_syst_type),
 `endif
 	.i_i0_global_linears(i_i0_global_linears),
 	.i_i0_global_mofs(i_i0_global_starts),

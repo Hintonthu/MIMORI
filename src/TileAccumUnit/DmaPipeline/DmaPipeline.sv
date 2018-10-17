@@ -184,7 +184,7 @@ input [DBW-1:0] i_dramrd [CSIZE];
 //============================================================================
 `ifdef SD
 `rdyack_logic(ch_mofs0);
-logic i_systolic_skip;
+logic [N_ICFG-1:0] i_systolic_skip;
 `endif
 `rdyack_logic(ch_mofs1);
 
@@ -263,7 +263,7 @@ DeleteIf#(1) u_ign_ch_cmd(
 	.cond(ch_skip),
 	`rdyack_connect(src, ch_mofs0),
 	`rdyack_connect(dst, ch_mofs1),
-	.skipped()
+	.deleted()
 );
 `endif
 // Now we have ch_mofs1 as output
@@ -276,10 +276,16 @@ DeleteIf#(1) u_ign_ch_cmd(
 `rdyack_logic(ch_cmd0);
 `rdyack_logic(ch_addr0);
 `rdyack_logic(ch_alloc0);
+logic clear_rp;
 always_comb begin
 	ch_mofs2_rdy = ch_mofs1_rdy && (ch_which ? rp_en1_rdy : rp_en0_rdy);
-	rp_en0_ack = ch_mofs2_ack && !ch_which;
-	rp_en1_ack = ch_mofs2_ack &&  ch_which;
+`ifdef SD
+	clear_rp = ch_mofs2_ack || ch_skip;
+`else
+	clear_rp = ch_mofs2_ack;
+`endif
+	rp_en0_ack = rp_en0_rdy && (clear_rp && !ch_which);
+	rp_en1_ack = rp_en1_rdy && (clear_rp &&  ch_which);
 	ch_mofs1_ack = ch_mofs2_ack;
 end
 Broadcast#(3) u_broadcast_ch(

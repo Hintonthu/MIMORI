@@ -88,7 +88,7 @@ output logic [DBW-1:0]        o_data [VSIZE];
 //======================================
 // Internal
 //======================================
-typedef enum [1:0] {FREE = 0, RUN, FSM_N} Fsm;
+typedef enum int {FREE = 0, RUN, FSM_N} Fsm;
 logic [FSM_N-1:0] fsm_r;
 logic [FSM_N-1:0] fsm_w;
 logic [CSIZE*DBW-1:0] data_1d;

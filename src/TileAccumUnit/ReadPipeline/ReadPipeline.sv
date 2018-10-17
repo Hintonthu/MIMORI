@@ -172,7 +172,6 @@ logic [LBW-1:0] alloc_lc_linear;
 logic [ICFG_BW-1:0] rmc_alloc_free_id;
 `ifdef SD
 logic               rmc_alloc_false_alloc;
-logic [LBW-1:0] lc_awl_linears [N_ICFG];
 `endif
 
 logic [LBW-1:0] i_local_mboundaries2 [N_ICFG][DIM];

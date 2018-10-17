@@ -42,9 +42,6 @@ module Allocator(
 	`rdyack_port(linear),
 `endif
 	o_linear,
-`ifdef SD
-	o_false_alloc,
-`endif
 	// Used to notify DMA something are allocated
 	`rdyack_port(allocated),
 	// Indicate SRAM is written, used to mark FIFO ready
@@ -65,6 +62,9 @@ localparam DIM = TauCfg::DIM;
 localparam N_ICFG = TauCfg::N_ICFG;
 localparam [LBW:0] VSIZE = TauCfg::VSIZE;
 localparam LBUF_SIZE = 5;
+`ifdef SD
+localparam STO_BW = TauCfg::STO_BW;
+`endif
 // derived
 localparam CV_BW = $clog2(VSIZE);
 localparam ICFG_BW = $clog2(N_ICFG+1);
@@ -80,8 +80,8 @@ input [HBW:0] i_sizes [N_ICFG];
 input [ICFG_BW-1:0] i_beg_id;
 input [ICFG_BW-1:0] i_end_id;
 `ifdef SD
-input               i_syst_type;
-input               i_systolic_skip;
+input [STO_BW-1:0]  i_syst_type;
+input [N_ICFG-1:0]  i_systolic_skip;
 `endif
 `ifdef VERI_TOP_Allocator
 `rdyack2_output(linear);
@@ -89,9 +89,6 @@ input               i_systolic_skip;
 `rdyack_output(linear);
 `endif
 output logic [LBW-1:0]     o_linear;
-`ifdef SD
-output logic               o_false_alloc;
-`endif
 `rdyack_output(allocated);
 `dval_input(we);
 `dval_input(free);
@@ -116,7 +113,7 @@ logic [HBW-1:0] cur_r;
 logic [HBW-1:0] cur_w;
 
 `ifdef SD
-always begin
+always_comb begin
 	cnt_false_alloc = i_systolic_skip[cnt_id_r] && `IS_FROM_SIDE(i_syst_type);
 	cnt_size = cnt_false_alloc ? '0 : i_sizes[cnt_id_r];
 end
@@ -192,7 +189,7 @@ logic [LBUF_SIZE-2:0] o_linears_load_nxt;
 logic [LBUF_SIZE-1:0] o_linears_load_new;
 logic [HBW-1:0]       o_linear_hi;
 logic [HBW:0]         o_linear_size;
-logic filling;
+logic filled;
 SFifoCtrl#(LBUF_SIZE) u_sfifo_ctrl_linear(
 	`clk_connect,
 	`rdyack_connect(src, fifo_in),
@@ -226,8 +223,8 @@ SFifoReg0D#(.NDATA(LBUF_SIZE)) u_sfifo_false_alloc(
 );
 `endif
 // If FIFO head is not ready
-PauseIf#(0) u_pause_output_when_filling(
-	.cond(filling),
+PauseIf#(0) u_pause_output_until_filled(
+	.cond(filled),
 	`rdyack_connect(src, fifo_out),
 	`rdyack_connect(dst, linear)
 );
@@ -246,9 +243,9 @@ assign fsize = i_sizes[i_free_id];
 always_comb begin
 	// Tell DMA to work is there are something in FIFO
 	allocated_rdy = !linear_empty;
-	filling =
+	filled =
 `ifdef SD
-		!o_false_alloc ||
+		o_false_alloc ||
 `endif
 		valid_num_r >= o_linear_size;
 end

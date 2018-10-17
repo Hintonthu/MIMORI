@@ -58,7 +58,6 @@ package TauCfg;
 	localparam BLOCK_PBW = $clog2(MAX_PENDING_BLOCK+1);
 	localparam INST_PBW = $clog2(MAX_PENDING_INST+1);
 	localparam MAX_LOCAL_ADDR_BW = LOCAL_ADDR_BW0 > LOCAL_ADDR_BW1 ? LOCAL_ADDR_BW0 : LOCAL_ADDR_BW1;
-
 	// Systolic flag[3:0] document
 	// [0] flag, to right
 	// [1] flag, to left
@@ -106,6 +105,8 @@ package TauCfg;
 	// +--------------------------------+
 `ifdef SD
 	parameter STO_BW = 4;
+	typedef logic [$clog2(N_TAU_Y  )-1:0] ST_IDX0_T;
+	typedef logic [$clog2(N_TAU_Y  )-1:0] ST_IDX1_T;
 	`define IS_FROM_SELF(x) (!x[3])
 	`define IS_FROM_SIDE(x) (x[3])
 	`define IS_FROM_RIGHT(x) (x[3:2] == 2'b10)
