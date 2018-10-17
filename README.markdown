@@ -1,3 +1,5 @@
+[![Build Status](https://travis-ci.com/johnjohnlin/MIMORI.svg?branch=master)](https://travis-ci.com/johnjohnlin/MIMORI.svg?branch=master)
+
 ## About MERIT Processor
 We implement *MERIT Processor*,
 an accelerator architecture for deep learning as well as other vision-related tasks with SystemVerilog.

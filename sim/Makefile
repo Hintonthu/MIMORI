@@ -2,8 +2,8 @@ NICOTB=../nicotb/lib
 IRUN=irun
 SYN=syn
 
-# Usage: TEST_CFG=X make top (default X = 0)
-top:
+# Usage: TEST_CFG=X make top_xx (default X = 0)
+top_sc:
 	make COVERAGE=$(COV) ARGS="+define+SC" Top
 
 top_mc:
@@ -12,16 +12,16 @@ top_mc:
 top_sd:
 	make COVERAGE=$(COV) ARGS="+define+SD" Top
 
-tops:
-	make ARGS="+define+SDF=\\\"../$(SYN)/Top.sdf\\\" +define+GATE_LEVEL +define+SRAM_GEN_MODE=SYNOPSYS32 +incdir+../$(SYN)/SAED32_EDK/lib/sram/verilog/ +incdir+../$(SYN)/SAED32_EDK/lib/stdcell_rvt/verilog/ +incdir+../$(SYN)/ +nowarn+SDFNCAP:SDFNDP:MACRDF:CUVWSP:SDFNSB:SDFNL1" Top
+tops_sc:
+	make ARGS="+nospecify +notimingchecks +delay_mode_unit +define+SDF=\\\"../$(SYN)/Top_syn.sdf\\\" +define+GATE_LEVEL +define+SRAM_GEN_MODE=SYNOPSYS32 +define+SC +incdir+../$(SYN)/SAED32_EDK/lib/sram/verilog/ +incdir+../$(SYN)/SAED32_EDK/lib/stdcell_rvt/verilog/ +incdir+../$(SYN)/ +nowarn+SDFNCAP:SDFNDP:MACRDF:CUVWSP:SDFNSB:SDFNL1" Top
 
 all_sub:
 	-make COVERAGE=$(COV) pbl
+	-make COVERAGE=$(COV) pbl_mc
 	-make COVERAGE=$(COV) abl
 	-make COVERAGE=$(COV) simd_drv
 	-make COVERAGE=$(COV) awl
 	-make COVERAGE=$(COV) wc
-	-make COVERAGE=$(COV) cal
 	-make COVERAGE=$(COV) alloc
 	-make COVERAGE=$(COV) rmc
 	-make COVERAGE=$(COV) chal
@@ -30,7 +30,8 @@ wc:
 	make COVERAGE=$(COV) WriteCollector
 
 chal:
-	make COVERAGE=$(COV) ChunkAddrLooper
+	-TEST0=0 make COVERAGE=$(COV) ChunkAddrLooper
+	-        make COVERAGE=$(COV) ChunkAddrLooper
 
 abl:
 	make COVERAGE=$(COV) AccumBlockLooper
@@ -47,7 +48,7 @@ pbl:
 	make COVERAGE=$(COV) ParallelBlockLooper
 
 pbl_mc:
-	make COVERAGE=$(COV) ParallelBlockLooper_mc
+	make ARGS="+define+MC" COVERAGE=$(COV) ParallelBlockLooper_mc
 
 alloc:
 	make COVERAGE=$(COV) Allocator

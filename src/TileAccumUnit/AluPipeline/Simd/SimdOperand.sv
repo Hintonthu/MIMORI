@@ -155,6 +155,7 @@ Forward u_fwd(
 //======================================
 assign inst = i_insts[i_pc];
 assign reg_offset = i_wid * i_reg_per_warp; // fuck off the nLint bitwidth check
+typedef logic [SRAM_ABW-1:0] REG_OFS_T;
 always_comb begin
 	{a_w, a_rspace} = SrcOpSpace(inst[14-:5]);
 	{b_w, b_rspace} = SrcOpSpace(inst[ 9-:5]);
@@ -174,8 +175,8 @@ always_comb begin
 	if (a_rspace[4]) warp_addr = warp_addr | inst[12-:3];
 	if (b_rspace[4]) warp_addr = warp_addr | inst[ 7-:3];
 	if (c_rspace[4]) warp_addr = warp_addr | inst[ 2-:3];
-	o_reg_raddr = reg_offset + warp_addr; // fuck off the nLint bitwidth check
-	reg_waddr_w = reg_offset + inst[17-:3]; // fuck off the nLint bitwidth check
+	o_reg_raddr = reg_offset + REG_OFS_T'(warp_addr);
+	reg_waddr_w = reg_offset + REG_OFS_T'(inst[17-:3]);
 end
 
 //======================================

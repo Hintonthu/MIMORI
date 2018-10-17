@@ -19,19 +19,25 @@
 
 `include "common/define.sv"
 `include "common/SFifo.sv"
-`include "TileAccumUnit/ReadPipeline/ChunkAddrLooper/ChunkRowStart.sv"
-`include "TileAccumUnit/ReadPipeline/ChunkAddrLooper/ChunkRow.sv"
+`include "TileAccumUnit/DmaPipeline/ChunkAddrLooper/ChunkRowStart.sv"
+`include "TileAccumUnit/DmaPipeline/ChunkAddrLooper/ChunkRow.sv"
 
 module ChunkAddrLooper(
 	`clk_port,
 	`rdyack_port(mofs),
+	i_which,
 	i_mofs,
 	i_mpad,
 	i_mbound,
 	i_mlast,
 	i_maddr,
 	i_wrap,
+`ifdef VERI_TOP_ChunkAddrLooper
+	`rdyack2_port(cmd),
+`else
 	`rdyack_port(cmd),
+`endif
+	o_which,
 	o_cmd_type, // 0,1,2
 	o_cmd_islast,
 	o_cmd_addr,
@@ -42,7 +48,6 @@ module ChunkAddrLooper(
 //======================================
 // Parameter
 //======================================
-parameter LBW = TauCfg::LOCAL_ADDR_BW0;
 localparam GBW = TauCfg::GLOBAL_ADDR_BW;
 localparam DIM = TauCfg::DIM;
 localparam CSIZE = TauCfg::CACHE_SIZE;
@@ -58,13 +63,19 @@ localparam DBW = $clog2(DIM);
 //======================================
 `clk_input;
 `rdyack_input(mofs);
+input            i_which;
 input [GBW-1:0]  i_mofs    [DIM];
 input [V_BW-1:0] i_mpad    [DIM];
 input [GBW-1:0]  i_mbound  [DIM];
 input [GBW-1:0]  i_mlast   [DIM];
 input [GBW-1:0]  i_maddr;
 input            i_wrap;
+`ifdef VERI_TOP_ChunkAddrLooper
+`rdyack2_output(cmd);
+`else
 `rdyack_output(cmd);
+`endif
+output logic             o_which;
 output logic [1:0]       o_cmd_type;
 output logic             o_cmd_islast;
 output logic [GBW-1:0]   o_cmd_addr;
@@ -111,7 +122,6 @@ logic             s4_dst_pass;
 Broadcast#(2) u_brd0(
 	`clk_connect,
 	`rdyack_connect(src, mofs),
-	.acked(),
 	.dst_rdys({wait_fin_rdy,s0_src_rdy}),
 	.dst_acks({wait_fin_ack,s0_src_ack})
 );
@@ -165,7 +175,7 @@ Forward u_s4(
 	`rdyack_connect(src, s34),
 	`rdyack_connect(dst, s4_dst)
 );
-ForwardIf u_fwd_if_cmd(
+PauseIf#(0) u_fwd_if_cmd(
 	.cond(s4_dst_pass),
 	`rdyack_connect(src, s4_dst),
 	`rdyack_connect(dst, cmd)
@@ -176,7 +186,7 @@ ForwardIf u_fwd_if_cmd(
 //======================================
 assign o_cmd_islast = cmd_blklast || s34_cmd_addr != o_cmd_addr; // last address or last command of block
 assign s4_dst_pass = s34_rdy || cmd_blklast;
-assign wait_fin_ack = cmd_blklast && cmd_ack;
+assign wait_fin_ack = wait_fin_rdy && cmd_blklast && cmd_ack;
 
 //======================================
 // Sequential
@@ -220,12 +230,14 @@ assign wait_fin_ack = cmd_blklast && cmd_ack;
 `ff_end
 
 `ff_rst
+	o_which <= 1'b0;
 	o_cmd_type <= 2'b0;
 	o_cmd_addr <= '0;
 	o_cmd_addrofs <= '0;
 	o_cmd_len <= '0;
 	cmd_blklast <= 1'b0;
 `ff_cg(s34_ack)
+	o_which <= i_which;
 	o_cmd_type <= s34_cmd_type;
 	o_cmd_addr <= s34_cmd_addr;
 	o_cmd_addrofs <= s34_cmd_addrofs;

@@ -217,9 +217,9 @@ SimdTmpBuffer u_tbuf(
 // Combinational
 //======================================
 always_comb begin
-	for (int i = 0, j = TDBW-1; i < VSIZE; i++, j += TDBW) begin
-		reg_alu_rdata[i] = reg_alu_rdata_flat[j-:TDBW];
-		alu_reg_wdata_flat[j-:TDBW] = alu_reg_wdata[i];
+	for (int i = 0; i < VSIZE; i++) begin
+		reg_alu_rdata[i] = reg_alu_rdata_flat[((i+1)*TDBW-1)-:TDBW];
+		alu_reg_wdata_flat[((i+1)*TDBW-1)-:TDBW] = alu_reg_wdata[i];
 	end
 end
 

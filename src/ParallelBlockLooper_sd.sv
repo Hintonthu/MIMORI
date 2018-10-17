@@ -92,6 +92,7 @@ logic [CN_TAU-1:0] select_shamt_r;
 logic [CN_TAU-1:0] select_shamt_w;
 logic [CN_TAU-1:0] select_shamt_max;
 logic [  N_TAU-1:0] can_send;
+logic [  N_TAU-1:0] can_send_t;
 logic [  N_TAU-1:0] can_send2;
 logic [2*N_TAU-1:0] can_send_rot;
 logic [  N_TAU  :0] select_send_rot;
@@ -180,10 +181,15 @@ always_comb begin
 	s0_valid_condy1 = {s0_valid_condy, 1'b1} & {1'b1, ~s0_valid_condy};
 end
 
+// y258
+// ^147
+// |036
+// +->x
 always_comb begin
 	for (int i = 0; i < N_TAU_X; i++) begin
 		for (int j = 0; j < N_TAU_Y; j++) begin
 			can_send[N_TAU_Y*i+j] = !s1_rdys[i][j] || !s0_valid_cond[i][j];
+			can_send_t[N_TAU_X*j+i] = can_send[N_TAU_Y*i+j];
 		end
 	end
 	can_send2 = '0;
@@ -192,25 +198,20 @@ always_comb begin
 			can_send2 = can_send;
 		end
 		2'b01: begin
-			can_send2[N_TAU_X-1:0] = '1;
 			for (int i = 0; i < N_TAU_X; i++) begin
-				for (int j = 0; j < N_TAU_Y; j++) begin
-					can_send2[i] = can_send2[i] && can_send[N_TAU_Y*i+j];
-				end
+				can_send2[i] = &can_send[(N_TAU_Y*(i+1)-1) -: N_TAU_Y];
 			end
 		end
 		2'b10: begin
-			can_send2[N_TAU_Y-1:0] = '1;
 			for (int i = 0; i < N_TAU_Y; i++) begin
-				for (int j = 0; j < N_TAU_X; j++) begin
-					can_send2[i] = can_send2[i] && can_send[i+N_TAU_Y*j];
-				end
+				can_send2[i] = &can_send_t[(N_TAU_X*(i+1)-1) -: N_TAU_X];
 			end
 		end
 		2'b11: begin
 			can_send2[0] = &can_send;
 		end
 	endcase
+	// nLint complains can_send2 has no load, WTF?
 	// Use higher half
 	can_send_rot = {2{can_send2}} << select_shamt_r;
 	// Use lower half
@@ -285,13 +286,13 @@ FindFromMsb#(N_TAU,1) u_arbiter(
 genvar gi, gj;
 generate for (gi = 0; gi < N_TAU_X; gi++) begin: ctrlx
 	for (gj = 0; gj < N_TAU_Y; gj++) begin: ctrly
-		IgnoreIf#(0) u_ign_invalid_block(
+		DeleteIf#(0) u_ign_invalid_block(
 			.cond(s0_valid_cond[gi][gj]),
 			.src_rdy(s0_dst_rdys[gi*N_TAU_Y+gj]),
 			.src_ack(s0_dst_acks[gi*N_TAU_Y+gj]),
 			.dst_rdy(s0_valid_rdys[gi][gj]),
 			.dst_ack(s0_valid_acks[gi][gj]),
-			.skipped()
+			.deleted()
 		);
 		Forward u_fwd(
 			`clk_connect,
@@ -300,7 +301,7 @@ generate for (gi = 0; gi < N_TAU_X; gi++) begin: ctrlx
 			.dst_rdy(s1_rdys[gi][gj]),
 			.dst_ack(s1_acks[gi][gj])
 		);
-		ForwardIf#(0) u_fwd_if_not_full(
+		PauseIf#(1) u_pause_if_full(
 			.cond(block_fulls[gi][gj]),
 			.src_rdy(s1_rdys[gi][gj]),
 			.src_ack(s1_acks[gi][gj]),
@@ -327,10 +328,10 @@ generate for (gi = 0; gi < N_TAU_X; gi++) begin: ctrlx
 			o_i1_systolic_idx[gi][gj] <= '0;
 		`ff_cg(s0_valid_acks[gi][gj])
 			o_bofss[gi][gj] <= s0_dst_bofss[gi][gj];
-			o_i0_systolic_gsize[gi][gj] <= (i_i0_systolic_enable ? s0_i0_systolic_gsize : 'b1);
-			o_i1_systolic_gsize[gi][gj] <= (i_i1_systolic_enable ? s0_i1_systolic_gsize : 'b1);
-			o_i0_systolic_idx[gi][gj] <= (i_i0_systolic_enable ? gi : '0);
-			o_i1_systolic_idx[gi][gj] <= (i_i1_systolic_enable ? gj : '0);
+			o_i0_systolic_gsize[gi][gj] <= i_i0_systolic_enable ? s0_i0_systolic_gsize : 'b1;
+			o_i1_systolic_gsize[gi][gj] <= i_i1_systolic_enable ? s0_i1_systolic_gsize : 'b1;
+			o_i0_systolic_idx[gi][gj] <= i_i0_systolic_enable ? TauCfg::ST_IDX0_T'(gi) : '0;
+			o_i1_systolic_idx[gi][gj] <= i_i1_systolic_enable ? TauCfg::ST_IDX1_T'(gj) : '0;
 		`ff_end
 	end
 end endgenerate

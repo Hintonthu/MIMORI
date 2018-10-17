@@ -83,14 +83,183 @@ end
 
 endmodule
 
+module SFifoReg0D(
+	`clk_port,
+	i_load_nxt,
+	i_load_new,
+	i_data,
+	o_data
+);
+parameter NDATA = 2;
+`clk_input;
+input  logic [NDATA-2:0] i_load_nxt;
+input  logic [NDATA-1:0] i_load_new;
+input  logic i_data;
+output logic o_data;
+
+logic [NDATA-1:0] data_r;
+assign o_data = data_r[0];
+genvar gi;
+for (gi = 0; gi < NDATA-1; gi++) begin: fifo_storage
+	always_ff @(posedge i_clk or negedge i_rst) begin
+		if (!i_rst) begin
+			data_r[gi] <= '0;
+		end else if (i_load_nxt[gi] || i_load_new[gi]) begin
+			data_r[gi] <= i_load_new[gi] ? i_data : data_r[gi+1];
+		end
+	end
+end
+
+`ff_rst
+	data_r[NDATA-1] <= '0;
+`ff_cg(i_load_new[NDATA-1])
+	data_r[NDATA-1] <= i_data;
+`ff_end
+endmodule
+
+module SFifoReg1D(
+	`clk_port,
+	i_load_nxt,
+	i_load_new,
+	i_data,
+	o_data
+);
+parameter BW = 8;
+parameter NDATA = 2;
+`clk_input;
+input  logic [NDATA-2:0] i_load_nxt;
+input  logic [NDATA-1:0] i_load_new;
+input  logic [BW-1:0] i_data;
+output logic [BW-1:0] o_data;
+
+logic [BW-1:0] data_r [NDATA];
+assign o_data = data_r[0];
+genvar gi;
+for (gi = 0; gi < NDATA-1; gi++) begin: fifo_storage
+	always_ff @(posedge i_clk or negedge i_rst) begin
+		if (!i_rst) begin
+			data_r[gi] <= '0;
+		end else if (i_load_nxt[gi] || i_load_new[gi]) begin
+			data_r[gi] <= i_load_new[gi] ? i_data : data_r[gi+1];
+		end
+	end
+end
+
+`ff_rst
+	data_r[NDATA-1] <= '0;
+`ff_cg(i_load_new[NDATA-1])
+	data_r[NDATA-1] <= i_data;
+`ff_end
+endmodule
+
+module SFifoReg2D(
+	`clk_port,
+	i_load_nxt,
+	i_load_new,
+	i_data,
+	o_data
+);
+parameter BW = 8;
+parameter NDATA = 2;
+parameter D0 = 2;
+`clk_input;
+input  logic [NDATA-2:0] i_load_nxt;
+input  logic [NDATA-1:0] i_load_new;
+input  logic [BW-1:0] i_data [D0];
+output logic [BW-1:0] o_data [D0];
+
+logic [BW-1:0] data_r [NDATA][D0];
+assign o_data = data_r[0];
+genvar gi;
+for (gi = 0; gi < NDATA-1; gi++) begin: fifo_storage
+	always_ff @(posedge i_clk or negedge i_rst) begin
+		if (!i_rst) begin
+			for (int i = 0; i < D0; i++) begin
+				data_r[gi][i] <= '0;
+			end
+		end else if (i_load_nxt[gi] || i_load_new[gi]) begin
+			for (int i = 0; i < D0; i++) begin
+				data_r[gi][i] <= i_load_new[gi] ? i_data[i] : data_r[gi+1][i];
+			end
+		end
+	end
+end
+
+`ff_rst
+	for (int i = 0; i < D0; i++) begin
+		data_r[NDATA-1][i] <= '0;
+	end
+`ff_cg(i_load_new[NDATA-1])
+	for (int i = 0; i < D0; i++) begin
+		data_r[NDATA-1][i] <= i_data[i];
+	end
+`ff_end
+endmodule
+
+module SFifoReg3D(
+	`clk_port,
+	i_load_nxt,
+	i_load_new,
+	i_data,
+	o_data
+);
+parameter BW = 8;
+parameter NDATA = 2;
+parameter D0 = 2;
+parameter D1 = 2;
+`clk_input;
+input  logic [NDATA-2:0] i_load_nxt;
+input  logic [NDATA-1:0] i_load_new;
+input  logic [BW-1:0] i_data [D0][D1];
+output logic [BW-1:0] o_data [D0][D1];
+
+logic [BW-1:0] data_r [NDATA][D0][D1];
+assign o_data = data_r[0];
+genvar gi;
+for (gi = 0; gi < NDATA-1; gi++) begin: fifo_storage
+	always_ff @(posedge i_clk or negedge i_rst) begin
+		if (!i_rst) begin
+			for (int i = 0; i < D0; i++) begin
+				for (int j = 0; j < D1; j++) begin
+					data_r[gi][i][j] <= '0;
+				end
+			end
+		end else if (i_load_nxt[gi] || i_load_new[gi]) begin
+			for (int i = 0; i < D0; i++) begin
+				for (int j = 0; j < D1; j++) begin
+					data_r[gi][i][j] <= i_load_new[gi] ? i_data[i][j] : data_r[gi+1][i][j];
+				end
+			end
+		end
+	end
+end
+
+`ff_rst
+	for (int i = 0; i < D0; i++) begin
+		for (int j = 0; j < D1; j++) begin
+			data_r[NDATA-1][i][j] <= '0;
+		end
+	end
+`ff_cg(i_load_new[NDATA-1])
+	for (int i = 0; i < D0; i++) begin
+		for (int j = 0; j < D1; j++) begin
+			data_r[NDATA-1][i][j] <= i_data[i][j];
+		end
+	end
+`ff_end
+endmodule
+
 module SFifo(
 	`clk_port,
 	`rdyack_port(src),
 	i_data,
+`ifdef VERI_TOP_SFifo
+	`rdyack2_port(dst),
+`else
 	`rdyack_port(dst),
+`endif
 	o_data
 );
-
 // 0: register
 // 1: TP sram
 parameter IMPL = 0;
@@ -109,15 +278,17 @@ endtask
 `clk_input;
 `rdyack_input(src);
 input [BW-1:0] i_data;
+`ifdef VERI_TOP_SFifo
+`rdyack2_output(dst);
+`else
 `rdyack_output(dst);
+`endif
 output logic [BW-1:0] o_data;
 genvar gi;
 
 generate if (IMPL == 0 && NDATA >= 2) begin: fifo_reg
 	logic [NDATA-2:0] load_nxt;
 	logic [NDATA-1:0] load_new;
-	logic [BW-1:0] data_r [NDATA];
-	assign o_data = data_r[0];
 	SFifoCtrl u_ctrl(
 		`clk_connect,
 		`rdyack_connect(src, src),
@@ -125,23 +296,15 @@ generate if (IMPL == 0 && NDATA >= 2) begin: fifo_reg
 		.o_load_nxt(load_nxt),
 		.o_load_new(load_new)
 	);
-	for (gi = 0; gi < NDATA-1; gi++) begin: fifo_storage
-		always_ff @(posedge i_clk or negedge i_rst) begin
-			if (!i_rst) begin
-				data_r[gi] <= '0;
-			end else if (load_nxt[gi] || load_new[gi]) begin
-				data_r[gi] <= load_new[gi] ? i_data : data_r[gi+1];
-			end
-		end
-	end
-
-	`ff_rst
-		data_r[NDATA-1] <= '0;
-	`ff_cg(load_new[NDATA-1])
-		data_r[NDATA-1] <= i_data;
-	`ff_end
+	SFifoReg1D u_reg(
+		`clk_connect,
+		.i_load_nxt(load_nxt),
+		.i_load_new(load_new),
+		.i_data(i_data),
+		.o_data(o_data)
+	);
 end else if (IMPL == 1 && NDATA >= 2) begin: fifo_2p
-	logic dst_rdy_w, sfull, sempty;
+	logic dst_rdy_w, sfull, sempty, re;
 	logic [CL_N-1:0]  ra_r, ra_w, wa_r, wa_w;
 	assign src_ack = src_rdy && !sfull;
 	// rdy -> if ack and empty, then stop; if ack but not empty, then read next;

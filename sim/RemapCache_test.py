@@ -18,7 +18,7 @@ from nicotb import *
 from nicotb.utils import Scoreboard, BusGetter, Stacker
 from nicotb.protocol import OneWire, TwoWire
 from itertools import repeat
-from UmiModel import npi, npd, newaxis
+from UmiModel import npi, npd, newaxis, UmiModel
 
 def main():
 	scb = Scoreboard("RemapCache")
@@ -33,9 +33,8 @@ def main():
 	yield rst_out_ev
 
 	# start simulation
-	cfg_bus.values.i_xor_masks[0] = BMASK
-	npd.copyto(cfg_bus.values.i_xor_schemes, XOR_SRC)
-	cfg_bus.values.i_xor_configs[0] = BROT
+	npd.copyto(cfg_bus.values.i_xor_srcs[0], xsrc)
+	cfg_bus.values.i_xor_swaps[0] = xswap
 	cfg_bus.Write()
 	yield ck_ev
 
@@ -50,7 +49,7 @@ def main():
 	for i in range(10):
 		yield ck_ev
 
-	NTEST = N_VEC*VSIZE-sum(STRIDES)-1
+	NTEST = N_VEC*VSIZE-npd.sum(stride, dtype=npd.int32)-1
 	raddr = npi.arange(NTEST)[:, newaxis] + STEP
 	st.Resize(NTEST)
 	test.Expect((raddr,))
@@ -68,32 +67,34 @@ def main():
 
 VSIZE = 32
 CV_BW = 5
-SBXB = (
-	# (1) normal
-	([3,2,12,8,16], 0, 0, 0),
-	# (2) broadcast
-	([3,0,12,8,16], 0, 0, 0),
-	# (3) shuffle
-	([12,24,48,1,2], 0, 0, 2),
-	# (4) shuffle+broadcast
-	([12,8,16,3,0], 0, 0, 2),
-	# (5) xor
-	([4,8,16,32,64], 0b11000, [-1,-1,-1,0,1], 2),
-	# (6) xor+shuffle
-	([16,32,64,2,4], 0b00110, [-1,0,1,-1,-1], 0b010_01_0_01),
-)
+STRIDES = [
+	# (0) normal
+	[3,2,12,8,16],
+	# (1) broadcast
+	[3,0,12,8,16],
+	# (2) shuffle
+	[12,24,48,1,2],
+	# (3) shuffle+broadcast
+	[12,8,16,3,0],
+	# (4) xor
+	[4,8,16,32,64],
+	# (5) xor+shuffle
+	[16,32,64,2,4],
+]
 try:
 	from os import environ
 	RMC_CONF = int(environ["RMC_CONF"])
 except:
 	RMC_CONF = 0
 
-STRIDES, BMASK, XOR_SRC, BROT = SBXB[RMC_CONF]
+stride = npi.array(STRIDES[RMC_CONF])
+xsrc = npi.empty(CV_BW)
+xswap = npi.empty(1)
+UmiModel._CalXor(stride, xsrc, xswap)
 N_VEC = 10
 STEP = [0]
-LS = len(STRIDES)
-for i in range(LS):
-	STEP = STEP + [j+STRIDES[i] for j in STEP]
+for i in stride:
+	STEP = STEP + [j+i for j in STEP]
 STEP = npi.array(STEP)
 (
 	ra_rdy_bus, ra_ack_bus,
@@ -119,9 +120,8 @@ STEP = npi.array(STEP)
 		(None , "i_wdata", (VSIZE,)),
 	),
 	(
-		("dut", "i_xor_masks"  , (1,)),
-		(None , "i_xor_schemes", (1,CV_BW)),
-		(None , "i_xor_configs", (1,)),
+		("dut", "i_xor_srcs", (1,CV_BW)),
+		(None , "i_xor_swaps"  , (1,)),
 	),
 ])
 rst_out_ev, ck_ev = CreateEvents(["rst_out", "ck_ev"])

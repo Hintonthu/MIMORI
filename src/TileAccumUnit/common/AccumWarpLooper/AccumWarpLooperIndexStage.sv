@@ -1,6 +1,6 @@
 `ifndef __ACCUM_WARP_LOOPER_INDEX_STAGE__
 `define __ACCUM_WARP_LOOPER_INDEX_STAGE__
-// Copyright 2016 Yu Sheng Lin
+// Copyright 2016,2018 Yu Sheng Lin
 
 // This file is part of MIMORI.
 
@@ -87,9 +87,11 @@ output logic               o_islast;
 //======================================
 // Internal
 //======================================
+// TODO: s0 is the same as output stage, pretty confusing
 `rdyack_logic(s0_dst);
 `rdyack_logic(s0_dst_delay);
 `dval_logic(s0_init);
+logic               s0_repeat;
 logic               s0_islast_aofs_r;
 logic               s0_islast_id;
 logic               s0_islast_bofs;
@@ -113,25 +115,31 @@ logic [WID_BW-1:0]  o_warpid_w;
 //======================================
 // Combinational
 //======================================
-assign s0_islast_bofs_id = s0_islast_bofs && s0_islast_id;
-assign o_islast = s0_islast_bofs_id && s0_islast_aofs_r;
-assign o_retire = s0_islast_bofs && o_id < s0_id_ret_r;
+// for ONE aofs, for all warp, for all instruction
 always_comb begin
 	o_id1 = o_id + 'b1;
 	s0_islast_id = o_id1 == s0_id_end_r;
+	// last warp, inst
+	s0_islast_bofs_id = s0_islast_bofs && s0_islast_id;
+	// last aofs, warp, inst
+	o_islast = s0_islast_bofs_id && s0_islast_aofs_r;
+	// Used for free SRAM allocation
+	// We use s0_islast_bofs instead of o_islast
+	// s.t. it can be released earlier
+	o_retire = s0_islast_bofs && o_id < s0_id_ret_r;
 end
 
 always_comb begin
 	casez({src_ack, dst_ack, s0_islast_id})
-		3'b1??: begin
+		3'b1??: begin: Init
 			o_id_w = i_id_beg;
 			o_warpid_w = '0;
 		end
-		3'b010: begin
+		3'b010: begin: InstNext
 			o_id_w = o_id1;
 			o_warpid_w = o_warpid;
 		end
-		3'b011: begin
+		3'b011: begin: WarpNext
 			o_id_w = s0_id_beg_r;
 			o_warpid_w = o_warpid + 'b1;
 		end
@@ -168,16 +176,15 @@ Forward u_s0(
 	`rdyack_connect(src, src),
 	`rdyack_connect(dst, s0_dst)
 );
-OneCycleInit u_s0d(
+LoopController#(.DONE_IF(1), .HOLD_SRC(1)) u_loop(
 	`clk_connect,
 	`rdyack_connect(src, s0_dst),
-	`rdyack_connect(dst, s0_dst_delay),
-	`dval_connect(init, s0_init)
-);
-AcceptIf u_ac(
-	.cond(s0_islast_bofs_id),
-	`rdyack_connect(src, s0_dst_delay),
-	`rdyack_connect(dst, dst)
+	`rdyack_connect(dst, dst),
+	.loop_done_cond(s0_islast_bofs_id),
+	.reg_cg(),
+	.loop_reset(s0_init_dval),
+	.loop_is_last(),
+	.loop_is_repeat(s0_repeat)
 );
 NDAdder#(.BW(WBW), .DIM(VDIM), .FROM_ZERO(0), .UNIT_STRIDE(1)) u_adder(
 	.i_restart(s0_init_dval),
@@ -198,6 +205,7 @@ NDAdder#(.BW(WBW), .DIM(VDIM), .FROM_ZERO(0), .UNIT_STRIDE(1)) u_adder(
 //======================================
 // Sequential
 //======================================
+// Cache all necessary data
 `ff_rst
 	s0_id_beg_r <= '0;
 	s0_id_end_r <= '0;
@@ -239,7 +247,7 @@ NDAdder#(.BW(WBW), .DIM(VDIM), .FROM_ZERO(0), .UNIT_STRIDE(1)) u_adder(
 		s0_bofs_r[i] <= '0;
 		s0_blofs_r[i] <= '0;
 	end
-`ff_cg(s0_init_dval || dst_ack && s0_islast_id)
+`ff_cg(s0_init_dval || s0_repeat && s0_islast_id)
 	s0_bofs_r <= s0_bofs_nxt;
 	s0_blofs_r <= s0_blofs_nxt;
 `ff_end

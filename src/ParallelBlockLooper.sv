@@ -16,6 +16,7 @@
 // along with MIMORI.  If not, see <http://www.gnu.org/licenses/>.
 
 `include "common/define.sv"
+`include "common/TauCfg.sv"
 `include "common/OffsetStage.sv"
 `include "common/Controllers.sv"
 
@@ -24,7 +25,11 @@ module ParallelBlockLooper(
 	`rdyack_port(src),
 	i_bgrid_step,
 	i_bgrid_end,
+`ifdef VERI_TOP_ParallelBlockLooper
+	`rdyack2_port(bofs),
+`else
 	`rdyack_port(bofs),
+`endif
 	o_bofs,
 	`dval_port(blkdone)
 );
@@ -42,7 +47,11 @@ localparam N_PENDING = TauCfg::MAX_PENDING_BLOCK;
 `rdyack_input(src);
 input [WBW-1:0] i_bgrid_step [VDIM];
 input [WBW-1:0] i_bgrid_end  [VDIM];
+`ifdef VERI_TOP_ParallelBlockLooper
+`rdyack2_output(bofs);
+`else
 `rdyack_output(bofs);
+`endif
 output logic [WBW-1:0] o_bofs [VDIM];
 `dval_input(blkdone);
 
@@ -55,11 +64,6 @@ output logic [WBW-1:0] o_bofs [VDIM];
 `rdyack_logic(wait_fin);
 logic block_full;
 logic block_empty;
-
-//======================================
-// Combinational
-//======================================
-assign wait_fin_ack = wait_fin_rdy && block_empty;
 
 //======================================
 // Submodule
@@ -86,20 +90,12 @@ OffsetStage#(.BW(WBW), .DIM(VDIM), .FROM_ZERO(1), .UNIT_STRIDE(0)) u_s0(
 	.o_islast(),
 	.init_dval()
 );
-ForwardIf#(0) u_fwd_if_not_full(
-	.cond(block_full),
-	`rdyack_connect(src, s0_dst),
-	`rdyack_connect(dst, bofs)
-);
-Semaphore#(N_PENDING) u_sem_done(
+FlowControl#(N_PENDING) u_flow(
 	`clk_connect,
-	.i_inc(bofs_ack),
-	.i_dec(blkdone_dval),
-	.o_full(block_full),
-	.o_empty(block_empty),
-	.o_will_full(),
-	.o_will_empty(),
-	.o_n()
+	`rdyack_connect(src, s0_dst),
+	`rdyack_connect(dst, bofs),
+	`dval_connect(fin, blkdone),
+	`rdyack_connect(wait_all, wait_fin)
 );
 
 endmodule

@@ -196,7 +196,9 @@ always_comb begin
 			end
 		end
 	end else begin
-		o_dat = '0;
+		// o_dat = '0;
+		// This make nLint happy
+		o_dat =  i_ends[DIM] & '0;
 		for (int i = 0; i <= DIM; i++) begin
 			if (i_sel[i]) begin
 				o_dat = o_dat | i_begs[i];

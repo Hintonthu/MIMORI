@@ -17,6 +17,7 @@
 // along with MIMORI.  If not, see <http://www.gnu.org/licenses/>.
 
 `include "common/define.sv"
+`include "common/TauCfg.sv"
 `include "common/OffsetStage.sv"
 `include "TileAccumUnit/common/OrCrossBar.sv"
 
@@ -39,7 +40,6 @@ module ChunkRowStart(
 //======================================
 // Parameter
 //======================================
-parameter LBW = TauCfg::LOCAL_ADDR_BW0;
 localparam GBW = TauCfg::GLOBAL_ADDR_BW;
 localparam DIM = TauCfg::DIM;
 localparam VSIZE = TauCfg::VSIZE;
@@ -124,20 +124,16 @@ always_comb begin
 	o_row_linear = i_maddr;
 	for (int i = 0; i < DIM-1; i++) begin
 		o_row_unclamp[i] = o_cur_row[i] + i_mofs[i];
-		unique case (1'b1)
-			o_row_unclamp[i][GBW-1]: begin: neg_value
+		unique if (o_row_unclamp[i][GBW-1]) begin: neg_value
 				o_row_clamp[i] = '0;
 				o_row_valid_all[i] = 1'b0;
-			end
-			($signed(o_row_unclamp[i]) >= $signed(i_mbound[i])): begin: over_run
+		end else if ($signed(o_row_unclamp[i]) >= $signed(i_mbound[i])) begin: over_run
 				o_row_clamp[i] = i_mbound[i]-i_mbound[i+1];
 				o_row_valid_all[i] = 1'b0;
-			end
-			default: begin: normal_mode
-				o_row_clamp[i] = o_row_unclamp[i];
-				o_row_valid_all[i] = 1'b1;
-			end
-		endcase
+		end else begin: normal_mode
+			o_row_clamp[i] = o_row_unclamp[i];
+			o_row_valid_all[i] = 1'b1;
+		end
 		o_row_linear = o_row_linear + o_row_clamp[i];
 	end
 	o_row_valid = i_wrap || (&o_row_valid_all);

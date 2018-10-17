@@ -111,21 +111,20 @@ end
 Broadcast#(3) u_brd(
 	`clk_connect,
 	`rdyack_connect(src, src),
-	.acked(),
 	.dst_rdys({dst0_brd_rdy, dst1_brd_rdy, to_alu_rdy}),
 	.dst_acks({dst0_brd_ack, dst1_brd_ack, to_alu_ack})
 );
-IgnoreIf#(0) u_ign_d0(
+DeleteIf#(0) u_ign_d0(
 	.cond(en_d0),
 	`rdyack_connect(src, dst0_brd),
 	`rdyack_connect(dst, dst0),
-	.skipped()
+	.deleted()
 );
-IgnoreIf#(0) u_ign_d1(
+DeleteIf#(0) u_ign_d1(
 	.cond(en_d1),
 	`rdyack_connect(src, dst1_brd),
 	`rdyack_connect(dst, dst1),
-	.skipped()
+	.deleted()
 );
 
 endmodule

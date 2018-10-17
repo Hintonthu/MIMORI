@@ -16,8 +16,10 @@
 // along with MIMORI.  If not, see <http://www.gnu.org/licenses/>.
 
 `include "common/define.sv"
+`include "common/TauCfg.sv"
 `include "common/ND.sv"
 `include "common/Controllers.sv"
+`include "common/OffsetStage.sv"
 `include "TileAccumUnit/common/AccumWarpLooper/AccumWarpLooperIndexStage.sv"
 
 module SimdDriver(
@@ -32,7 +34,11 @@ module SimdDriver(
 	i_aboundary,
 	i_inst_id_begs,
 	i_inst_id_ends,
+`ifdef VERI_TOP_SimdDriver
+	`rdyack2_port(inst),
+`else
 	`rdyack_port(inst),
+`endif
 	o_bofs,
 	o_aofs,
 	o_pc,
@@ -69,7 +75,11 @@ input [CCV_BW-1:0]  i_bsub_lo_order [VDIM];
 input [WBW-1:0]     i_aboundary     [VDIM];
 input [INST_BW-1:0] i_inst_id_begs [VDIM+1];
 input [INST_BW-1:0] i_inst_id_ends [VDIM+1];
+`ifdef VERI_TOP_SimdDriver
+`rdyack2_output(inst);
+`else
 `rdyack_output(inst);
+`endif
 output [WBW-1:0]     o_bofs [VDIM];
 output [WBW-1:0]     o_aofs [VDIM];
 output [INST_BW-1:0] o_pc;
@@ -102,22 +112,30 @@ logic inst_empty;
 // Combinational
 //======================================
 assign s01_bypass = s01_id_beg == s01_id_end;
+// We have 2 stage, so must wait for both stage (also see u_brd1 below)
 assign wait_last_ack = wait_last_rdy && (s01_islast && s01_skipped || s1_islast && s1_dst_ack);
-assign wait_fin_ack = wait_fin_rdy && inst_empty;
 
 //======================================
 // Submodule
 //======================================
+// Hold input until finish
 BroadcastInorder#(2) u_brd0(
 	`clk_connect,
 	`rdyack_connect(src, abofs),
 	.dst_rdys({wait_fin_rdy, brd1_rdy}),
 	.dst_acks({wait_fin_ack, brd1_ack})
 );
+// Pause when we have too much pending
+FlowControl#(N_PENDING) u_flow(
+	`clk_connect,
+	`rdyack_connect(src, s1_dst),
+	`rdyack_connect(dst, inst),
+	`dval_connect(fin, inst_commit),
+	`rdyack_connect(wait_all, wait_fin)
+);
 Broadcast#(2) u_brd1(
 	`clk_connect,
 	`rdyack_connect(src, brd1),
-	.acked(),
 	.dst_rdys({wait_last_rdy, s0_src_rdy}),
 	.dst_acks({wait_last_ack, s0_src_ack})
 );
@@ -137,6 +155,7 @@ OffsetStage#(.BW(WBW), .DIM(VDIM), .FROM_ZERO(0), .UNIT_STRIDE(1)) u_s0_ofs(
 	.o_islast(s01_islast),
 	.init_dval()
 );
+// Select range by the range of offset stage
 IdSelect#(.BW(INST_BW), .DIM(VDIM), .RETIRE(0)) u_s0_sel_beg(
 	.i_sel(s01_sel_beg),
 	.i_begs(i_inst_id_begs),
@@ -172,26 +191,12 @@ AccumWarpLooperIndexStage#(.N_CFG(N_INST)) u_s1_idx(
 	.o_retire(),
 	.o_islast(s1_islast)
 );
-Semaphore#(N_PENDING) u_sem_inst(
-	`clk_connect,
-	.i_inc(inst_ack),
-	.i_dec(inst_commit_dval),
-	.o_full(inst_full),
-	.o_empty(inst_empty),
-	.o_will_full(),
-	.o_will_empty(),
-	.o_n()
-);
-IgnoreIf#(1) u_ign_if_noinst(
+// Do not feed to index stage if this range has no inst.
+DeleteIf#(1) u_del_if_noinst(
 	.cond(s01_bypass),
 	`rdyack_connect(src, s0_dst),
 	`rdyack_connect(dst, s1_src),
-	.skipped(s01_skipped)
-);
-ForwardIf#(0) u_issue_inst_if(
-	.cond(inst_full),
-	`rdyack_connect(src, s1_dst),
-	`rdyack_connect(dst, inst)
+	.deleted(s01_skipped)
 );
 
 endmodule

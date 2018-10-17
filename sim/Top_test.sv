@@ -24,9 +24,9 @@
 `timescale 1ns/1ps
 import TauCfg::*;
 
-`define CLK 10
-`define HCLK 5
-`define INPUT_DELAY 2
+`define CLK 2.7
+`define HCLK 1.35
+`define INPUT_DELAY 0.09
 
 module Top_test;
 localparam GBW = GLOBAL_ADDR_BW;
@@ -79,12 +79,12 @@ initial begin
 	end
 	for (int i = 0; i < N_ICFG; i++) begin
 		u_top.i_i0_local_xor_masks[i] = 0;
-		u_top.i_i0_local_bit_swaps[i] = 0;
+		u_top.i_i0_local_xor_configs[i] = 0;
 		u_top.i_i0_global_linears[i] = 0;
 		u_top.i_i0_stencil_begs[i] = 0;
 		u_top.i_i0_stencil_ends[i] = 0;
 		u_top.i_i1_local_xor_masks[i] = 0;
-		u_top.i_i1_local_bit_swaps[i] = 0;
+		u_top.i_i1_local_xor_configs[i] = 0;
 		u_top.i_i1_global_linears[i] = 0;
 		u_top.i_i1_stencil_begs[i] = 0;
 		u_top.i_i1_stencil_ends[i] = 0;
@@ -180,7 +180,6 @@ always #`HCLK i_clk = ~i_clk;
 initial begin
 `ifdef GATE_LEVEL
 	$fsdbDumpfile("Top_syn.fsdb");
-	$sdf_annotate(`SDF , u_top.u_top);
 	$fsdbDumpvars(0, Top_test, "+mda");
 `else
 `ifdef SC
@@ -200,7 +199,7 @@ initial begin
 	#0.1 $NicotbInit();
 	#(`CLK*2) i_rst = 0;
 	#(`CLK*2) i_rst = 1;
-	#(`CLK*10000) $display("Timeout");
+	#(`CLK*20000) $display("Timeout");
 	$NicotbFinal();
 	$finish;
 end

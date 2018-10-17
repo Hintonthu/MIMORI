@@ -39,8 +39,8 @@ def main():
 	n_bofs, bofs = conf.CreateBlockTransaction()
 	for i in range(n_bofs):
 		(
-			n_o, bofs_o, abeg_o, aend_o, abeg_id_o, aend_id_o,
-		) = conf.CreateAccumBlockTransaction(bofs[i])[12:18]
+			n_o, bofs_o, abeg_o, aend_o, abeg_id_o, aend_id_o, dummy
+		) = conf.CreateAccumBlockTransaction(bofs[i])[3]
 		for j in range(n_o):
 			# Expect?
 			(

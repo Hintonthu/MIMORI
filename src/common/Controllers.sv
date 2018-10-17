@@ -1,6 +1,6 @@
 `ifndef __CONTROLLERS__
 `define __CONTROLLERS__
-// Copyright 2016 Yu Sheng Lin
+// Copyright 2016,2018 Yu Sheng Lin
 
 // This file is part of MIMORI.
 
@@ -24,238 +24,98 @@ module Forward(
 	`rdyack_port(src),
 	`rdyack_port(dst)
 );
-//======================================
-// I/O
-//======================================
+parameter bit SLOW = 0;
 `clk_input;
 `rdyack_input(src);
 `rdyack_output(dst);
-
-//======================================
-// Internal
-//======================================
 logic dst_rdy_w;
-
-//======================================
-// Combinational
-//======================================
-assign dst_rdy_w = src_rdy || (dst_rdy && !dst_ack);
-assign src_ack = src_rdy && (!dst_rdy || dst_ack);
-
-//======================================
-// Sequential
-//======================================
-`ff_rst
-	dst_rdy <= 1'b0;
-`ff_nocg
-	dst_rdy <= dst_rdy_w;
-`ff_end
-
-endmodule
-
-module ForwardMulti(
-	`clk_port,
-	`rdyack_port(src),
-	`rdyack_port(dst),
-	acks
-);
-
-parameter NDATA = 2;
-
-`clk_input;
-`rdyack_input(src);
-`rdyack_output(dst);
-output logic [NDATA-1:0] acks;
-
-logic can_ack;
-logic [NDATA-1:0] rdy_r;
-logic [NDATA-1:0] rdy_w;
-
 always_comb begin
-	dst_rdy = rdy_r[0];
-	can_ack = !dst_rdy || dst_ack;
-	src_ack = src_rdy && can_ack;
-	if (can_ack) begin
-		acks = {src_rdy, rdy_r[NDATA-1:1]};
-		rdy_w = acks;
-	end else begin
-		acks = '0;
-		rdy_w = rdy_r;
-	end
+	dst_rdy_w = (src_rdy && !(SLOW && dst_rdy)) || (dst_rdy && !dst_ack);
+	src_ack = (!dst_rdy || (!SLOW && dst_ack)) && src_rdy;
 end
-
-always_ff @(posedge i_clk or negedge i_rst) begin
-	if (!i_rst) begin
-		rdy_r <= '0;
-	end else if (can_ack) begin
-		rdy_r <= rdy_w;
-	end
-end
-
-endmodule
-
-module ForwardSlow(
-	`clk_port,
-	`rdyack_port(src),
-	`rdyack_port(dst)
-);
-
-//======================================
-// I/O
-//======================================
-`clk_input;
-`rdyack_input(src);
-`rdyack_output(dst);
-
-//======================================
-// Internal
-//======================================
-logic dst_rdy_w;
-
-//======================================
-// Combinational
-//======================================
-assign dst_rdy_w = dst_rdy ? !dst_ack : src_rdy;
-assign src_ack = !dst_rdy && src_rdy;
-
-//======================================
-// Sequential
-//======================================
 `ff_rst
 	dst_rdy <= 1'b0;
 `ff_nocg
 	dst_rdy <= dst_rdy_w;
 `ff_end
-
 endmodule
 
-module ForwardIf(
+module PauseIf(
 	cond,
 	`rdyack_port(src),
 	`rdyack_port(dst)
 );
-parameter COND_ = 1;
+parameter bit COND_ = 1;
 input cond;
 `rdyack_input(src);
 `rdyack_output(dst);
-assign dst_rdy = src_rdy && (cond == (COND_&1));
+assign dst_rdy = src_rdy && (cond != COND_);
 assign src_ack = dst_ack;
 endmodule
 
-module AcceptIf(
+module RepeatIf(
 	cond,
 	`rdyack_port(src),
-	`rdyack_port(dst)
+	`rdyack_port(dst),
+	repeated
+);
+parameter bit COND_ = 1;
+input cond;
+`rdyack_input(src);
+`rdyack_output(dst);
+output logic repeated;
+logic rep;
+always_comb begin
+	rep = cond == COND_;
+	dst_rdy = src_rdy;
+	src_ack = dst_ack && !rep;
+	repeated = dst_ack && rep;
+end
+endmodule
+
+module DeleteIf(
+	cond,
+	`rdyack_port(src),
+	`rdyack_port(dst),
+	deleted
 );
 parameter COND_ = 1;
 input cond;
 `rdyack_input(src);
 `rdyack_output(dst);
-assign dst_rdy = src_rdy;
-assign src_ack = dst_ack && (cond == (COND_&1));
-endmodule
-
-module IgnoreIf(
-	cond,
-	`rdyack_port(src),
-	`rdyack_port(dst),
-	skipped
-);
-parameter COND_ = 1;
-input cond;
-`rdyack_input(src);
-`rdyack_output(dst);
-output skipped;
-logic cond2;
-assign cond2 = cond == (COND_&1);
-assign dst_rdy = src_rdy && !cond2;
-assign skipped = src_rdy && cond2;
-assign src_ack = dst_ack || skipped;
-endmodule
-
-module OneCycleInit(
-	`clk_port,
-	`rdyack_port(src),
-	`rdyack_port(dst),
-	`dval_port(init)
-);
-
-//======================================
-// I/O
-//======================================
-`clk_input;
-`rdyack_input(src);
-`rdyack_output(dst);
-`dval_output(init);
-
-//======================================
-// Internal
-//======================================
-logic dst_rdy_w;
-
-//======================================
-// Combinational
-//======================================
-assign dst_rdy_w = dst_rdy ? !dst_ack : src_rdy;
-assign src_ack = dst_ack;
-assign init_dval = src_rdy && !dst_rdy;
-
-//======================================
-// Sequential
-//======================================
-`ff_rst
-	dst_rdy <= 1'b0;
-`ff_nocg
-	dst_rdy <= dst_rdy_w;
-`ff_end
-
+output logic deleted;
+logic del;
+always_comb begin
+	del = cond == COND_;
+	dst_rdy = src_rdy && !del;
+	deleted = src_rdy && del;
+	src_ack = dst_ack || deleted;
+end
 endmodule
 
 module Broadcast(
 	`clk_port,
 	`rdyack_port(src),
-	acked,
 	dst_rdys,
 	dst_acks
 );
-
-//======================================
-// Parameter
-//======================================
 parameter N = 2;
-
-//======================================
-// I/O
-//======================================
 `clk_input;
 `rdyack_input(src);
-output logic [N-1:0] acked;
 output logic [N-1:0] dst_rdys;
 input        [N-1:0] dst_acks;
-
-//======================================
-// Internal
-//======================================
+logic [N-1:0] acked;
 logic [N-1:0] acked_w;
 logic [N-1:0] acked_nxt;
-
-//======================================
-// Combinational
-//======================================
 assign dst_rdys = src_rdy ? ~acked : '0;
 assign acked_nxt = acked | dst_acks;
 assign src_ack = &acked_nxt;
 assign acked_w = src_ack ? '0 : acked_nxt;
-
-//======================================
-// Sequential
-//======================================
 `ff_rst
 	acked <= '0;
 `ff_nocg
 	acked <= acked_w;
 `ff_end
-
 endmodule
 
 module BroadcastInorder(
@@ -264,48 +124,71 @@ module BroadcastInorder(
 	dst_rdys,
 	dst_acks
 );
-
-//======================================
-// Parameter
-//======================================
 parameter N = 2;
-
-//======================================
-// I/O
-//======================================
 `clk_input;
 `rdyack_input(src);
 output logic [N-1:0] dst_rdys;
 input        [N-1:0] dst_acks;
-
-//======================================
-// Internal
-//======================================
+logic sent;
 logic [N-1:0] dst_rdys_r;
 logic [N-1:0] dst_rdys_w;
-
-//======================================
-// Combinational
-//======================================
 assign dst_rdys = src_rdy ? dst_rdys_r : '0;
 always_comb begin
 	src_ack = dst_acks[N-1];
-	priority case ({src_ack, dst_acks[N-2:0]})
-		2'b00: dst_rdys_w = dst_rdys_r;
-		2'b10: dst_rdys_w = 'b1;
-		2'b01: dst_rdys_w = dst_rdys_r<<1;
-	endcase
+	sent = |dst_acks;
+	dst_rdys_w = {dst_rdys_r[N-2:0], dst_rdys_r[N-1]};
 end
-
-//======================================
-// Sequential
-//======================================
 `ff_rst
 	dst_rdys_r <= 'b1;
-`ff_nocg
+`ff_cg(sent)
 	dst_rdys_r <= dst_rdys_w;
 `ff_end
+endmodule
 
+module LoopController(
+	`clk_port,
+	`rdyack_port(src),
+	`rdyack_port(dst),
+	loop_done_cond,
+	reg_cg,
+	loop_reset,
+	loop_is_last,
+	loop_is_repeat
+);
+parameter bit DONE_IF = 1;
+parameter bit HOLD_SRC = 1;
+`clk_input;
+`rdyack_input(src);
+`rdyack_output(dst);
+input  logic loop_done_cond;
+output logic reg_cg;
+output logic loop_reset;
+output logic loop_is_last;
+output logic loop_is_repeat;
+`rdyack_logic(loop);
+assign reg_cg = loop_reset || loop_is_repeat;
+assign loop_is_last = loop_ack;
+generate if (HOLD_SRC) begin: HoldSourceDataDuringLoop
+	BroadcastInorder#(2) u_brd(
+		`clk_connect,
+		`rdyack_connect(src, src),
+		.dst_rdys({loop_rdy,loop_reset}),
+		.dst_acks({loop_ack,loop_reset})
+	);
+end else begin: AcceptSourceDataBeforeLoop
+	Forward u_fwd(
+		`clk_connect,
+		`rdyack_connect(src, src),
+		`rdyack_connect(dst, loop)
+	);
+	assign loop_reset = src_ack;
+end endgenerate
+RepeatIf#(~DONE_IF) u_rep(
+	.cond(loop_done_cond),
+	`rdyack_connect(src, loop),
+	`rdyack_connect(dst, dst),
+	.repeated(loop_is_repeat)
+);
 endmodule
 
 module Semaphore(
@@ -318,17 +201,8 @@ module Semaphore(
 	o_will_empty,
 	o_n
 );
-
-//======================================
-// Parameter
-//======================================
 parameter N_MAX = 63;
-// derived
 localparam BW = $clog2(N_MAX+1);
-
-//======================================
-// I/O
-//======================================
 `clk_input;
 input i_inc;
 input i_dec;
@@ -337,15 +211,7 @@ output logic o_empty;
 output logic o_will_full;
 output logic o_will_empty;
 output logic [BW-1:0] o_n;
-
-//======================================
-// Internal
-//======================================
 logic [BW-1:0] o_n_w;
-
-//======================================
-// Combinational
-//======================================
 assign o_full = o_n == N_MAX;
 assign o_empty = o_n == '0;
 assign o_will_full = o_n_w == N_MAX;
@@ -357,15 +223,43 @@ always_comb begin
 		2'b11, 2'b00: o_n_w = o_n;
 	endcase
 end
-
-//======================================
-// Sequential
-//======================================
 `ff_rst
 	o_n <= '0;
 `ff_cg(i_inc ^ i_dec)
 	o_n <= o_n_w;
 `ff_end
-
 endmodule
+
+module FlowControl(
+	`clk_port,
+	`rdyack_port(src),
+	`rdyack_port(dst),
+	`dval_port(fin),
+	`rdyack_port(wait_all)
+);
+parameter N_MAX = 63;
+`clk_input;
+`rdyack_input(src);
+`rdyack_output(dst);
+`dval_input(fin);
+`rdyack_input(wait_all);
+logic sfull, sempty;
+Semaphore#(N_MAX) u_sem(
+	`clk_connect,
+	.i_inc(dst_ack),
+	.i_dec(fin_dval),
+	.o_full(sfull),
+	.o_empty(sempty),
+	.o_will_full(),
+	.o_will_empty(),
+	.o_n()
+);
+PauseIf#(1) u_pause_full(
+	.cond(sfull),
+	`rdyack_connect(src, src),
+	`rdyack_connect(dst, dst)
+);
+assign wait_all_ack = wait_all_rdy & sempty;
+endmodule
+
 `endif

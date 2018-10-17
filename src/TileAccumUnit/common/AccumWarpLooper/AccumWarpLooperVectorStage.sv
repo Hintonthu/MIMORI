@@ -118,7 +118,9 @@ BofsExpand u_bexp(
 //======================================
 // Combinational
 //======================================
-assign mofs_bsubstep = i_mofs_bsubsteps[i_id];
+always_comb for (int i = 0; i < CV_BW; i++) begin
+	mofs_bsubstep[i] = i_mofs_bsubsteps[i_id][i];
+end
 `ifdef SD
 assign syst_skip = i_systolic_skip[i_id] && `IS_FROM_SIDE(i_syst_type);
 `endif

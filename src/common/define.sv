@@ -7,6 +7,8 @@
 `define rdyack_port(name) name``_rdy, name``_ack
 `define rdyack_connect(port_name, logic_name) .port_name``_rdy(logic_name``_rdy), .port_name``_ack(logic_name``_ack)
 `define rdyack_unconnect(port_name) .port_name``_rdy(), .port_name``_ack()
+`define rdyack2_port(name) name``_rdy, name``_canack
+`define rdyack2_output(name) output logic name``_rdy; input name``_canack; logic name``_ack; assign name``_ack = name``_canack && name``_rdy
 `define dval_input(name) input name``_dval
 `define dval_output(name) output logic name``_dval
 `define dval_logic(name) logic name``_dval

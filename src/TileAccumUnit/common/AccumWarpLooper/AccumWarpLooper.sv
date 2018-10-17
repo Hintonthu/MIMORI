@@ -18,6 +18,7 @@
 // along with MIMORI.  If not, see <http://www.gnu.org/licenses/>.
 
 `include "common/define.sv"
+`include "common/TauCfg.sv"
 `include "common/Controllers.sv"
 `include "common/OffsetStage.sv"
 `include "common/ND.sv"
@@ -60,7 +61,11 @@ module AccumWarpLooper(
 `ifdef SD
 	i_systolic_skip,
 `endif
+`ifdef VERI_TOP_AccumWarpLooper
+	`rdyack2_port(addrval),
+`else
 	`rdyack_port(addrval),
+`endif
 	o_id,
 	o_address,
 	o_valid,
@@ -130,7 +135,11 @@ input [ABW-1:0]     i_stencil_lut [STSIZE];
 `ifdef SD
 input [N_CFG-1:0]   i_systolic_skip;
 `endif
+`ifdef VERI_TOP_AccumWarpLooper
+`rdyack2_output(addrval);
+`else
 `rdyack_output(addrval);
+`endif
 output [NCFG_BW-1:0] o_id;
 output [ABW-1:0]     o_address [VSIZE];
 output [VSIZE-1:0]   o_valid;
@@ -173,6 +182,13 @@ logic [WBW-1:0]     s12_bofs  [VDIM];
 logic [WBW-1:0]     s12_aofs  [VDIM];
 logic               s12_retire;
 logic               s12_islast;
+logic [DIM_BW-1:0]  s12_global_bshuf  [VDIM];
+logic [DIM_BW-1:0]  s12_global_ashuf  [VDIM];
+logic [SF_BW-1:0]   s12_bstride_frac  [VDIM];
+logic [SS_BW-1:0]   s12_bstride_shamt [VDIM];
+logic [SF_BW-1:0]   s12_astride_frac  [VDIM];
+logic [SS_BW-1:0]   s12_astride_shamt [VDIM];
+logic [ABW-1:0]     s12_mboundary [DIM];
 logic [NCFG_BW-1:0] s23_id;
 logic [ABW-1:0]     s23_linear;
 logic [WBW-1:0]     s23_bofs [VDIM];
@@ -195,6 +211,19 @@ assign s12_aofs = USE_LOFS ? s12_alofs : s12_agofs;
 always_comb for (int i = 0; i < VDIM; i++) begin
 	abeg[i] = stencil_en ? 'b0 : i_abeg[i];
 	aend[i] = stencil_en ? 'b1 : i_aend[i];
+end
+always_comb begin
+	for (int i = 0; i < VDIM; i++) begin
+		s12_global_bshuf[i] = i_global_bshufs[s12_id][i];
+		s12_global_ashuf[i] = i_global_ashufs[s12_id][i];
+		s12_bstride_frac[i] = i_bstrides_frac[s12_id][i];
+		s12_bstride_shamt[i] = i_bstrides_shamt[s12_id][i];
+		s12_astride_frac[i] = i_astrides_frac[s12_id][i];
+		s12_astride_shamt[i] = i_astrides_shamt[s12_id][i];
+	end
+	for (int i = 0; i < DIM; i++) begin
+		s12_mboundary[i] = i_mboundaries[s12_id][i];
+	end
 end
 `ifdef SD
 assign o_syst_type = i_systolic_skip[o_id] ? i_syst_type : `FROM_SELF;
@@ -243,11 +272,11 @@ IdSelect#(.BW(NCFG_BW), .DIM(VDIM), .RETIRE(1)) u_s0_sel_ret(
 	.i_ends(i_id_ends),
 	.o_dat(s01_id_ret)
 );
-IgnoreIf#(1) u_ign_01(
+DeleteIf#(1) u_ign_01(
 	.cond(s01_bypass),
 	`rdyack_connect(src, s0_dst),
 	`rdyack_connect(dst, s1_src),
-	.skipped(s01_skipped)
+	.deleted(s01_skipped)
 );
 AccumWarpLooperIndexStage#(.N_CFG(N_CFG)) u_s1_idx(
 	`clk_connect,
@@ -280,14 +309,14 @@ AccumWarpLooperMemofsStage#(.N_CFG(N_CFG), .ABW(ABW)) u_s2_mofs(
 	.i_aofs(s12_aofs),
 	.i_retire(s12_retire),
 	.i_islast(s12_islast),
-	.i_global_bshuf(i_global_bshufs[s12_id]),
-	.i_global_ashuf(i_global_ashufs[s12_id]),
-	.i_bstride_frac(i_bstrides_frac[s12_id]),
-	.i_bstride_shamt(i_bstrides_shamt[s12_id]),
-	.i_astride_frac(i_astrides_frac[s12_id]),
-	.i_astride_shamt(i_astrides_shamt[s12_id]),
+	.i_global_bshuf(s12_global_bshuf),
+	.i_global_ashuf(s12_global_ashuf),
+	.i_bstride_frac(s12_bstride_frac),
+	.i_bstride_shamt(s12_bstride_shamt),
+	.i_astride_frac(s12_astride_frac),
+	.i_astride_shamt(s12_astride_shamt),
 	.i_linear(i_linears[s12_id]),
-	.i_mboundary(i_mboundaries[s12_id]),
+	.i_mboundary(s12_mboundary),
 	`rdyack_connect(dst, s23),
 	.o_id(s23_id),
 	.o_linear(s23_linear),

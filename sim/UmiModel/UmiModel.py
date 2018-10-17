@@ -1,4 +1,3 @@
-#!/usr/bin/env python
 # Copyright 2016-2018 Yu Sheng Lin
 
 # This file is part of MIMORI.
@@ -16,10 +15,33 @@
 # You should have received a copy of the GNU General Public License
 # along with MIMORI.  If not, see <http://www.gnu.org/licenses/>.
 
-from __future__ import print_function, division
 from os import environ
 from . import npi, npd, newaxis, i16
-from .ramulator import MemorySpace
+import bisect
+
+class MemorySpace(object):
+	def __init__(self, mranges, n):
+		mranges.sort(key=lambda x: x[0])
+		self.keys = [x[0] for x in mranges]
+		self.values = [x[1] for x in mranges]
+		self.n = n
+
+	def FindRange(self, a):
+		idx = bisect.bisect_right(self.keys, a)-1
+		return a-self.keys[idx], self.values[idx]
+
+	def WriteScalarMask(self, a, d, m):
+		m = npd.bitwise_and(m[0]>>npi.arange(self.n), 1) != 0
+		aa, mem = self.FindRange(a[0])
+		mem[aa:aa+self.n][m] = d[m]
+
+	def Write(self, a, d, m):
+		aa, mem = self.FindRange(a[0])
+		mem[aa:aa+self.n][m] = d[m]
+
+	def Read(self, a):
+		aa, mem = self.FindRange(a[0])
+		return mem[aa:aa+self.n]
 
 def ExtractUFloat(i, frac_bw):
 	i = int(i)
@@ -48,14 +70,23 @@ def Clog2(i, exact=False):
 	assert not exact or (1<<ret) == ii
 	return ret
 
+def TrailingZeros(i):
+	ret = 0
+	while (i&1) == 0:
+		ret += 1
+		i >>= 1
+	return ret
+
 class UmiModel(object):
 	MEM_PAD, MEM_WRAP = range(2)
+	N_TAU = 4
 	VSIZE = 32
 	DIM = 4
 	VDIM = 6
-	BW = 24
+	BW = 16
 	ABW = 32
-	LBW = 10
+	LBW0 = 11
+	LBW1 = 10
 	STRIDE_SIG_BW = 8
 	STRIDE_EXP_BW = 3
 	LG_VSIZE = Clog2(VSIZE, True)
@@ -65,7 +96,6 @@ class UmiModel(object):
 	DRAM_ALIGN = 8
 	DRAM_ALIGN_MASK = DRAM_ALIGN-1
 	VSIZE_MASK = VSIZE-1
-	LBW_MASK = (1<<LBW)-1
 	# please check define.sv
 	limits = {
 		"const": 4,
@@ -103,7 +133,8 @@ class UmiModel(object):
 		'mstart', # precomuted offsets
 		'lmpad', 'lmsize', # derived from lmwidth, lmalign
 		'vlinear', # precomputed vector addresses local/global for I/O
-		'xor_mask', 'xor_src', 'xor_config', # XOR scheme: TODO document
+		'xor_src', 'xor_swap', # XOR scheme: TODO document
+		'local_adr', # Internal status
 	], [
 		DIM,1,2*VDIM,2*VDIM,2*VDIM,DIM,DIM,
 		1,1,
@@ -113,7 +144,8 @@ class UmiModel(object):
 		DIM,
 		DIM,1,
 		VSIZE,
-		1,LG_VSIZE,1,
+		LG_VSIZE,1,
+		N_TAU,
 	])
 	# cmd_type 0: fill addr[ofs:ofs+len] to SRAM
 	# cmd_type 1: repeat addr[ofs] len times to SRAM
@@ -176,7 +208,8 @@ class UmiModel(object):
 			npi.arange(rg[i,0], rg[i,1]) for i in range(rg.shape[0])
 		])
 
-	def _CalStride(self, um, is_local):
+	@staticmethod
+	def _CalStride(um, is_local):
 		mul = npd.copy(um['lmalign'] if is_local else um['mboundary'])
 		mul = npd.roll(mul, -1, axis=1)
 		mul[:,-1] = 1
@@ -185,6 +218,25 @@ class UmiModel(object):
 			  mul[idx, um['udim'][:,UmiModel.VDIM:]]
 			* um['ustride'][:,UmiModel.VDIM:]
 		)
+
+	@staticmethod
+	def _CalXor(strides, xor_src, xor_swap):
+		s = npd.empty_like(strides)
+		n = s.size
+		for i in range(n):
+			st = strides[i]
+			if st != 0:
+				s[i] = TrailingZeros(strides[i])
+		min_element = npd.argmin(s)
+		xor_swap[0] = min_element
+		ind = npd.roll(npi.arange(n), min_element)
+		xor_src[:] = -1
+		for i in range(n):
+			dst = ind[i]
+			src = s[i]
+			if strides[i] != 0 and src != dst:
+				assert xor_src[dst] == -1, "Cannot create a suitable scheme"
+				xor_src[dst] = src
 
 	@staticmethod
 	def _CountBlockRoutine(ref_local, ref_end=None):
@@ -204,13 +256,14 @@ class UmiModel(object):
 		n_ref = ref_ofs.shape[0]
 		return n_ref, ref_ofs
 
-	def _InitUmcfg(self, umcfg, n, is_local):
+	@staticmethod
+	def _InitUmcfg(umcfg, n, v_nd, is_local, xor_fallback):
 		# layout of umcfg
 		#   aaaapppp
 		n_total = n[1][-1]
 		assert n_total == umcfg.shape[0]
 		# Calaulate memory shape cumsum (multiplier, boundary)
-		umcfg['mboundary'] = self._CalMemBound(umcfg['mwidth'])
+		umcfg['mboundary'] = UmiModel._CalMemBound(umcfg['mwidth'])
 		if is_local:
 			umcfg['lmsize'] = umcfg['lmalign'][:,0]
 			# Calaulate pad of local memory
@@ -222,9 +275,15 @@ class UmiModel(object):
 			umcfg['mboundary_lmwidth'][:,:-1] *= umcfg['mboundary'][:,1:]
 		# Calculate vector related
 		if is_local:
-			umcfg['vlinear'] = npd.dot(self._CalStride(umcfg, True), self.v_nd.T)
+			umcfg['vlinear'] = npd.dot(UmiModel._CalStride(umcfg, True), v_nd)
+			# if true, then use the value provided by users
+			if not xor_fallback:
+				idx = npi.ones(UmiModel.LG_VSIZE) << npi.arange(UmiModel.LG_VSIZE)
+				for i in range(n_total):
+					# use i:i+1 to pass by reference
+					UmiModel._CalXor(umcfg['vlinear'][i,idx], umcfg['xor_src'][i,:], umcfg['xor_swap'][i:i+1])
 		else:
-			umcfg['vlinear'] = npd.dot(self._CalStride(umcfg, False), self.v_nd.T)
+			umcfg['vlinear'] = npd.dot(UmiModel._CalStride(umcfg, False), v_nd)
 		for i in range(n_total):
 			for j in range(UmiModel.VDIM*2):
 				s, f = ExtractUFloat(umcfg['ustride'][i,j], UmiModel.STRIDE_EXP_BW)
@@ -239,9 +298,10 @@ class UmiModel(object):
 			ums[idx,umcfg['udim'][:,UmiModel.VDIM+i]] += umcfg['ustart'][:,UmiModel.VDIM+i]
 		return umcfg
 
-	def _InitApcfg(self, pcfg, acfg):
+	@staticmethod
+	def _InitApcfg(pcfg, acfg):
 		# Init
-		VDIM = self.VDIM
+		VDIM = UmiModel.VDIM
 		# Convert some values
 		pcfg['end'] = ((pcfg['total']-1)//pcfg['local']+1)*pcfg['local']
 		acfg['end'] = ((acfg['total']-1)//acfg['local']+1)*acfg['local']
@@ -254,7 +314,7 @@ class UmiModel(object):
 		pf = pcfg['vshuf'][0]
 		plv = pcfg['lg_vsize'][0]
 		plf = pcfg['lg_vshuf'][0]
-		for i in range(self.VDIM):
+		for i in range(UmiModel.VDIM):
 			plv[i] = Clog2(pv[i], True)
 			plf[i] = Clog2(pf[i], True)
 		v_nd = npi.indices(pv).reshape((VDIM, -1)).T << plf
@@ -278,21 +338,18 @@ class UmiModel(object):
 		mofs[:,:-1] *= mbound[:,1:]
 		return mofs
 
-	def __init__(self, pcfg, acfg, umcfg_i0, umcfg_i1, umcfg_o, insts, n_i0, n_i1, n_o, n_inst):
+	def __init__(self, pcfg, acfg, umcfg_i0, umcfg_i1, umcfg_o, insts, n_i0, n_i1, n_o, n_inst, xor_fallback=False):
 		# convert to internal format
 		# v_nd_shuf, v_nd = head of warp, warp sub idx
-		self.pcfg, self.acfg, self.warp_nd, self.v_nd = self._InitApcfg(pcfg, acfg)
+		self.pcfg, self.acfg, self.warp_nd, self.v_nd = UmiModel._InitApcfg(pcfg, acfg)
 		self.sram_cur = [0, 0]
 		self.n_i0 = self._CvtRange(n_i0)
 		self.n_i1 = self._CvtRange(n_i1)
-		self.sram_linear = [
-			npi.empty(self.n_i0[1][-1]),
-			npi.empty(self.n_i1[1][-1]),
-		]
-		self.umcfg_i0 = self._InitUmcfg(umcfg_i0, n_i0, is_local=True)
-		self.umcfg_i1 = self._InitUmcfg(umcfg_i1, n_i1, is_local=True)
+		v_ndT = self.v_nd.T
+		self.umcfg_i0 = self._InitUmcfg(umcfg_i0, n_i0, v_ndT, is_local=True, xor_fallback=xor_fallback)
+		self.umcfg_i1 = self._InitUmcfg(umcfg_i1, n_i1, v_ndT, is_local=True, xor_fallback=xor_fallback)
 		self.n_o = self._CvtRange(n_o)
-		self.umcfg_o = self._InitUmcfg(umcfg_o, n_o, is_local=False)
+		self.umcfg_o = self._InitUmcfg(umcfg_o, n_o, v_ndT, is_local=False, xor_fallback=True) # True is not used
 		self.n_inst = self._CvtRange(n_inst)
 		self.insts = insts
 		self.n_reg = 1
@@ -305,17 +362,25 @@ class UmiModel(object):
 		assert len(a.shape) == 1 and l <= limit
 		self.luts[name] = (l, a)
 
-	def AllocSram(self, which, beg, end):
-		linear = self.sram_linear[which]
-		um = self.umcfg_i0['lmsize'] if which == 0 else self.umcfg_i1['lmsize']
-		new_addr = npi.cumsum(npd.insert(um[beg:end], 0, self.sram_cur[which])) & UmiModel.LBW_MASK
+	def AllocSram(self, which, beg, end, tau=0):
+		if which:
+			linear = self.umcfg_i1['local_adr'][tau,:]
+			msz = self.umcfg_i1['lmsize']
+			bw = UmiModel.LBW1
+		else:
+			linear = self.umcfg_i0['local_adr'][tau,:]
+			msz = self.umcfg_i0['lmsize']
+			bw = UmiModel.LBW0
+		MASK = (1<<bw)-1
+		base = self.sram_cur[which]
+		new_addr = npi.cumsum(npd.insert(msz[beg:end], 0, base)) & MASK
 		linear[beg:end] = new_addr[:-1]
 		self.sram_cur[which] = new_addr[-1]
-		return linear
 
-	"""
-		Important functions
-	"""
+	#################
+	# Hardware model
+	#################
+
 	def CreateBlockTransaction(self):
 		return self._CountBlockRoutine(self.pcfg['local'][0], self.pcfg['end'][0])
 
@@ -325,21 +390,32 @@ class UmiModel(object):
 		n_aofs, aofs_beg = self._CountBlockRoutine(glb_alocal, glb_aend)
 		aofs_end = npd.fmin(self.acfg['local']+aofs_beg, self.acfg['total'])
 		l, r = UmiModel._SelRangeIdx(aofs_beg, glb_alocal, glb_aend)
-		def Extract(nums):
-			a_range = UmiModel._SelRangeSel(l, r, nums)
+		a_range_i0  = UmiModel._SelRangeSel(l, r, self.n_i0)
+		a_range_i1  = UmiModel._SelRangeSel(l, r, self.n_i1)
+		a_range_o   = UmiModel._SelRangeSel(l, r, self.n_o)
+		a_range_alu = UmiModel._SelRangeSel(l, r, self.n_inst)
+		a_range_dma = npd.reshape(npd.hstack((a_range_i0, a_range_i1)), (-1,2))
+		aofs_beg2 = npd.repeat(aofs_beg, 2, 0)
+		aofs_end2 = npd.repeat(aofs_end, 2, 0)
+		def Extract(a_range, a_beg, a_end, dma=False):
 			diff_id = a_range[:,0] != a_range[:,1]
 			n_trim = npd.count_nonzero(diff_id)
 			bofs_trim = npd.broadcast_to(bofs, (n_trim, self.VDIM))
-			aofs_beg_trim = aofs_beg[diff_id]
-			aofs_end_trim = aofs_end[diff_id]
+			aofs_beg_trim = a_beg[diff_id]
+			aofs_end_trim = a_end[diff_id]
 			beg_trim = a_range[diff_id,0]
 			end_trim = a_range[diff_id,1]
-			return n_trim, bofs_trim, aofs_beg_trim, aofs_end_trim, beg_trim, end_trim
+			dma_which = None
+			if dma:
+				zero_one = npd.bitwise_and(npi.arange(a_range.shape[0]), 1)
+				dma_which = zero_one[diff_id]
+			return n_trim, bofs_trim, aofs_beg_trim, aofs_end_trim, beg_trim, end_trim, dma_which
 		return (
-			Extract(self.n_i0) +
-			Extract(self.n_i1) +
-			Extract(self.n_o) +
-			Extract(self.n_inst)
+			Extract(a_range_i0, aofs_beg, aofs_end),
+			Extract(a_range_i1, aofs_beg, aofs_end),
+			Extract(a_range_dma, aofs_beg2, aofs_end2, True),
+			Extract(a_range_o, aofs_beg, aofs_end),
+			Extract(a_range_alu, aofs_beg, aofs_end),
 		)
 
 	def CreateAccumTransaction(self, abeg, aend):
@@ -473,564 +549,3 @@ class UmiModel(object):
 				dram_addr.append(cur)
 				dram_wmask.append(wmask)
 		return npi.array(dram_addr), npd.vstack(dram_wmask)
-
-sample_conf = list()
-verf_func = list()
-
-##########
-## TEST 0
-##########
-n_i0 = ([0,0,0,0,0,0,0], [1,1,1,1,1,1,1])
-n_i1 = ([0,0,0,0,0,0,0], [1,1,1,1,1,1,1])
-n_o = ([0,0,0,0,0,0,0], [0,0,0,0,0,0,1])
-n_inst = ([0,2,2,2,2,2,2], [3,3,3,3,3,3,4])
-insts = npd.array([
-	# OOOSSSSSRDDTWWWAAAAABBBBBCCCCC
-	0b000000001110000000010000000000, # R0 = 1
-	0b000000000110000000000000000000, # nop
-	0b100000001111000110001000010001, # R0 = R0+I0*I1 (push)
-	0b000000000000000100100000000000, # DRAM = T0
-], dtype=npd.uint32)
-p = npd.empty(1, UmiModel.PCFG_DTYPE)
-a = npd.empty(1, UmiModel.ACFG_DTYPE)
-um_i0 = npd.empty(1, UmiModel.UMCFG_DTYPE)
-um_i1 = npd.empty(1, UmiModel.UMCFG_DTYPE)
-um_o = npd.empty(1, UmiModel.UMCFG_DTYPE)
-
-try:
-	PAD = int(environ["PAD_VALUE"])
-except:
-	PAD = None
-p['total'] = [1,1,1,1,20,10]
-p['local'] = [1,1,1,1,16,8]
-p['vsize'] = [1,1,1,1,4,8]
-p['vshuf'] = [1,1,1,1,4,1]
-p['syst0_skip'] = 0
-p['syst0_axis'] = -1
-# This comment disables systolic sharing
-# p['syst1_skip'] = 0
-# p['syst1_axis'] = -1
-p['syst1_skip'] = 0b1
-p['syst1_axis'] = 5
-a['total'] = [1,1,1,1,3,3]
-a['local'] = [1,1,1,1,2,2]
-um_i0['mwrap'].fill(UmiModel.MEM_WRAP if PAD is None else UmiModel.MEM_PAD)
-um_i0['mlinear'] = [0]
-um_i0['ustart'] = [[0,0,0,0,-1,-1,0,0,0,0,0,0],]
-um_i0['ustride'] = [[0,0,0,0,1,1,0,0,0,0,1,1],]
-um_i0['udim'] = [[0,0,0,0,2,3,0,0,0,0,2,3],]
-um_i0['lmwidth'] = [[1,1,17,9],]
-um_i0['lmalign'] = [[192,192,192,10],]
-um_i0['mwidth'] = [[1,1,100,301],]
-um_i0['xor_mask'] = 0
-um_i0['xor_config'] = 0
-um_i0['pad_value'] = 0 if PAD is None else PAD
-
-um_i1['mwrap'].fill(UmiModel.MEM_WRAP)
-um_i1['mlinear'] = [100000]
-um_i1['ustart'] = [[0,0,0,0,0,0,0,0,0,0,0,0],]
-um_i1['ustride'] = [[0,0,0,0,1,1,0,0,0,0,0,0],]
-um_i1['udim'] = [[0,0,0,0,2,3,0,0,0,0,0,0],]
-um_i1['lmwidth'] = [[1,1,2,2],]
-um_i1['lmalign'] = [[32,32,32,2],]
-um_i1['mwidth'] = [[1,1,3,3],]
-um_i1['xor_mask'] = 0
-um_i1['xor_config'] = 0
-
-um_o['mwrap'].fill(UmiModel.MEM_WRAP)
-um_o['mlinear'] = [300000]
-um_o['ustart'] = [[0,0,0,0,0,0,0,0,0,0,0,0],]
-um_o['ustride'] = [[0,0,0,0,0,0,0,0,0,0,1,1],]
-um_o['udim'] = [[0,0,0,0,0,0,0,0,0,0,2,3],]
-um_o['mwidth'] = [[1,1,1000,1000],]
-
-cfg0 = UmiModel(p, a, um_i0, um_i1, um_o, insts, n_i0, n_i1, n_o, n_inst)
-def VerfFunc0(CSIZE):
-	# init
-	img = npd.random.randint(10, size=30100, dtype=i16)
-	# conv = npd.arange(16, dtype=i16)
-	conv = npd.ones(16, dtype=i16)
-	result = npd.zeros(1000000, dtype=i16)
-	img_2d = npd.reshape(img[:30100], (100,301))
-	conv_2d = npd.reshape(conv[:9], (3,3))
-	result_2d = npd.reshape(result, (1000,1000))
-	gold_2d = npd.zeros((20,10), dtype=i16)
-	yield MemorySpace([
-		(     0, img   ),
-		(100000, conv  ),
-		(300000, result),
-	], CSIZE)
-	# check
-	for y in range(20):
-		for x in range(10):
-			yy, xx = npd.ogrid[y-1:y+2, x-1:x+2]
-			yyy = npd.fmax(yy, 0)
-			xxx = npd.fmax(xx, 0)
-			wind = img_2d[yyy,xxx]
-			if not PAD is None:
-				wind[npd.logical_or(yyy != yy, xxx != xx)] = PAD
-			gold_2d[y,x] = (1 + npd.sum(wind * conv_2d, dtype=i16))
-	npd.savetxt("img.txt",    img_2d[:20,:10], "%d")
-	npd.savetxt("ans.txt",   gold_2d[:20,:10], "%d")
-	npd.savetxt("res.txt", result_2d[:20,:10], "%d")
-	for y in range(20):
-		for x in range(10):
-			gold = gold_2d[y,x]
-			got = result_2d[y,x]
-			assert gold == got, f"Error at pixel {y} {x}, {got} != {gold}"
-	result_2d[:20,:10] = 0
-	assert npd.all(result_2d == 0)
-	print("SimpConv test result successes")
-
-sample_conf.append(cfg0)
-verf_func.append(VerfFunc0)
-
-##########
-## TEST 1
-##########
-n_i0 = ([0,0,0,0,0,0,0], [1,1,1,1,1,1,1])
-n_i1 = ([0,0,0,0,0,0,0], [0,0,0,0,0,0,0])
-n_o = ([0,0,0,0,0,0,0], [1,1,1,1,1,1,1])
-n_inst = ([0,1,1,1,1,1,1], [2,2,2,2,2,2,2])
-insts = npd.array([
-	# OOOSSSSSRDDTWWWAAAAABBBBBCCCCC
-	0b000000000111000000000000000000, # 0 (push)
-	0b001000000001000100101000000000, # T0+I0 (push, DRAM>>0)
-], dtype=npd.uint32)
-p = npd.empty(1, UmiModel.PCFG_DTYPE)
-a = npd.empty(1, UmiModel.ACFG_DTYPE)
-um_i0 = npd.empty(1, UmiModel.UMCFG_DTYPE)
-um_i1 = npd.empty(0, UmiModel.UMCFG_DTYPE)
-um_o = npd.empty(1, UmiModel.UMCFG_DTYPE)
-
-p['total'] = [1,1,1,1,1,100]
-p['local'] = [1,1,1,1,1,32]
-p['vsize'] = [1,1,1,1,1,32]
-p['vshuf'] = [1,1,1,1,1,1]
-p['syst0_skip'] = 0
-p['syst0_axis'] = -1
-p['syst1_skip'] = 0
-p['syst1_axis'] = -1
-a['total'] = [1,1,1,1,1,100]
-a['local'] = [1,1,1,1,1,32]
-um_i0['mwrap'].fill(UmiModel.MEM_WRAP)
-um_i0['mlinear'] = [0]
-um_i0['ustart'] = [[0,0,0,0,0,0,0,0,0,0,0,0],]
-um_i0['ustride'] = [[0,0,0,0,0,1,0,0,0,0,0,1],]
-um_i0['udim'] = [[0,0,0,0,0,3,0,0,0,0,0,2],]
-um_i0['lmwidth'] = [[1,1,32,32],]
-um_i0['lmalign'] = [[1024,1024,1024,32],]
-um_i0['mwidth'] = [[1,1,100,100],]
-um_i0['xor_mask'] = 0b11111
-um_i0['xor_src'] = [[0,1,2,3,4],]
-um_i0['xor_config'] = 0
-um_o['mwrap'].fill(UmiModel.MEM_WRAP)
-um_o['mlinear'] = [300000]
-um_o['ustart'] = [[0,0,0,0,0,0,0,0,0,0,0,0],]
-um_o['ustride'] = [[0,0,0,0,0,1,0,0,0,0,0,1],]
-um_o['udim'] = [[0,0,0,0,0,2,0,0,0,0,0,3],]
-um_o['mwidth'] = [[1,1,100,100],]
-
-cfg1 = UmiModel(p, a, um_i0, um_i1, um_o, insts, n_i0, n_i1, n_o, n_inst)
-def VerfFunc1(CSIZE):
-	# init
-	# img = npd.random.randint(10, size=10000, dtype=i16)
-	img = npd.ones(10000, dtype=i16)
-	result = npd.zeros(10000, dtype=i16)
-	img_2d = npd.reshape(img, (100,100))
-	result_2d = npd.reshape(result, (100,100))
-	yield MemorySpace([
-		(     0, img   ),
-		(300000, result),
-	], CSIZE)
-	# check
-	golden = npd.cumsum(img_2d, axis=1, dtype=i16).T
-	check_res = result_2d != golden
-	fail = npd.any(check_res)
-	if fail:
-		npd.savetxt("intimg_i.txt", result_2d[:100,:100], "%d")
-		npd.savetxt("intimg_o.txt", golden[:100,:100], "%d")
-		assert not fail
-	assert not npd.any(check_res)
-	print("IntImg(1D) test result successes")
-
-sample_conf.append(cfg1)
-verf_func.append(VerfFunc1)
-
-##########
-## TEST 2
-##########
-n_i0 = ([0,0,0,0,0,0,0], [1,1,1,1,1,1,1])
-n_i1 = ([0,0,0,0,0,0,0], [1,1,1,1,1,1,1])
-n_o = ([0,0,0,0,0,0,0], [0,0,0,0,0,0,1])
-n_inst = ([0,2,2,2,2,2,2], [3,3,3,3,3,3,5])
-insts = npd.array([
-	# OOOSSSSSRDDTWWWAAAAABBBBBCCCCC
-	0b000000001110000000000000000000, # R0 = 0
-	0b000000000110000000000000000000, # nop
-	0b100000001110000110001000010001, # R0 = R0+I0*I1
-	0b000000000110000000000000000000, # nop
-	0b000000000000000110000000000000, # DRAM = R0
-], dtype=npd.uint32)
-p = npd.empty(1, UmiModel.PCFG_DTYPE)
-a = npd.empty(1, UmiModel.ACFG_DTYPE)
-um_i0 = npd.empty(1, UmiModel.UMCFG_DTYPE)
-um_i1 = npd.empty(1, UmiModel.UMCFG_DTYPE)
-um_o = npd.empty(1, UmiModel.UMCFG_DTYPE)
-
-p['total'] = [1,1,1,1,128,64]
-p['local'] = [1,1,1,1,64,32]
-p['vsize'] = [1,1,1,1,1,32]
-p['vshuf'] = [1,1,1,1,1,1]
-p['syst0_skip'] = 0b1
-p['syst0_axis'] = 5
-p['syst1_skip'] = 0b1
-p['syst1_axis'] = 4
-a['total'] = [1,1,1,1,1,64]
-a['local'] = [1,1,1,1,1,16]
-um_i0['mwrap'].fill(UmiModel.MEM_WRAP)
-um_i0['mlinear'] = [0]
-um_i0['ustart'] = [[0,0,0,0,0,0,0,0,0,0,0,0],]
-um_i0['ustride'] = [[0,0,0,0,0,1,0,0,0,0,1,0],]
-um_i0['udim'] = [[0,0,0,0,0,3,0,0,0,0,2,0],]
-um_i0['lmwidth'] = [[1,1,64,16],]
-um_i0['lmalign'] = [[1024,1024,1024,16],]
-um_i0['mwidth'] = [[1,1,128,64],]
-um_i0['xor_mask'] = 0
-um_i0['xor_config'] = 0
-um_i1['mlinear'] = [100000]
-um_i1['ustart'] = [[0,0,0,0,0,0,0,0,0,0,0,0],]
-um_i1['ustride'] = [[0,0,0,0,0,1,0,0,0,0,0,1],]
-um_i1['udim'] = [[0,0,0,0,0,2,0,0,0,0,0,3],]
-um_i1['lmwidth'] = [[1,1,16,32],]
-um_i1['lmalign'] = [[512,512,512,32],]
-um_i1['mwidth'] = [[1,1,64,64],]
-um_i1['xor_mask'] = 0
-um_i1['xor_config'] = 0
-um_o['mwrap'].fill(UmiModel.MEM_WRAP)
-um_o['mlinear'] = [300000]
-um_o['ustart'] = [[0,0,0,0,0,0,0,0,0,0,0,0],]
-um_o['ustride'] = [[0,0,0,0,0,0,0,0,0,0,1,1],]
-um_o['udim'] = [[0,0,0,0,0,0,0,0,0,0,2,3],]
-um_o['mwidth'] = [[1,1,128,64],]
-
-cfg2 = UmiModel(p, a, um_i0, um_i1, um_o, insts, n_i0, n_i1, n_o, n_inst)
-def VerfFunc2(CSIZE):
-	# init
-	A_flat = npd.random.randint(0, 3, 128*64, i16)
-	B_flat = npd.random.randint(3, 6, 64*64, i16)
-	C_flat = npd.zeros(128*64, dtype=i16)
-	A = npd.reshape(A_flat, (128,64))
-	B = npd.reshape(B_flat, (64,64))
-	C = npd.reshape(C_flat, (128,64))
-	C_gold = npd.dot(A, B)
-	yield MemorySpace([
-		(     0, A_flat),
-		(100000, B_flat),
-		(300000, C_flat),
-	], CSIZE)
-	# check
-	assert npd.all(C == C_gold)
-	print("MatMul test result successes")
-
-sample_conf.append(cfg2)
-verf_func.append(VerfFunc2)
-
-##########
-## TEST 3
-##########
-n_i0 = ([0,0,0,0,0,0,0], [1,1,1,1,1,1,1])
-n_i1 = ([0,0,0,0,0,0,0], [1,1,1,1,1,1,1])
-n_o = ([0,0,0,0,0,0,0], [0,0,0,0,0,0,1])
-n_inst = ([0,2,2,2,2,2,2], [3,3,3,3,3,3,5])
-insts = npd.array([
-	# OOOSSSSSRDDTWWWAAAAABBBBBCCCCC
-	0b000000001110000000000000000000, # R0 = 0
-	0b000000000110000000000000000000, # nop
-	0b011000001110000110001000010001, # R0 = R0+abs(I0-I1)
-	0b000000000110000000000000000000, # nop
-	0b000000000000000110000000000000, # DRAM = R0
-], dtype=npd.uint32)
-p = npd.empty(1, UmiModel.PCFG_DTYPE)
-a = npd.empty(1, UmiModel.ACFG_DTYPE)
-um_i0 = npd.empty(1, UmiModel.UMCFG_DTYPE)
-um_i1 = npd.empty(1, UmiModel.UMCFG_DTYPE)
-um_o = npd.empty(1, UmiModel.UMCFG_DTYPE)
-
-p['total'] = [1,1,4,4,8,8] ## 4x4 block & 8x8 search range
-p['local'] = [1,1,1,1,8,8]
-p['vsize'] = [1,1,1,1,4,8]
-p['vshuf'] = [1,1,1,1,2,1]
-p['syst0_skip'] = 0
-p['syst0_axis'] = -1
-p['syst1_skip'] = 0b1
-p['syst1_axis'] = 5
-a['total'] = [1,1,1,1,8,8]
-a['local'] = [1,1,1,1,8,8]
-um_i0['mwrap'].fill(UmiModel.MEM_WRAP)
-um_i0['mlinear'] = [0]
-um_i0['ustart'] = [[0,0,0,0,0,0,0,0,4,4,-4,-4],]
-um_i0['ustride'] = [[0,0,0,0,1,1,0,0,8,8,1,1],]
-um_i0['udim'] = [[0,0,0,0,2,3,0,0,2,3,2,3],]
-um_i0['lmwidth'] = [[1,1,15,15],]
-um_i0['lmalign'] = [[256,256,256,16],]
-um_i0['mwidth'] = [[1,1,50,50],]
-um_i0['xor_mask'] = 0b11000
-um_i0['xor_src'] = [[-1,-1,-1,0,1],]
-um_i0['xor_config'] = 0
-um_i1['mlinear'] = [100000]
-um_i1['ustart'] = [[0,0,0,0,0,0,0,0,0,0,0,0],]
-um_i1['ustride'] = [[0,0,0,0,1,1,0,0,8,8,0,0],]
-um_i1['udim'] = [[0,0,0,0,2,3,0,0,2,3,0,0],]
-um_i1['lmwidth'] = [[1,1,8,8],]
-um_i1['lmalign'] = [[64,64,64,8],]
-um_i1['mwidth'] = [[1,1,32,32],]
-um_i1['xor_mask'] = 0
-um_i1['xor_config'] = 0
-um_o['mwrap'].fill(UmiModel.MEM_WRAP)
-um_o['mlinear'] = [300000]
-um_o['ustart'] = [[0,0,0,0,0,0,0,0,0,0,0,0],]
-um_o['ustride'] = [[0,0,0,0,0,0,0,0,1,1,1,1],]
-um_o['udim'] = [[0,0,0,0,0,0,0,0,0,1,2,3],]
-um_o['mwidth'] = [[4,4,8,8],]
-
-cfg3 = UmiModel(p, a, um_i0, um_i1, um_o, insts, n_i0, n_i1, n_o, n_inst)
-def VerfFunc3(CSIZE):
-	# init
-	prev_flat = npd.random.randint(0, 128, 50*50, i16)
-	cur_flat = npd.random.randint(0, 128, 32*32, i16)
-	diff_flat = npd.zeros(4*4*8*8, dtype=i16)
-	prev = npd.reshape(prev_flat, (50,50))
-	cur = npd.reshape(cur_flat, (32,32))
-	diff = npd.reshape(diff_flat, (4*4,8*8))
-	diff_gold = npd.empty_like(diff)
-	for y in range(4):
-		for x in range(4):
-			by = y*8
-			bx = x*8
-			for dy in range(8):
-				for dx in range(8):
-					bdy = by+dy
-					bdx = bx+dx
-					diff_gold[y*4+x,dy*8+dx] = npd.sum(npd.abs(
-						cur[by:by+8,bx:bx+8] - prev[bdy:bdy+8,bdx:bdx+8]
-					))
-	yield MemorySpace([
-		(     0, prev_flat),
-		(100000, cur_flat),
-		(300000, diff_flat),
-	], CSIZE)
-	# check
-	npd.savetxt("me_result.txt", diff, fmt="%d")
-	npd.savetxt("me_gold.txt", diff_gold, fmt="%d")
-	assert npd.all(diff == diff_gold)
-	print("Motion estimation test result successes")
-
-sample_conf.append(cfg3)
-verf_func.append(VerfFunc3)
-
-##########
-## TEST 4
-##########
-n_i0 = ([0,0,0,0,0,0,0], [0,0,0,0,0,0,0])
-n_i1 = ([0,0,0,0,0,0,0], [0,0,0,0,0,0,0])
-n_o = ([0,0,0,0,0,0,0], [0,0,0,0,0,0,1])
-n_inst = ([0,0,0,0,0,0,0], [3,3,3,3,3,3,3])
-insts = npd.array([
-	# OOOSSSSSRDDTWWWAAAAABBBBBCCCCC
-	0b111011010111000000000000000000, # pid[5] (push)
-	0b111011000111000000000000000000, # pid[4] (push)
-	0b100000000000000100111001010100, # DRAM = T1+T0*100
-], dtype=npd.uint32)
-p = npd.empty(1, UmiModel.PCFG_DTYPE)
-a = npd.empty(1, UmiModel.ACFG_DTYPE)
-um_i0 = npd.empty(0, UmiModel.UMCFG_DTYPE)
-um_i1 = npd.empty(0, UmiModel.UMCFG_DTYPE)
-um_o = npd.empty(1, UmiModel.UMCFG_DTYPE)
-
-p['total'] = [1,1,1,1,60,30]
-p['local'] = [1,1,1,1,8,16]
-p['vsize'] = [1,1,1,1,2,16]
-p['vshuf'] = [1,1,1,1,1,1]
-p['syst0_skip'] = 0
-p['syst0_axis'] = -1
-p['syst1_skip'] = 0
-p['syst1_axis'] = -1
-a['total'] = [1,1,1,1,1,1]
-a['local'] = [1,1,1,1,1,1]
-um_o['mwrap'].fill(UmiModel.MEM_WRAP)
-um_o['mlinear'] = [300000]
-um_o['ustart'] = [[0,0,0,0,0,0,0,0,0,0,0,0],]
-um_o['ustride'] = [[0,0,0,0,0,0,0,0,0,0,1,1],]
-um_o['udim'] = [[0,0,0,0,0,0,0,0,0,0,2,3],]
-um_o['mwidth'] = [[1,1,60,30],]
-
-cfg4 = UmiModel(p, a, um_i0, um_i1, um_o, insts, n_i0, n_i1, n_o, n_inst)
-cfg4.add_lut("const", [100])
-def VerfFunc4(CSIZE):
-	# init
-	idx_flat = npd.zeros(60*30, i16)
-	idx = npd.reshape(idx_flat, (60,30))
-	y, x = npd.ogrid[0:60, 0:30]
-	idx_gold = (y*100+x).astype(i16)
-	yield MemorySpace([
-		(300000, idx_flat),
-	], CSIZE)
-	# check
-	npd.savetxt("idx.txt", idx, fmt="%d")
-	print(idx)
-	print(idx_gold)
-	assert npd.all(idx == idx_gold)
-	print("Index generation test result successes")
-
-sample_conf.append(cfg4)
-verf_func.append(VerfFunc4)
-
-##########
-## TEST 5
-##########
-n_i0 = ([0,0,0,0,0,0,0], [1,1,1,1,1,1,1])
-n_i1 = ([0,0,0,0,0,0,0], [0,0,0,0,0,0,0])
-n_o = ([0,0,0,0,0,0,0], [0,0,0,0,0,0,1])
-n_inst = ([0,0,0,0,0,0,0], [0,0,0,0,0,0,4])
-insts = npd.array([
-	# OOOSSSSSRDDTWWWAAAAABBBBBCCCCC
-	0b000000000111000000001000000000, # y1 (push)
-	0b010000000111000000001000010010, # 0+(t0-y2)^2 (push)
-	0b000000000111000000001000000000, # x1 (push)
-	0b010000000000000100111000010010, # DRAM = t1+(t0-x2)^2 (DRAM)
-], dtype=npd.uint32)
-p = npd.empty(1, UmiModel.PCFG_DTYPE)
-a = npd.empty(1, UmiModel.ACFG_DTYPE)
-um_i0 = npd.empty(1, UmiModel.UMCFG_DTYPE)
-um_i1 = npd.empty(0, UmiModel.UMCFG_DTYPE)
-um_o = npd.empty(1, UmiModel.UMCFG_DTYPE)
-
-H_grad, W_grad = 32, 64
-p['total'] = [1,1,1,1,H_grad-2,W_grad-2]
-p['local'] = [1,1,1,1,16,32]
-p['vsize'] = [1,1,1,1,1,32]
-p['vshuf'] = [1,1,1,1,1,1]
-p['syst0_skip'] = 0
-p['syst0_axis'] = -1
-p['syst1_skip'] = 0
-p['syst1_axis'] = -1
-a['total'] = [1,1,1,1,3,3]
-a['local'] = [1,1,1,1,3,3]
-um_i0['mwrap'].fill(UmiModel.MEM_WRAP)
-um_i0['mlinear'] = [10000]
-um_i0['ustart'] = [[0,0,0,0,-1,-1,0,0,0,0,1,1],]
-um_i0['ustride'] = [[0,0,0,0,1,1,0,0,0,0,1,1],]
-um_i0['udim'] = [[0,0,0,0,2,3,0,0,0,0,2,3],]
-um_i0['lmwidth'] = [[1,1,18,34],]
-um_i0['lmalign'] = [[640,640,640,34],]
-um_i0['mwidth'] = [[1,1,H_grad,W_grad],]
-um_i0['xor_mask'] = 0
-um_i0['xor_config'] = 0
-um_o['mwrap'].fill(UmiModel.MEM_WRAP)
-um_o['mlinear'] = [300000]
-um_o['ustart'] = [[0,0,0,0,0,0,0,0,0,0,0,0],]
-um_o['ustride'] = [[0,0,0,0,0,0,0,0,0,0,1,1],]
-um_o['udim'] = [[0,0,0,0,0,0,0,0,0,0,2,3],]
-um_o['mwidth'] = [[1,1,H_grad,W_grad],]
-
-cfg5 = UmiModel(p, a, um_i0, um_i1, um_o, insts, n_i0, n_i1, n_o, n_inst)
-cfg5.add_lut("stencil0", [1,69,34,36])
-def VerfFunc5(CSIZE):
-	# init
-	img_flat = npi.arange(W_grad*H_grad, dtype=i16)
-	# img_flat = npd.random.randint(10, size=W_grad*H_grad, dtype=i16)
-	gradm_flat = npd.zeros(W_grad*H_grad, i16)
-	img = npd.reshape(img_flat, (H_grad,W_grad))
-	gradm = npd.reshape(gradm_flat, (H_grad,W_grad))
-	gradm_gold = npd.square(img[1:-1,2:]-img[1:-1,:-2]) + npd.square(img[2:,1:-1]-img[:-2,1:-1])
-	yield MemorySpace([
-		(10000, img_flat),
-		(300000, gradm_flat),
-	], CSIZE)
-	# check
-	npd.savetxt("grad_img.txt", img, fmt="%4d")
-	npd.savetxt("grad_result.txt", gradm[:H_grad-2,:W_grad-2], fmt="%4d")
-	npd.savetxt("grad_gold.txt", gradm_gold, fmt="%4d")
-	assert npd.all(gradm_gold == gradm[:H_grad-2,:W_grad-2])
-	gradm[:H_grad-2,:W_grad-2] = 0
-	assert not npd.any(gradm)
-	print("Gradient test result successes")
-
-sample_conf.append(cfg5)
-verf_func.append(VerfFunc5)
-
-##########
-## TEST 6
-##########
-n_i0 = ([0,0,0,0,0,0,0], [1,1,1,1,1,1,1])
-n_i1 = ([0,0,0,0,0,0,0], [0,0,0,0,0,0,0])
-n_o = ([0,0,0,0,0,0,0], [0,0,0,0,0,0,1])
-n_inst = ([0,0,0,0,0,0,0], [1,1,1,1,1,1,1])
-insts = npd.array([
-	# OOOSSSSSRDDTWWWAAAAABBBBBCCCCC
-	0b000000000000000000001000000000, # DRAM = I0+0 (DRAM)
-], dtype=npd.uint32)
-p = npd.empty(1, UmiModel.PCFG_DTYPE)
-a = npd.empty(1, UmiModel.ACFG_DTYPE)
-um_i0 = npd.empty(1, UmiModel.UMCFG_DTYPE)
-um_i1 = npd.empty(0, UmiModel.UMCFG_DTYPE)
-um_o = npd.empty(1, UmiModel.UMCFG_DTYPE)
-
-H_ds, W_ds = 33, 121
-H_ds4, W_ds4 = (H_ds+3)//4, (W_ds+3)//4
-p['total'] = [1,1,1,1,H_ds4,W_ds4]
-p['local'] = [1,1,1,1,4,32]
-p['vsize'] = [1,1,1,1,1,32]
-p['vshuf'] = [1,1,1,1,1,1]
-p['syst0_skip'] = 0
-p['syst0_axis'] = -1
-p['syst1_skip'] = 0
-p['syst1_axis'] = -1
-a['total'] = [1,1,1,1,1,1]
-a['local'] = [1,1,1,1,1,1]
-um_i0['mwrap'].fill(UmiModel.MEM_WRAP)
-um_i0['mlinear'] = [10000]
-um_i0['ustart'] = [[0,0,0,0,0,0,0,0,0,0,0,0],]
-um_i0['ustride'] = [[0,0,0,0,0,0,0,0,0,0,1,4],]
-um_i0['udim'] = [[0,0,0,0,0,0,0,0,0,0,1,3],]
-um_i0['lmwidth'] = [[1,4,1,125],]
-um_i0['lmalign'] = [[512,512,125,125],]
-um_i0['mwidth'] = [[1,H_ds4,4,W_ds],]
-um_i0['xor_mask'] = 0b11000
-um_i0['xor_src'] = [[-1,-1,-1,0,1],]
-um_i0['xor_config'] = 2
-um_o['mwrap'].fill(UmiModel.MEM_WRAP)
-um_o['mlinear'] = [300000]
-um_o['ustart'] = [[0,0,0,0,0,0,0,0,0,0,0,0],]
-um_o['ustride'] = [[0,0,0,0,0,0,0,0,0,0,1,1],]
-um_o['udim'] = [[0,0,0,0,0,0,0,0,0,0,2,3],]
-um_o['mwidth'] = [[1,1,H_ds4,W_ds4],]
-
-cfg6 = UmiModel(p, a, um_i0, um_i1, um_o, insts, n_i0, n_i1, n_o, n_inst)
-def VerfFunc6(CSIZE):
-	# init
-	hi_flat = npd.random.randint(10, size=10000, dtype=i16)
-	lo_flat = npd.zeros(2000, i16)
-	hi = npd.reshape(hi_flat[:H_ds*W_ds], (H_ds,W_ds))
-	lo = npd.reshape(lo_flat[:H_ds4*W_ds4], (H_ds4,W_ds4))
-	yield MemorySpace([
-		(10000, hi_flat),
-		(300000, lo_flat),
-	], CSIZE)
-	npd.savetxt("hi.txt", hi, "%d")
-	npd.savetxt("lo_gold.txt", hi[::4,::4], "%d")
-	npd.savetxt("lo.txt", lo, "%d")
-	# check
-	assert npd.all(lo == hi[::4,::4])
-	print("Downsample test result successes")
-
-sample_conf.append(cfg6)
-verf_func.append(VerfFunc6)
-
-try:
-	WHAT = int(environ["TEST_CFG"])
-except:
-	WHAT = 0
-default_sample_conf = sample_conf[WHAT]
-default_verf_func = verf_func[WHAT]
