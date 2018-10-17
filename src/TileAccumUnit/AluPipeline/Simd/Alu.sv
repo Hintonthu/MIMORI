@@ -276,6 +276,7 @@ always_comb sel_c = SelectOp(i_c, i_const_c, i_rdata, i_sramrd0, i_sramrd1, i_tb
 always_comb for (int i = 0; i < VDIM; i++) begin
 	bofsz[i] = (i_opcode == 3'b111 && i_shamt[4:3] == 2'b01)  ? i_bofs[i] : '0;
 end
+typedef logic [DBW-1:0] DATA_T;
 always_comb begin
 	priority case (i_opcode)
 		3'b000: result = AluOpAdd(sel_a, sel_b, sel_c, i_shamt, i_opcode == 3'b000);
@@ -288,7 +289,7 @@ always_comb begin
 		3'b111: result = AluIdx(i_aofs, vector_blockofs, i_shamt);
 	endcase
 	for (int i = 0; i < VSIZE; i++) begin
-		o_dramwd[i]  = result[i] >> (2*i_to_dram); // fuck off the nLint bit width check
+		o_dramwd[i]  = DATA_T'(result[i] >> (2*i_to_dram));
 		o_wdata[i] = result[i];
 		// shared with o_wdata (this makes DC happier)
 		// o_tbuf_wdata[i] = result[i];

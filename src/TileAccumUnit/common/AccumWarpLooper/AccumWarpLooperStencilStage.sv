@@ -1,4 +1,4 @@
-// Copyright 2016 Yu Sheng Lin
+// Copyright 2016,2018 Yu Sheng Lin
 
 // This file is part of MIMORI.
 
@@ -76,7 +76,7 @@ output logic               o_islast;
 //======================================
 `rdyack_logic(s1);
 logic last_stencil;
-logic acc_cond;
+logic done_cond;
 logic [ST_BW-1:0] sid1;
 logic [ST_BW-1:0] sid_r;
 logic [ST_BW-1:0] sid_w;
@@ -90,10 +90,10 @@ logic retire_r;
 //======================================
 assign sid1 = sid_r + 'b1;
 assign last_stencil = sid1 == i_stencil_ends[o_id];
-assign acc_cond = !i_stencil || last_stencil;
+assign done_cond = !i_stencil || last_stencil;
 assign o_linear = linear_r + (i_stencil ? i_stencil_lut[sid_r] : '0);
-assign o_islast = islast_r && acc_cond;
-assign o_retire = retire_r && acc_cond;
+assign o_islast = islast_r && done_cond;
+assign o_retire = retire_r && done_cond;
 always_comb begin
 	casez ({src_ack,dst_ack})
 		2'b1?: sid_w = i_stencil_begs[i_id];
@@ -110,10 +110,11 @@ Forward u_fwd(
 	`rdyack_connect(src, src),
 	`rdyack_connect(dst, s1)
 );
-AcceptIf u_acc(
-	.cond(acc_cond),
+RepeatIf#(0) u_acc(
+	.cond(done_cond),
 	`rdyack_connect(src, s1),
-	`rdyack_connect(dst, dst)
+	`rdyack_connect(dst, dst),
+	.repeated()
 );
 
 //======================================

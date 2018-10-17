@@ -172,7 +172,7 @@ generate for (i = 0; i < N_TAU; i++) begin: ctrl
 		.dst_rdy(s1_rdys[i]),
 		.dst_ack(s1_acks[i])
 	);
-	ForwardIf#(0) u_fwd_if_not_full(
+	PauseIf#(1) u_pause_if_full(
 		.cond(block_fulls[i]),
 		.src_rdy(s1_rdys[i]),
 		.src_ack(s1_acks[i]),

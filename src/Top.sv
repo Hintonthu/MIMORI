@@ -134,10 +134,6 @@ module Top(
 	o_dramwas,
 	o_dramwds,
 	o_dramw_masks
-`ifdef SD
-	i_i1_systolic_skip,
-	i_i1_systolic_axis,
-`endif
 );
 
 //======================================
@@ -211,7 +207,7 @@ input [WBW-1:0]     i_agrid_end      [VDIM];
 input [WBW-1:0]     i_aboundary      [VDIM];
 input [XOR_BW-1:0]  i_i0_local_xor_srcs       [N_ICFG][CV_BW];
 input [CCV_BW-1:0]  i_i0_local_xor_swaps      [N_ICFG];
-input [LBW0-1:0]    i_i0_local_boundaries     [N_ICFG][DIM];
+input [LBW0  :0]    i_i0_local_boundaries     [N_ICFG][DIM];
 input [LBW0-1:0]    i_i0_local_bsubsteps      [N_ICFG][CV_BW];
 input [CV_BW-1:0]   i_i0_local_pads           [N_ICFG][DIM];
 input [WBW-1:0]     i_i0_global_starts        [N_ICFG][DIM];
@@ -238,7 +234,7 @@ input [VDIM_BW1-1:0] i_i0_systolic_axis;
 `endif
 input [XOR_BW-1:0]  i_i1_local_xor_srcs       [N_ICFG][CV_BW];
 input [CCV_BW-1:0]  i_i1_local_xor_swaps      [N_ICFG];
-input [LBW1-1:0]    i_i1_local_boundaries     [N_ICFG][DIM];
+input [LBW1  :0]    i_i1_local_boundaries     [N_ICFG][DIM];
 input [LBW1-1:0]    i_i1_local_bsubsteps      [N_ICFG][CV_BW];
 input [CV_BW-1:0]   i_i1_local_pads           [N_ICFG][DIM];
 input [WBW-1:0]     i_i1_global_starts        [N_ICFG][DIM];

@@ -162,28 +162,3 @@ class DramRespChan(object):
 					c_r_fulls, c_w_fulls, c_has_resps
 				)
 			self.dram_counter += self.dram_speed_inc
-
-class MemorySpace(object):
-	def __init__(self, mranges, n):
-		mranges.sort(key=lambda x: x[0])
-		self.keys = [x[0] for x in mranges]
-		self.values = [x[1] for x in mranges]
-		self.n = n
-
-	def FindRange(self, a):
-		idx = bisect.bisect_right(self.keys, a)-1
-		return a-self.keys[idx], self.values[idx]
-
-	def WriteScalarMask(self, a, d, m):
-		m = npd.bitwise_and(m[0]>>npi.arange(self.n), 1) != 0
-		aa, mem = self.FindRange(a[0])
-		mem[aa:aa+self.n][m] = d[m]
-
-	def Write(self, a, d, m):
-		aa, mem = self.FindRange(a[0])
-		mem[aa:aa+self.n][m] = d[m]
-
-	def Read(self, a):
-		aa, mem = self.FindRange(a[0])
-		return mem[aa:aa+self.n]
-

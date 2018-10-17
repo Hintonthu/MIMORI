@@ -25,8 +25,8 @@ def main():
 	yield rst_out_ev
 	n_bofs, bofs = cfg.CreateBlockTransaction()
 	(
-		n_alu, bofs_alu, abeg_alu, aend_alu, abeg_id_alu, aend_id_alu,
-	) = cfg.CreateAccumBlockTransaction(bofs[0])[-6:]
+		n_alu, bofs_alu, abeg_alu, aend_alu, abeg_id_alu, aend_id_alu, dummy
+	) = cfg.CreateAccumBlockTransaction(bofs[0])[-1]
 	master = TwoWire.Master(src_rdy, src_ack, src_bus, ck_ev)
 	inst_commit = OneWire.Master(inst_commit_dval, tuple(), ck_ev)
 	resp = Response(inst_commit.SendIter, ck_ev)

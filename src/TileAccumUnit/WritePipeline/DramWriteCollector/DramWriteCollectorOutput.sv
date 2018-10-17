@@ -80,11 +80,11 @@ OrCrossBar#(DBW, VSIZE, CSIZE) u_oxbar(
 	.o_data(dramwd_w),
 	.o_mask(dramw_mask_w)
 );
-IgnoreIf#(0) u_ign_if_no_data(
+DeleteIf#(0) u_ign_if_no_data(
 	.cond(has_data),
 	`rdyack_connect(src, dst),
 	`rdyack_connect(dst, dramw),
-	.skipped()
+	.deleted()
 );
 
 //======================================
