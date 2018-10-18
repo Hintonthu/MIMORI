@@ -284,8 +284,8 @@ always_comb begin
 `else
 	clear_rp = ch_mofs2_ack;
 `endif
-	rp_en0_ack = rp_en0_rdy && (clear_rp && !ch_which);
-	rp_en1_ack = rp_en1_rdy && (clear_rp &&  ch_which);
+	rp_en0_ack = rp_en0_rdy && ch_mofs1_rdy && (clear_rp && !ch_which);
+	rp_en1_ack = rp_en1_rdy && ch_mofs1_rdy && (clear_rp &&  ch_which);
 	ch_mofs1_ack = ch_mofs2_ack;
 end
 Broadcast#(3) u_broadcast_ch(
