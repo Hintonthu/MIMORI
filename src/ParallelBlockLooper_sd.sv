@@ -35,7 +35,6 @@ module ParallelBlockLooper_sd(
 	// Ex: gsize = 4, idx = 1
 	// Counter:            0123321001233210
 	// Systolic hold data? 0100001001000010 (counter == idx)
-	// (For now idx is constant)
 	o_i0_systolic_gsize,
 	o_i0_systolic_idx,
 	o_i1_systolic_gsize,
@@ -181,10 +180,12 @@ always_comb begin
 	s0_valid_condy1 = {s0_valid_condy, 1'b1} & {1'b1, ~s0_valid_condy};
 end
 
-// y258
-// ^147
-// |036
-// +->x
+// Flatten 2D to 1D
+// (i1)
+// y 258
+// ^ 147
+// | 036
+// +--->x (i0)
 always_comb begin
 	for (int i = 0; i < N_TAU_X; i++) begin
 		for (int j = 0; j < N_TAU_Y; j++) begin
