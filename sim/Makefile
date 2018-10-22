@@ -23,7 +23,7 @@ all_sub:
 	-make COVERAGE=$(COV) awl
 	-make COVERAGE=$(COV) wc
 	-make COVERAGE=$(COV) alloc
-	-make COVERAGE=$(COV) rmc
+	#-make COVERAGE=$(COV) rmc
 	-make COVERAGE=$(COV) chal
 
 wc:

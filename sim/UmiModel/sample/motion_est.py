@@ -38,13 +38,13 @@ um_i1 = npd.empty(1, UmiModel.UMCFG_DTYPE)
 um_o = npd.empty(1, UmiModel.UMCFG_DTYPE)
 
 p['total'] = [1,1,4,4,8,8] ## 4x4 block & 8x8 search range
-p['local'] = [1,1,1,1,8,8]
+p['local'] = [1,1,1,2,4,8]
 p['vsize'] = [1,1,1,1,4,8]
-p['vshuf'] = [1,1,1,1,2,1]
+p['vshuf'] = [1,1,1,1,1,1]
 p['syst0_skip'] = 0
 p['syst0_axis'] = -1
 p['syst1_skip'] = 0b1
-p['syst1_axis'] = 5
+p['syst1_axis'] = 4
 a['total'] = [1,1,1,1,8,8]
 a['local'] = [1,1,1,1,8,8]
 um_i0['mwrap'].fill(UmiModel.MEM_WRAP)
@@ -52,15 +52,15 @@ um_i0['mlinear'] = [0]
 um_i0['ustart'] = [[0,0,0,0,0,0,0,0,4,4,-4,-4],]
 um_i0['ustride'] = [[0,0,0,0,1,1,0,0,8,8,1,1],]
 um_i0['udim'] = [[0,0,0,0,2,3,0,0,2,3,2,3],]
-um_i0['lmwidth'] = [[1,1,15,15],]
-um_i0['lmalign'] = [[256,256,256,16],]
+um_i0['lmwidth'] = [[1,1,11,23],]
+um_i0['lmalign'] = [[288,288,288,24],]
 um_i0['mwidth'] = [[1,1,50,50],]
 um_i1['mlinear'] = [100000]
 um_i1['ustart'] = [[0,0,0,0,0,0,0,0,0,0,0,0],]
 um_i1['ustride'] = [[0,0,0,0,1,1,0,0,8,8,0,0],]
 um_i1['udim'] = [[0,0,0,0,2,3,0,0,2,3,0,0],]
-um_i1['lmwidth'] = [[1,1,8,8],]
-um_i1['lmalign'] = [[64,64,64,8],]
+um_i1['lmwidth'] = [[1,1,8,16],]
+um_i1['lmalign'] = [[128,128,128,16],]
 um_i1['mwidth'] = [[1,1,32,32],]
 um_o['mwrap'].fill(UmiModel.MEM_WRAP)
 um_o['mlinear'] = [300000]
