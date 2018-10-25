@@ -33,8 +33,8 @@ samples = [
 	"integral_image",
 	"gemm_medium",
 	"motion_est",
-	"gradient",
 	"meshgrid",
+	"gradient",
 	"downsample",
 ]
 for s in samples:
