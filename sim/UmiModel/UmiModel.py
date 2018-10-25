@@ -276,8 +276,8 @@ class UmiModel(object):
 			ShufAccum(self.pcfg['local']-1, umcfg['ustride'][:,VDIM:], umcfg['udim'][:,VDIM:])
 			ShufAccum(self.acfg['local']-1, umcfg['ustride'][:,:VDIM], umcfg['udim'][:,:VDIM])
 			# Align leftmost lmalign to VSIZE
-			# LG_VSIZE = UmiModel.LG_VSIZE
-			# umcfg['lmalign'][:,0] -= (((umcfg['lmalign'][:,0]-1)>>LG_VSIZE)<<LG_VSIZE)+1
+			LG_VSIZE = UmiModel.LG_VSIZE
+			umcfg['lmalign'][:,0] = (((umcfg['lmalign'][:,0]-1)>>LG_VSIZE)+1)<<LG_VSIZE
 			# Calaulate pad of local memory and validate lmalign
 			umcfg['lmsize'] = umcfg['lmalign'][:,0]
 			pad = npd.copy(umcfg['lmalign'])

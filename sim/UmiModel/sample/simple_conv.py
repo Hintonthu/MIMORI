@@ -56,7 +56,7 @@ um_i0['mlinear'] = [0]
 um_i0['ustart'] = [[0,0,0,0,-1,-1,0,0,0,0,0,0],]
 um_i0['ustride'] = [[0,0,0,0,1,1,0,0,0,0,1,1],]
 um_i0['udim'] = [[0,0,0,0,2,3,0,0,0,0,2,3],]
-um_i0['lmalign'] = [[192,192,192,10],]
+um_i0['lmalign'] = [[170,170,170,10],]
 um_i0['mwidth'] = [[1,1,100,301],]
 um_i0['pad_value'] = 0 if PAD is None else PAD
 
@@ -65,7 +65,7 @@ um_i1['mlinear'] = [100000]
 um_i1['ustart'] = [[0,0,0,0,0,0,0,0,0,0,0,0],]
 um_i1['ustride'] = [[0,0,0,0,1,1,0,0,0,0,0,0],]
 um_i1['udim'] = [[0,0,0,0,2,3,0,0,0,0,0,0],]
-um_i1['lmalign'] = [[32,32,32,2],]
+um_i1['lmalign'] = [[4,4,4,2],]
 um_i1['mwidth'] = [[1,1,3,3],]
 
 um_o['mwrap'].fill(UmiModel.MEM_WRAP)
