@@ -19,9 +19,6 @@
 from .. import UmiModel, npi, npd, newaxis, i16
 from ..UmiModel import MemorySpace
 
-n_i0 = ([0,0,0,0,0,0,0], [1,1,1,1,1,1,1])
-n_i1 = ([0,0,0,0,0,0,0], [1,1,1,1,1,1,1])
-n_o = ([0,0,0,0,0,0,0], [0,0,0,0,0,0,1])
 n_inst = ([0,2,2,2,2,2,2], [3,3,3,3,3,3,5])
 insts = npd.array([
 	# OOOSSSSSRDDTWWWAAAAABBBBBCCCCC
@@ -52,14 +49,12 @@ um_i0['mlinear'] = [0]
 um_i0['ustart'] = [[0,0,0,0,0,0,0,0,4,4,-4,-4],]
 um_i0['ustride'] = [[0,0,0,0,1,1,0,0,8,8,1,1],]
 um_i0['udim'] = [[0,0,0,0,2,3,0,0,2,3,2,3],]
-um_i0['lmwidth'] = [[1,1,11,23],]
-um_i0['lmalign'] = [[288,288,288,24],]
+um_i0['lmalign'] = [[264,264,264,24],]
 um_i0['mwidth'] = [[1,1,50,50],]
 um_i1['mlinear'] = [100000]
 um_i1['ustart'] = [[0,0,0,0,0,0,0,0,0,0,0,0],]
 um_i1['ustride'] = [[0,0,0,0,1,1,0,0,8,8,0,0],]
 um_i1['udim'] = [[0,0,0,0,2,3,0,0,2,3,0,0],]
-um_i1['lmwidth'] = [[1,1,8,16],]
 um_i1['lmalign'] = [[128,128,128,16],]
 um_i1['mwidth'] = [[1,1,32,32],]
 um_o['mwrap'].fill(UmiModel.MEM_WRAP)
@@ -69,7 +64,7 @@ um_o['ustride'] = [[0,0,0,0,0,0,0,0,1,1,1,1],]
 um_o['udim'] = [[0,0,0,0,0,0,0,0,0,1,2,3],]
 um_o['mwidth'] = [[4,4,8,8],]
 
-cfg = UmiModel(p, a, um_i0, um_i1, um_o, insts, n_i0, n_i1, n_o, n_inst)
+cfg = UmiModel(p, a, um_i0, um_i1, um_o, insts, n_inst)
 def VerfFunc(CSIZE):
 	# init
 	prev_flat = npd.random.randint(0, 128, 50*50, i16)

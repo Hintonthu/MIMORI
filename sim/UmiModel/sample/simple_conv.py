@@ -20,9 +20,6 @@ from os import environ
 from .. import UmiModel, npi, npd, newaxis, i16
 from ..UmiModel import MemorySpace
 
-n_i0 = ([0,0,0,0,0,0,0], [1,1,1,1,1,1,1])
-n_i1 = ([0,0,0,0,0,0,0], [1,1,1,1,1,1,1])
-n_o = ([0,0,0,0,0,0,0], [0,0,0,0,0,0,1])
 n_inst = ([0,2,2,2,2,2,2], [3,3,3,3,3,3,4])
 insts = npd.array([
 	# OOOSSSSSRDDTWWWAAAAABBBBBCCCCC
@@ -59,8 +56,7 @@ um_i0['mlinear'] = [0]
 um_i0['ustart'] = [[0,0,0,0,-1,-1,0,0,0,0,0,0],]
 um_i0['ustride'] = [[0,0,0,0,1,1,0,0,0,0,1,1],]
 um_i0['udim'] = [[0,0,0,0,2,3,0,0,0,0,2,3],]
-um_i0['lmwidth'] = [[1,1,17,9],]
-um_i0['lmalign'] = [[192,192,192,10],]
+um_i0['lmalign'] = [[170,170,170,10],]
 um_i0['mwidth'] = [[1,1,100,301],]
 um_i0['pad_value'] = 0 if PAD is None else PAD
 
@@ -69,8 +65,7 @@ um_i1['mlinear'] = [100000]
 um_i1['ustart'] = [[0,0,0,0,0,0,0,0,0,0,0,0],]
 um_i1['ustride'] = [[0,0,0,0,1,1,0,0,0,0,0,0],]
 um_i1['udim'] = [[0,0,0,0,2,3,0,0,0,0,0,0],]
-um_i1['lmwidth'] = [[1,1,2,2],]
-um_i1['lmalign'] = [[32,32,32,2],]
+um_i1['lmalign'] = [[4,4,4,2],]
 um_i1['mwidth'] = [[1,1,3,3],]
 
 um_o['mwrap'].fill(UmiModel.MEM_WRAP)
@@ -80,7 +75,7 @@ um_o['ustride'] = [[0,0,0,0,0,0,0,0,0,0,1,1],]
 um_o['udim'] = [[0,0,0,0,0,0,0,0,0,0,2,3],]
 um_o['mwidth'] = [[1,1,1000,1000],]
 
-cfg = UmiModel(p, a, um_i0, um_i1, um_o, insts, n_i0, n_i1, n_o, n_inst)
+cfg = UmiModel(p, a, um_i0, um_i1, um_o, insts, n_inst)
 def VerfFunc(CSIZE):
 	# init
 	img = npd.random.randint(10, size=30100, dtype=i16)

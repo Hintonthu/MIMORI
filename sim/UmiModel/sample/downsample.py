@@ -19,9 +19,6 @@
 from .. import UmiModel, npi, npd, newaxis, i16
 from ..UmiModel import MemorySpace
 
-n_i0 = ([0,0,0,0,0,0,0], [1,1,1,1,1,1,1])
-n_i1 = ([0,0,0,0,0,0,0], [0,0,0,0,0,0,0])
-n_o = ([0,0,0,0,0,0,0], [0,0,0,0,0,0,1])
 n_inst = ([0,0,0,0,0,0,0], [1,1,1,1,1,1,1])
 insts = npd.array([
 	# OOOSSSSSRDDTWWWAAAAABBBBBCCCCC
@@ -50,8 +47,7 @@ um_i0['mlinear'] = [10000]
 um_i0['ustart'] = [[0,0,0,0,0,0,0,0,0,0,0,0],]
 um_i0['ustride'] = [[0,0,0,0,0,0,0,0,0,0,1,4],]
 um_i0['udim'] = [[0,0,0,0,0,0,0,0,0,0,1,3],]
-um_i0['lmwidth'] = [[1,4,1,125],]
-um_i0['lmalign'] = [[512,512,125,125],]
+um_i0['lmalign'] = [[500,500,125,125],]
 um_i0['mwidth'] = [[1,H_ds4,4,W_ds],]
 um_o['mwrap'].fill(UmiModel.MEM_WRAP)
 um_o['mlinear'] = [300000]
@@ -60,7 +56,7 @@ um_o['ustride'] = [[0,0,0,0,0,0,0,0,0,0,1,1],]
 um_o['udim'] = [[0,0,0,0,0,0,0,0,0,0,2,3],]
 um_o['mwidth'] = [[1,1,H_ds4,W_ds4],]
 
-cfg = UmiModel(p, a, um_i0, um_i1, um_o, insts, n_i0, n_i1, n_o, n_inst)
+cfg = UmiModel(p, a, um_i0, um_i1, um_o, insts, n_inst)
 def VerfFunc(CSIZE):
 	# init
 	hi_flat = npd.random.randint(10, size=10000, dtype=i16)
