@@ -259,7 +259,7 @@ class UmiModel(object):
 	@staticmethod
 	def _InitUmcfg(umcfg, n, v_nd, is_local, xor_fallback):
 		# layout of umcfg
-		#   aaaapppp
+		#   aaaaaapppppp
 		n_total = n[1][-1]
 		assert n_total == umcfg.shape[0]
 		# Calaulate memory shape cumsum (multiplier, boundary)
@@ -338,19 +338,57 @@ class UmiModel(object):
 		mofs[:,:-1] *= mbound[:,1:]
 		return mofs
 
-	def __init__(self, pcfg, acfg, umcfg_i0, umcfg_i1, umcfg_o, insts, n_i0, n_i1, n_o, n_inst, xor_fallback=False):
+	@staticmethod
+	def _ExtractRange(n_inst, cond):
+		cum = npd.cumsum(cond, dtype=i16)
+		cum = npd.insert(cum, 0, 0)
+		return (
+			cum[n_inst[0]],
+			cum[n_inst[1]],
+		)
+
+	@staticmethod
+	def _InitRange(n_inst, insts, stencil):
+		n_inst = (
+			npi.array(n_inst[0], dtype=i16),
+			npi.array(n_inst[1], dtype=i16),
+		)
+		# I0
+		cond = npd.logical_or.reduce((
+			((insts    )&0x1f) == 0x10,
+			((insts>>5 )&0x1f) == 0x10,
+			((insts>>10)&0x1f) == 0x10,
+		))
+		n_i0 = UmiModel._ExtractRange(n_inst, cond)
+		# I1
+		cond = npd.logical_or.reduce((
+			((insts    )&0x1f) == 0x11,
+			((insts>>5 )&0x1f) == 0x11,
+			((insts>>10)&0x1f) == 0x11,
+		))
+		n_i1 = UmiModel._ExtractRange(n_inst, cond)
+		# O
+		cond = ((insts>>19)&0x3) != 0x3
+		n_o = UmiModel._ExtractRange(n_inst, cond)
+		# TODO: Very ugly hard-coding workaround
+		if stencil[0]:
+			npd.copyto(n_i0[0], 0)
+			npd.copyto(n_i0[1], 1)
+		if stencil[1]:
+			npd.copyto(n_i1[0], 0)
+			npd.copyto(n_i1[1], 1)
+		return n_i0, n_i1, n_o, n_inst
+
+	def __init__(self, pcfg, acfg, umcfg_i0, umcfg_i1, umcfg_o, insts, n_inst, stencil=(False,False), xor_fallback=False):
 		# convert to internal format
+		self.n_i0, self.n_i1, self.n_o, self.n_inst = UmiModel._InitRange(n_inst, insts, stencil)
 		# v_nd_shuf, v_nd = head of warp, warp sub idx
 		self.pcfg, self.acfg, self.warp_nd, self.v_nd = UmiModel._InitApcfg(pcfg, acfg)
 		self.sram_cur = [0, 0]
-		self.n_i0 = self._CvtRange(n_i0)
-		self.n_i1 = self._CvtRange(n_i1)
 		v_ndT = self.v_nd.T
-		self.umcfg_i0 = self._InitUmcfg(umcfg_i0, n_i0, v_ndT, is_local=True, xor_fallback=xor_fallback)
-		self.umcfg_i1 = self._InitUmcfg(umcfg_i1, n_i1, v_ndT, is_local=True, xor_fallback=xor_fallback)
-		self.n_o = self._CvtRange(n_o)
-		self.umcfg_o = self._InitUmcfg(umcfg_o, n_o, v_ndT, is_local=False, xor_fallback=True) # True is not used
-		self.n_inst = self._CvtRange(n_inst)
+		self.umcfg_i0 = self._InitUmcfg(umcfg_i0, self.n_i0, v_ndT, is_local=True, xor_fallback=xor_fallback)
+		self.umcfg_i1 = self._InitUmcfg(umcfg_i1, self.n_i1, v_ndT, is_local=True, xor_fallback=xor_fallback)
+		self.umcfg_o = self._InitUmcfg(umcfg_o, self.n_o, v_ndT, is_local=False, xor_fallback=True) # True is not used
 		self.insts = insts
 		self.n_reg = 1
 		self.luts = dict.fromkeys(UmiModel.limits.keys(), (0, npi.empty((1,))))

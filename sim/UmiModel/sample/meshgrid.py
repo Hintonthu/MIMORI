@@ -19,9 +19,6 @@
 from .. import UmiModel, npi, npd, newaxis, i16
 from ..UmiModel import MemorySpace
 
-n_i0 = ([0,0,0,0,0,0,0], [0,0,0,0,0,0,0])
-n_i1 = ([0,0,0,0,0,0,0], [0,0,0,0,0,0,0])
-n_o = ([0,0,0,0,0,0,0], [0,0,0,0,0,0,1])
 n_inst = ([0,0,0,0,0,0,0], [3,3,3,3,3,3,3])
 insts = npd.array([
 	# OOOSSSSSRDDTWWWAAAAABBBBBCCCCC
@@ -51,7 +48,7 @@ um_o['ustride'] = [[0,0,0,0,0,0,0,0,0,0,1,1],]
 um_o['udim'] = [[0,0,0,0,0,0,0,0,0,0,2,3],]
 um_o['mwidth'] = [[1,1,60,30],]
 
-cfg = UmiModel(p, a, um_i0, um_i1, um_o, insts, n_i0, n_i1, n_o, n_inst)
+cfg = UmiModel(p, a, um_i0, um_i1, um_o, insts, n_inst)
 cfg.add_lut("const", [100])
 def VerfFunc(CSIZE):
 	# init
