@@ -47,7 +47,6 @@ um_i0['mlinear'] = [10000]
 um_i0['ustart'] = [[0,0,0,0,0,0,0,0,0,0,0,0],]
 um_i0['ustride'] = [[0,0,0,0,0,0,0,0,0,0,1,4],]
 um_i0['udim'] = [[0,0,0,0,0,0,0,0,0,0,1,3],]
-um_i0['lmwidth'] = [[1,4,1,125],]
 um_i0['lmalign'] = [[512,512,125,125],]
 um_i0['mwidth'] = [[1,H_ds4,4,W_ds],]
 um_o['mwrap'].fill(UmiModel.MEM_WRAP)

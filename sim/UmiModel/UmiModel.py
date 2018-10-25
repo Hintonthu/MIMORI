@@ -256,8 +256,8 @@ class UmiModel(object):
 		n_ref = ref_ofs.shape[0]
 		return n_ref, ref_ofs
 
-	@staticmethod
-	def _InitUmcfg(umcfg, n, v_nd, is_local, xor_fallback):
+	def _InitUmcfg(self, umcfg, n, is_local, xor_fallback):
+		v_nd = self.v_nd.T
 		# layout of umcfg
 		#   aaaaaapppppp
 		n_total = n[1][-1]
@@ -265,11 +265,25 @@ class UmiModel(object):
 		# Calaulate memory shape cumsum (multiplier, boundary)
 		umcfg['mboundary'] = UmiModel._CalMemBound(umcfg['mwidth'])
 		if is_local:
+			VDIM = UmiModel.VDIM
+			# Compute lmwidth
+			npd.copyto(umcfg['lmwidth'], 1)
+			idx = npi.arange(n_total)
+			def ShufAccum(ofs, st, sh):
+				str_ofs = ofs * st
+				for i in range(VDIM):
+					umcfg['lmwidth'][idx,sh[:,i]] += str_ofs[:,i]
+			ShufAccum(self.pcfg['local']-1, umcfg['ustride'][:,VDIM:], umcfg['udim'][:,VDIM:])
+			ShufAccum(self.acfg['local']-1, umcfg['ustride'][:,:VDIM], umcfg['udim'][:,:VDIM])
+			# Align leftmost lmalign to VSIZE
+			# LG_VSIZE = UmiModel.LG_VSIZE
+			# umcfg['lmalign'][:,0] -= (((umcfg['lmalign'][:,0]-1)>>LG_VSIZE)<<LG_VSIZE)+1
+			# Calaulate pad of local memory and validate lmalign
 			umcfg['lmsize'] = umcfg['lmalign'][:,0]
-			# Calaulate pad of local memory
 			pad = npd.copy(umcfg['lmalign'])
 			pad[:,:-1] -= umcfg['lmwidth'][:,:-1] * umcfg['lmalign'][:,1:]
 			pad[:,-1] -= umcfg['lmwidth'][:,-1]
+			assert npd.all(pad >= 0), "lmalign {} is not compatible with local memory size {}".format(umcfg['lmalign'], umcfg['lmwidth'])
 			umcfg['lmpad'] = npd.fliplr(npi.cumsum(npd.fliplr(pad), axis=1))
 			umcfg['mboundary_lmwidth'] = umcfg['lmwidth']
 			umcfg['mboundary_lmwidth'][:,:-1] *= umcfg['mboundary'][:,1:]
@@ -385,10 +399,9 @@ class UmiModel(object):
 		# v_nd_shuf, v_nd = head of warp, warp sub idx
 		self.pcfg, self.acfg, self.warp_nd, self.v_nd = UmiModel._InitApcfg(pcfg, acfg)
 		self.sram_cur = [0, 0]
-		v_ndT = self.v_nd.T
-		self.umcfg_i0 = self._InitUmcfg(umcfg_i0, self.n_i0, v_ndT, is_local=True, xor_fallback=xor_fallback)
-		self.umcfg_i1 = self._InitUmcfg(umcfg_i1, self.n_i1, v_ndT, is_local=True, xor_fallback=xor_fallback)
-		self.umcfg_o = self._InitUmcfg(umcfg_o, self.n_o, v_ndT, is_local=False, xor_fallback=True) # True is not used
+		self.umcfg_i0 = self._InitUmcfg(umcfg_i0, self.n_i0, is_local=True, xor_fallback=xor_fallback)
+		self.umcfg_i1 = self._InitUmcfg(umcfg_i1, self.n_i1, is_local=True, xor_fallback=xor_fallback)
+		self.umcfg_o = self._InitUmcfg(umcfg_o, self.n_o, is_local=False, xor_fallback=True) # True is not used
 		self.insts = insts
 		self.n_reg = 1
 		self.luts = dict.fromkeys(UmiModel.limits.keys(), (0, npi.empty((1,))))
