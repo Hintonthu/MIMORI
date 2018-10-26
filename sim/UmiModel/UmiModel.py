@@ -393,7 +393,10 @@ class UmiModel(object):
 			npd.copyto(n_i1[1], 1)
 		return n_i0, n_i1, n_o, n_inst
 
-	def __init__(self, pcfg, acfg, umcfg_i0, umcfg_i1, umcfg_o, insts, n_inst, stencil=(False,False), xor_fallback=False):
+	def __init__(self, pcfg, acfg, umcfg_i0, umcfg_i1, umcfg_o, insts, n_inst, **kwargs):
+		stencil = kwargs.get('stencil', (False,False))
+		xor_fallback = kwargs.get('xor_fallback', False)
+		one_warp = kwargs.get('one_warp', False)
 		# convert to internal format
 		self.n_i0, self.n_i1, self.n_o, self.n_inst = UmiModel._InitRange(n_inst, insts, stencil)
 		# v_nd_shuf, v_nd = head of warp, warp sub idx
@@ -405,6 +408,9 @@ class UmiModel(object):
 		self.insts = insts
 		self.n_reg = 1
 		self.luts = dict.fromkeys(UmiModel.limits.keys(), (0, npi.empty((1,))))
+		assert npd.prod(self.pcfg['local']) != UmiModel.VSIZE or one_warp, (
+			"One warp configuration is error-prone and thus disabled; use one_warp=True to enable."
+		)
 
 	def add_lut(self, name, a):
 		limit = UmiModel.limits[name]

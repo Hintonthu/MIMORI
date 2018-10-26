@@ -36,6 +36,7 @@ samples = [
 	"meshgrid",
 	"gradient",
 	"downsample",
+	"dw_conv",
 ]
 for s in samples:
 	ImportFunction(s)

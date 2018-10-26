@@ -55,7 +55,7 @@ um_o['ustride'] = [[0,0,0,0,0,1,0,0,0,0,0,1],]
 um_o['udim'] = [[0,0,0,0,0,2,0,0,0,0,0,3],]
 um_o['mwidth'] = [[1,1,100,100],]
 
-cfg = UmiModel(p, a, um_i0, um_i1, um_o, insts, n_inst)
+cfg = UmiModel(p, a, um_i0, um_i1, um_o, insts, n_inst, one_warp=True)
 def VerfFunc(CSIZE):
 	# init
 	# img = npd.random.randint(10, size=10000, dtype=i16)
