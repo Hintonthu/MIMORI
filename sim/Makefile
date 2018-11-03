@@ -60,9 +60,9 @@ awl:
 	make COVERAGE=$(COV) AccumWarpLooper
 
 fifo:
-	make ARGS="+define+IMPL=0" COVERAGE=$(COV) SFifo
-	make ARGS="+define+IMPL=1" COVERAGE=$(COV) SFifo
-	make ARGS="+define+IMPL=2" COVERAGE=$(COV) SFifo
+	-make ARGS="+define+IMPL=0" COVERAGE=$(COV) SFifo
+	-make ARGS="+define+IMPL=1" COVERAGE=$(COV) SFifo
+	-make ARGS="+define+IMPL=2" COVERAGE=$(COV) SFifo
 
 dump_scoreboard:
 	@echo -e \
