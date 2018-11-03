@@ -28,8 +28,8 @@ def main():
 	test = scb.GetTest("test")
 	st = Stacker(N, callbacks=[test.Get])
 	bg = BusGetter(callbacks=[st.Get])
-	master = TwoWire.Master(srdy, sack, idata, ck_ev, A=5, B=8)
-	slave = TwoWire.Slave(drdy, dack, odata, ck_ev, callbacks=[bg.Get], A=4, B=8)
+	master = TwoWire.Master(srdy, sack, idata, ck_ev, A=3, B=8)
+	slave = TwoWire.Slave(drdy, dack, odata, ck_ev, callbacks=[bg.Get], A=1, B=2)
 	yield rst_out_ev
 	yield ck_ev
 	i_data = idata.value

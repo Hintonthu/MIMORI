@@ -39,8 +39,11 @@ initial begin
 	$finish;
 end
 
+`ifndef IMPL
+`define IMPL 0
+`endif
 assign dst_ack = dst_rdy && dst_canack;
-SFifo#(.IMPL(1), .NDATA(16), .BW(16)) dut(
+SFifo#(.IMPL(`IMPL), .NDATA(16), .BW(16)) dut(
 	`clk_connect,
 	`rdyack_connect(dst, dst)
 );
