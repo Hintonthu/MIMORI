@@ -110,6 +110,7 @@ logic [ICFG_BW-1:0] cnt_id_w;
 logic [ICFG_BW-1:0] cnt_id_1;
 logic [HBW:0]       cnt_size;
 logic [HBW-1:0] cur_r;
+logic [HBW-1:0] cur_1;
 logic [HBW-1:0] cur_w;
 
 `ifdef SD
@@ -138,6 +139,13 @@ always_comb begin
 	cnt_done = cnt_id_1 == i_end_id;
 end
 
+typedef logic [HBW-2:0] HBW1_T;
+always_comb begin
+	cur_1 = cur_r + cnt_size[HBW-1:0];
+	// align s.t. the lowest HBW-1 bits are zero
+	cur_w = cnt_done ? {(cur_1[HBW-1] ^ (|cur_1[HBW-2:0])), HBW1_T'(0)} : cur_1;
+end
+
 `ff_rst
 	cnt_id_r <= '0;
 `ff_cg(cnt_cg)
@@ -147,7 +155,7 @@ end
 `ff_rst
 	cur_r <= '0;
 `ff_cg(cnt_ack)
-	cur_r <= cur_r + cnt_size[HBW-1:0];
+	cur_r <= cur_w;
 `ff_end
 
 //======================================
@@ -160,7 +168,9 @@ logic linear_full;
 logic linear_empty;
 logic has_space;
 logic can_alloc;
-logic [HBW:0] capacity_r; // defined later
+logic [HBW:0] capacity_r; // global context which is defined later
+logic [HBW:0] capacity_add;
+logic [HBW:0] capacity_add_align;
 logic [HBW:0] capacity_w;
 always_comb begin
 	has_space = capacity_r >= cnt_size;
@@ -235,6 +245,12 @@ PauseIf#(0) u_pause_output_until_filled(
 logic [HBW:0] fsize;
 logic [HBW:0] valid_num_r;
 logic [HBW:0] valid_num_w;
+// Flags indicating whether this chunk is allocated with alignment
+// We use a fifo without flow control, this works fine for double buffer
+logic [2*N_ICFG-2:0] free_align_load_nxt;
+logic [2*N_ICFG-1:0] free_align_load_new;
+logic                free_align_in;
+logic                free_align_out;
 `ifdef SD
 assign fsize = i_false_free ? '0 : i_sizes[i_free_id];
 `else
@@ -250,13 +266,50 @@ always_comb begin
 		valid_num_r >= o_linear_size;
 end
 
+SFifoCtrl#(N_ICFG*2) u_sfifo_ctrl_align_flag(
+	`clk_connect,
+	// NOTE:/ this fifo can always receive data,
+	// and the data is got only when there are something in it.
+	.src_rdy(cnt_ack),
+	.src_ack(),
+	.dst_rdy(),
+	.dst_ack(free_dval),
+	.o_load_nxt(free_align_load_nxt),
+	.o_load_new(free_align_load_new)
+);
+SFifoReg0D#(.NDATA(N_ICFG*2)) u_sfifo_align_flag(
+	`clk_connect,
+	.i_load_nxt(free_align_load_nxt),
+	.i_load_new(free_align_load_new),
+	.i_data(free_align_in),
+	.o_data(free_align_out)
+);
+
 // Capacity
 always_comb begin
+	capacity_add = capacity_r + fsize;
+	// align s.t. the lowest HBW-1 bits are zero
+	if (free_align_out) begin
+		capacity_add_align = {
+			(capacity_add[HBW:HBW-1] + {1'b0, (|capacity_add[HBW-2:0])}),
+			HBW1_T'(0)
+		};
+	end else begin
+		capacity_add_align = capacity_add;
+	end
 	case({cnt_ack,free_dval})
-		2'b00: capacity_w = capacity_r;
-		2'b01: capacity_w = capacity_r            + fsize;
-		2'b10: capacity_w = capacity_r - cnt_size;
-		2'b11: capacity_w = capacity_r - cnt_size + fsize;
+		2'b00: begin
+			capacity_w = capacity_r;
+		end
+		2'b01: begin
+			capacity_w = capacity_add_align;
+		end
+		2'b10: begin
+			capacity_w = capacity_r - cnt_size;
+		end
+		2'b11: begin
+			capacity_w = capacity_add_align - cnt_size;
+		end
 	endcase
 end
 

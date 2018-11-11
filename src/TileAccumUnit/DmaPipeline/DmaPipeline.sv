@@ -225,6 +225,7 @@ end
 logic               ch_which;
 logic [WBW-1:0]     ch_mofs [DIM];
 logic [ICFG_BW-1:0] ch_mid;
+logic               ch_islast_mid;
 ChunkHead u_chunk_head(
 	`clk_connect,
 	`rdyack_connect(i_abofs, bofs),
@@ -251,7 +252,8 @@ ChunkHead u_chunk_head(
 `endif
 	.o_which(ch_which),
 	.o_mofs(ch_mofs),
-	.o_id(ch_mid)
+	.o_id(ch_mid),
+	.o_islast_id(ch_islast_mid)
 `ifdef SD
 	,
 	.o_skip(ch_skip)
@@ -371,12 +373,15 @@ logic [ICFG_BW-1:0] ch_addr_mid;
 
 logic               ch_alloc_which;
 logic [ICFG_BW-1:0] ch_alloc_mid;
+logic               ch_alloc_islast_mid;
 `ff_rst
-	ch_alloc_which <= '0;
+	ch_alloc_which <= 1'b0;
 	ch_alloc_mid <= '0;
+	ch_alloc_islast_mid <= 1'b0;
 `ff_cg(ch_alloc0_ack)
 	ch_alloc_which <= ch_which;
 	ch_alloc_mid <= ch_mid;
+	ch_alloc_islast_mid <= ch_islast_mid;
 `ff_end
 
 //======================================================
@@ -511,6 +516,7 @@ SramWriteCollector u_swc(
 	`clk_connect,
 	`rdyack_connect(alloc, ch_alloc1),
 	.i_id(ch_alloc_mid),
+	.i_islast_id(ch_alloc_islast_mid),
 	.i_size(ch_alloc_size),
 	.i_padv(ch_alloc_pad_value),
 	`rdyack_connect(cmd, cal_swc),

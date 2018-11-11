@@ -31,6 +31,7 @@ def main():
 	N_CFG = sizes.shape[0]
 	LBW = 11
 	LMASK = (1<<LBW)-1
+	HALF = 1<<(LBW-1)
 	# bus
 	(
 		alloc_rdy, alloc_ack,
@@ -61,12 +62,22 @@ def main():
 	))
 	size_bus.value = sizes_hi
 	size_bus.Write()
+	# compute answer
 	ids0 = npd.random.randint(N_CFG+1, size=N_TEST)
 	ids1 = npd.random.randint(N_CFG+1, size=N_TEST)
-	rg = npd.vstack((npd.fmin(ids0, ids1), npd.fmax(ids0, ids1))).T
-	rg = rg[ids0 != ids1]
-	flat_ids = UmiModel._FlatRangeNorep(rg)
-	N_ANS = flat_ids.size
+	rgs = npd.vstack((npd.fmin(ids0, ids1), npd.fmax(ids0, ids1))).T
+	rgs = rgs[ids0 != ids1]
+	flat_ids = UmiModel._FlatRangeNorep(rgs)
+	linears, base_addr = list(), 0
+	for rg in rgs:
+		linear = npi.cumsum(sizes[range(rg[0], rg[1])])
+		linear = npd.roll(linear, 1)
+		linear[0] = 0
+		linear = (linear + base_addr) & LMASK
+		linears.append(linear)
+		base_addr = HALF if base_addr == 0 else 0
+	linears = npd.concatenate(linears)
+	N_ANS = linears.size
 	# init
 	sem = Semaphore(0)
 	space = (1<<LBW) // VSIZE
@@ -75,10 +86,6 @@ def main():
 	alc_ptr = 0
 	ado_ptr = 0
 	free_ptr = 0
-	# init
-	linears = npi.cumsum(sizes[flat_ids]) & LMASK
-	linears = npd.roll(linears, 1)
-	linears[0] = 0
 	# testbench
 	scb = Scoreboard("Allocator")
 	test = scb.GetTest("test")
@@ -149,7 +156,7 @@ def main():
 			data_bus.i_beg_id[0] = ID[0]
 			data_bus.i_end_id[0] = ID[1]
 			yield data_bus
-	yield from a_master.SendIter(TheIter(rg))
+	yield from a_master.SendIter(TheIter(rgs))
 	yield from sem.Acquire(N_ANS)
 
 	for i in range(5):
