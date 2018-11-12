@@ -45,10 +45,12 @@ package TauCfg;
 `endif
 	parameter SYSTOLIC_FIFO_DEPTH = 4;
 	// derived
+	localparam CW_BW = $clog2(WORK_BW);
 	localparam XOR_BW = 4; // Enough for indexing 16 bits (3 or 4 are suitable in most cases)
 	localparam ICFG_BW = $clog2(N_ICFG+1);
 	localparam OCFG_BW = $clog2(N_OCFG+1);
 	localparam INST_BW = $clog2(N_INST+1);
+	localparam VDIM_BW = $clog2(VDIM);
 	localparam DIM_BW = $clog2(DIM);
 	localparam CV_BW = $clog2(VSIZE);
 	localparam CCV_BW = $clog2(CV_BW+1);

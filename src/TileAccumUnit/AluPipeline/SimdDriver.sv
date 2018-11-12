@@ -1,4 +1,4 @@
-// Copyright 2016 Yu Sheng Lin
+// Copyright 2016,2018 Yu Sheng Lin
 
 // This file is part of MIMORI.
 
@@ -26,6 +26,8 @@ module SimdDriver(
 	`clk_port,
 	`rdyack_port(abofs),
 	i_bofs,
+	i_dual_axis,
+	i_dual_order,
 	i_aofs_beg,
 	i_aofs_end,
 	i_bgrid_step,
@@ -51,7 +53,9 @@ module SimdDriver(
 //======================================
 localparam N_INST = TauCfg::N_INST;
 localparam WBW = TauCfg::WORK_BW;
+localparam CW_BW = TauCfg::CW_BW;
 localparam VDIM = TauCfg::VDIM;
+localparam VDIM_BW = TauCfg::VDIM_BW;
 localparam VSIZE = TauCfg::VSIZE;
 localparam N_PENDING = TauCfg::MAX_PENDING_INST;
 localparam MAX_WARP = TauCfg::MAX_WARP;
@@ -67,6 +71,8 @@ localparam WID_BW = $clog2(MAX_WARP);
 `clk_input;
 `rdyack_input(abofs);
 input [WBW-1:0]     i_bofs          [VDIM];
+input [VDIM_BW-1:0] i_dual_axis;
+input [CW_BW-1:0]   i_dual_order;
 input [WBW-1:0]     i_aofs_beg      [VDIM];
 input [WBW-1:0]     i_aofs_end      [VDIM];
 input [WBW-1:0]     i_bgrid_step    [VDIM];
@@ -172,6 +178,8 @@ AccumWarpLooperIndexStage#(.N_CFG(N_INST)) u_s1_idx(
 	`clk_connect,
 	`rdyack_connect(src, s1_src),
 	.i_bofs(i_bofs),
+	.i_dual_axis(i_dual_axis),
+	.i_dual_order(i_dual_order),
 	.i_aofs(s01_aofs),
 	.i_alofs(),
 	.i_islast(s01_islast),

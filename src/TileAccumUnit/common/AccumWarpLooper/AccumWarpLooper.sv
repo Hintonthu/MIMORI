@@ -31,6 +31,8 @@ module AccumWarpLooper(
 	`clk_port,
 	`rdyack_port(abofs),
 	i_bofs,
+	i_dual_axis,
+	i_dual_order,
 	i_abeg,
 	i_aend,
 `ifdef SD
@@ -87,7 +89,9 @@ parameter STENCIL = 0;
 // This is also used for systolic (WritePipeline do not use systolic information).
 parameter USE_LOFS = 0;
 localparam WBW = TauCfg::WORK_BW;
+localparam CW_BW = TauCfg::CW_BW;
 localparam VDIM = TauCfg::VDIM;
+localparam VDIM_BW = TauCfg::VDIM_BW;
 localparam DIM = TauCfg::DIM;
 localparam DIM_BW = TauCfg::DIM_BW;
 localparam VSIZE = TauCfg::VSIZE;
@@ -106,6 +110,8 @@ localparam ST_BW = $clog2(STSIZE+1);
 `clk_input;
 `rdyack_input(abofs);
 input [WBW-1:0]     i_bofs [VDIM];
+input [VDIM_BW-1:0] i_dual_axis;
+input [CW_BW-1:0]   i_dual_order;
 input [WBW-1:0]     i_abeg [VDIM];
 input [WBW-1:0]     i_aend [VDIM];
 `ifdef SD
@@ -282,6 +288,8 @@ AccumWarpLooperIndexStage#(.N_CFG(N_CFG)) u_s1_idx(
 	`clk_connect,
 	`rdyack_connect(src, s1_src),
 	.i_bofs(i_bofs),
+	.i_dual_axis(i_dual_axis),
+	.i_dual_order(i_dual_order),
 	.i_aofs(s01_aofs),
 	.i_alofs(s01_alofs),
 	.i_islast(s01_islast),

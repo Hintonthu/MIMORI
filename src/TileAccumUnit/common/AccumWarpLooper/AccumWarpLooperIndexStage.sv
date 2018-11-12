@@ -25,6 +25,8 @@ module AccumWarpLooperIndexStage(
 	`clk_port,
 	`rdyack_port(src),
 	i_bofs,
+	i_dual_axis,
+	i_dual_order,
 	i_aofs,
 	i_alofs,
 	i_islast,
@@ -50,7 +52,9 @@ module AccumWarpLooperIndexStage(
 //======================================
 parameter N_CFG = TauCfg::N_ICFG;
 localparam WBW = TauCfg::WORK_BW;
+localparam CW_BW = TauCfg::CW_BW;
 localparam VDIM = TauCfg::VDIM;
+localparam VDIM_BW = TauCfg::VDIM_BW;
 localparam VSIZE = TauCfg::VSIZE;
 localparam MAX_WARP = TauCfg::MAX_WARP;
 // derived
@@ -65,6 +69,8 @@ localparam WID_BW = $clog2(MAX_WARP);
 `clk_input;
 `rdyack_input(src);
 input [WBW-1:0]     i_bofs  [VDIM];
+input [VDIM_BW-1:0] i_dual_axis;
+input [CW_BW-1:0]   i_dual_order;
 input [WBW-1:0]     i_aofs  [VDIM];
 input [WBW-1:0]     i_alofs [VDIM];
 input               i_islast;
@@ -95,19 +101,24 @@ logic               s0_repeat;
 logic               s0_islast_aofs_r;
 logic               s0_islast_id;
 logic               s0_islast_bofs;
+logic               s0_islast_warp;
 logic               s0_islast_bofs_id;
 logic [NCFG_BW-1:0] s0_id_beg_r;
 logic [NCFG_BW-1:0] s0_id_end_r;
 logic [NCFG_BW-1:0] s0_id_ret_r;
 logic [WID_BW-1:0]  s0_warpid_w;
+logic               s0_warp_hi;
 logic [WBW-1:0]     s0_bofs_beg_r [VDIM];
 logic [WBW-1:0]     s0_bofs_end_r [VDIM];
+logic [WBW-1:0]     s0_bofs_bitor [VDIM];
 logic [WBW-1:0]     s0_bofs_r     [VDIM];
 logic [WBW-1:0]     s0_bofs_nxt   [VDIM];
 logic [WBW-1:0]     s0_blofs_r    [VDIM];
 logic [WBW-1:0]     s0_blofs_nxt  [VDIM];
 logic [CCV_BW-1:0]  s0_bsub_up_order [VDIM];
 logic [CCV_BW-1:0]  s0_bsub_lo_order [VDIM];
+logic [VDIM_BW-1:0] s0_dual_axis;
+logic [CW_BW-1:0]   s0_dual_order;
 logic [NCFG_BW-1:0] o_id1;
 logic [NCFG_BW-1:0] o_id_w;
 logic [WID_BW-1:0]  o_warpid_w;
@@ -119,14 +130,16 @@ logic [WID_BW-1:0]  o_warpid_w;
 always_comb begin
 	o_id1 = o_id + 'b1;
 	s0_islast_id = o_id1 == s0_id_end_r;
+	// last warp
+	s0_islast_warp = s0_warp_hi && s0_islast_bofs;
 	// last warp, inst
-	s0_islast_bofs_id = s0_islast_bofs && s0_islast_id;
+	s0_islast_bofs_id = s0_islast_warp && s0_islast_id;
 	// last aofs, warp, inst
 	o_islast = s0_islast_bofs_id && s0_islast_aofs_r;
 	// Used for free SRAM allocation
-	// We use s0_islast_bofs instead of o_islast
+	// We use s0_islast_warp instead of o_islast
 	// s.t. it can be released earlier
-	o_retire = s0_islast_bofs && o_id < s0_id_ret_r;
+	o_retire = s0_islast_warp && o_id < s0_id_ret_r;
 end
 
 always_comb begin
@@ -162,9 +175,11 @@ function [WBW-1:0] Vshuf;
 	Vshuf = (bofs&~lm) | ((bofs&lm)<<up_order);
 endfunction
 
+typedef logic [WBW-1:0] WORKDIM_T;
 always_comb for (int i = 0; i < VDIM; i++) begin
-	o_bofs[i] = Vshuf(s0_bofs_r[i], s0_bsub_up_order[i], s0_bsub_lo_order[i]);
-	o_blofs[i] = Vshuf(s0_blofs_r[i], s0_bsub_up_order[i], s0_bsub_lo_order[i]);
+	s0_bofs_bitor[i] = WORKDIM_T'(s0_dual_axis == i && s0_warp_hi) << s0_dual_order;
+	o_bofs[i] = Vshuf(s0_bofs_r[i], s0_bsub_up_order[i], s0_bsub_lo_order[i]) | s0_bofs_bitor[i];
+	o_blofs[i] = Vshuf(s0_blofs_r[i], s0_bsub_up_order[i], s0_bsub_lo_order[i]) | s0_bofs_bitor[i];
 end
 
 //======================================
@@ -219,6 +234,8 @@ NDAdder#(.BW(WBW), .DIM(VDIM), .FROM_ZERO(0), .UNIT_STRIDE(1)) u_adder(
 		s0_bsub_up_order[i] <= '0;
 		s0_bsub_lo_order[i] <= '0;
 	end
+	s0_dual_axis <= 'b0;
+	s0_dual_order <= 'b0;
 `ff_cg(src_ack)
 	s0_id_beg_r <= i_id_beg;
 	s0_id_end_r <= i_id_end;
@@ -232,12 +249,20 @@ NDAdder#(.BW(WBW), .DIM(VDIM), .FROM_ZERO(0), .UNIT_STRIDE(1)) u_adder(
 	end
 	s0_bsub_up_order <= i_bsub_up_order;
 	s0_bsub_lo_order <= i_bsub_lo_order;
+	s0_dual_axis <= i_dual_axis;
+	s0_dual_order <= i_dual_order;
+`ff_end
+
+`ff_rst
+	s0_warp_hi <= 1'b0;
+`ff_cg(dst_ack)
+	s0_warp_hi <= !s0_warp_hi;
 `ff_end
 
 `ff_rst
 	o_warpid <= '0;
 	o_id <= '0;
-`ff_cg(src_ack || dst_ack)
+`ff_cg(src_ack || dst_ack && s0_warp_hi)
 	o_warpid <= o_warpid_w;
 	o_id <= o_id_w;
 `ff_end
@@ -247,7 +272,7 @@ NDAdder#(.BW(WBW), .DIM(VDIM), .FROM_ZERO(0), .UNIT_STRIDE(1)) u_adder(
 		s0_bofs_r[i] <= '0;
 		s0_blofs_r[i] <= '0;
 	end
-`ff_cg(s0_init_dval || s0_repeat && s0_islast_id)
+`ff_cg(s0_init_dval || s0_repeat && s0_islast_id && s0_warp_hi)
 	s0_bofs_r <= s0_bofs_nxt;
 	s0_blofs_r <= s0_blofs_nxt;
 `ff_end
