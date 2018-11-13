@@ -40,6 +40,7 @@ p['total'] = [1,1,1,1,H_grad-2,W_grad-2]
 p['local'] = [1,1,1,1,16,32]
 p['vsize'] = [1,1,1,1,1,32]
 p['vshuf'] = [1,1,1,1,1,1]
+p['dual_axis'] = 4
 p['syst0_skip'] = 0
 p['syst0_axis'] = -1
 p['syst1_skip'] = 0

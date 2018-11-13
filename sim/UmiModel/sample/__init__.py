@@ -30,13 +30,13 @@ def ImportFunction(mod_name):
 
 samples = [
 	"simple_conv",
-#	"integral_image",
-#	"gemm_medium",
-#	"motion_est",
-#	"meshgrid",
-#	"gradient",
-#	"downsample",
-#	"dw_conv",
+	"integral_image",
+	"gemm_medium",
+	"motion_est",
+	"meshgrid",
+	"gradient",
+	"downsample",
+	"dw_conv",
 ]
 for s in samples:
 	ImportFunction(s)

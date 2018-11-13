@@ -35,6 +35,7 @@ p['total'] = [1,1,1,1,60,30]
 p['local'] = [1,1,1,1,8,16]
 p['vsize'] = [1,1,1,1,2,16]
 p['vshuf'] = [1,1,1,1,1,1]
+p['dual_axis'] = 4
 p['syst0_skip'] = 0
 p['syst0_axis'] = -1
 p['syst1_skip'] = 0
