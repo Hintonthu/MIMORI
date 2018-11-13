@@ -1,4 +1,4 @@
-// Copyright 2016 Yu Sheng Lin
+// Copyright 2016,2018 Yu Sheng Lin
 
 // This file is part of MIMORI.
 
@@ -26,6 +26,8 @@ module WritePipeline(
 	i_abeg,
 	i_aend,
 	i_bboundary,
+	i_dual_axis,
+	i_dual_order,
 	i_bsubofs,
 	i_bsub_up_order,
 	i_bsub_lo_order,
@@ -54,10 +56,12 @@ module WritePipeline(
 // Parameter
 //======================================
 localparam WBW = TauCfg::WORK_BW;
+localparam CW_BW = TauCfg::CW_BW;
 localparam GBW = TauCfg::GLOBAL_ADDR_BW;
 localparam DBW = TauCfg::DATA_BW;
 localparam DIM = TauCfg::DIM;
 localparam VDIM = TauCfg::VDIM;
+localparam VDIM_BW = TauCfg::VDIM_BW;
 localparam N_OCFG = TauCfg::N_OCFG;
 localparam VSIZE = TauCfg::VSIZE;
 localparam CSIZE = TauCfg::CACHE_SIZE;
@@ -78,6 +82,8 @@ input [WBW-1:0]     i_bofs [VDIM];
 input [WBW-1:0]     i_abeg [VDIM];
 input [WBW-1:0]     i_aend [VDIM];
 input [WBW-1:0]     i_bboundary      [VDIM];
+input [VDIM_BW-1:0] i_dual_axis;
+input [CW_BW-1:0]   i_dual_order;
 input [CV_BW-1:0]   i_bsubofs [VSIZE][VDIM];
 input [CCV_BW-1:0]  i_bsub_up_order  [VDIM];
 input [CCV_BW-1:0]  i_bsub_lo_order  [VDIM];
@@ -122,6 +128,8 @@ AccumWarpLooper#(.N_CFG(N_OCFG), .ABW(GBW), .STENCIL(0), .USE_LOFS(0)) u_awl(
 `endif
 	.i_linears(i_global_linears),
 	.i_bboundary(i_bboundary),
+	.i_dual_axis(i_dual_axis),
+	.i_dual_order(i_dual_order),
 	.i_bsubofs(i_bsubofs),
 	.i_bsub_up_order(i_bsub_up_order),
 	.i_bsub_lo_order(i_bsub_lo_order),

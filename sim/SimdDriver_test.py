@@ -49,10 +49,10 @@ def main():
 		# /2 since in hardware, we use two warps (2x, 2x+1) to form a large warp x
 		warpid_alu >>= 1
 		npd.copyto(data_bus.i_bofs         , bofs[0])
-		npd.copyto(data_bus.i_dual_axis    , cfg.pcfg['dual_axis'])
-		npd.copyto(data_bus.i_dual_order   , cfg.pcfg['dual_order'])
 		npd.copyto(data_bus.i_aofs_beg     , abeg_alu[i])
 		npd.copyto(data_bus.i_aofs_end     , aend_alu[i])
+		npd.copyto(data_bus.i_dual_axis    , cfg.pcfg['dual_axis'])
+		npd.copyto(data_bus.i_dual_order   , cfg.pcfg['dual_order'])
 		npd.copyto(data_bus.i_bgrid_step   , cfg.pcfg["local"][0])
 		npd.copyto(data_bus.i_bsub_up_order, cfg.pcfg["lg_vsize_2x"][0])
 		npd.copyto(data_bus.i_bsub_lo_order, cfg.pcfg["lg_vshuf"][0])
@@ -82,10 +82,10 @@ src_rdy, src_ack, inst_rdy, inst_ack, inst_commit_dval = CreateBuses([
 src_bus, inst_bus = CreateBuses([
 	(
 		("dut", "i_bofs", (VDIM,)),
-		(None , "i_dual_axis"),
-		(None , "i_dual_order"),
 		(None , "i_aofs_beg", (VDIM,)),
 		(None , "i_aofs_end", (VDIM,)),
+		(None , "i_dual_axis"),
+		(None , "i_dual_order"),
 		(None , "i_bgrid_step", (VDIM,)),
 		(None , "i_bsub_up_order", (VDIM,)),
 		(None , "i_bsub_lo_order", (VDIM,)),

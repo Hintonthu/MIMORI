@@ -25,8 +25,6 @@ module AccumWarpLooperIndexStage(
 	`clk_port,
 	`rdyack_port(src),
 	i_bofs,
-	i_dual_axis,
-	i_dual_order,
 	i_aofs,
 	i_alofs,
 	i_islast,
@@ -34,6 +32,8 @@ module AccumWarpLooperIndexStage(
 	i_id_end,
 	i_id_ret,
 	i_bgrid_step,
+	i_dual_axis,
+	i_dual_order,
 	i_bsub_up_order,
 	i_bsub_lo_order,
 	`rdyack_port(dst),
@@ -69,8 +69,6 @@ localparam WID_BW = $clog2(MAX_WARP);
 `clk_input;
 `rdyack_input(src);
 input [WBW-1:0]     i_bofs  [VDIM];
-input [VDIM_BW-1:0] i_dual_axis;
-input [CW_BW-1:0]   i_dual_order;
 input [WBW-1:0]     i_aofs  [VDIM];
 input [WBW-1:0]     i_alofs [VDIM];
 input               i_islast;
@@ -78,6 +76,8 @@ input [NCFG_BW-1:0] i_id_beg;
 input [NCFG_BW-1:0] i_id_end;
 input [NCFG_BW-1:0] i_id_ret;
 input [WBW-1:0]     i_bgrid_step    [VDIM];
+input [VDIM_BW-1:0] i_dual_axis;
+input [CW_BW-1:0]   i_dual_order;
 input [CCV_BW-1:0]  i_bsub_up_order [VDIM];
 input [CCV_BW-1:0]  i_bsub_lo_order [VDIM];
 `rdyack_output(dst);

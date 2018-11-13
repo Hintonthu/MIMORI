@@ -63,8 +63,10 @@ def main():
 		npd.copyto(i_data.i_bgrid_end, cfg.pcfg['end'][0])
 	npd.copyto(i_data.i_bgrid_step,    cfg.pcfg['local'][0])
 	npd.copyto(i_data.i_bboundary,     cfg.pcfg['total'][0])
+	npd.copyto(i_data.i_dual_axis,     cfg.pcfg['dual_axis'])
+	npd.copyto(i_data.i_dual_order,    cfg.pcfg['dual_order'])
 	npd.copyto(i_data.i_bsubofs,       cfg.v_nd >> cfg.pcfg['lg_vshuf'][0])
-	npd.copyto(i_data.i_bsub_up_order, cfg.pcfg['lg_vsize'][0])
+	npd.copyto(i_data.i_bsub_up_order, cfg.pcfg['lg_vsize_2x'][0])
 	npd.copyto(i_data.i_bsub_lo_order, cfg.pcfg['lg_vshuf'][0])
 	npd.copyto(i_data.i_agrid_step,    cfg.acfg['local'][0])
 	npd.copyto(i_data.i_agrid_end,     cfg.acfg['end'][0])
@@ -213,6 +215,8 @@ cfg_bus, cfg_rdy_bus, cfg_ack_bus, = CreateBuses([
 		("u_top", "i_bgrid_step"             , (VDIM,)),
 		(None   , "i_bgrid_end"              , (VDIM,)),
 		(None   , "i_bboundary"              , (VDIM,)),
+		(None   , "i_dual_axis"),
+		(None   , "i_dual_order"),
 		(None   , "i_bsubofs"                , (VSIZE,VDIM,)),
 		(None   , "i_bsub_up_order"          , (VDIM,)),
 		(None   , "i_bsub_lo_order"          , (VDIM,)),

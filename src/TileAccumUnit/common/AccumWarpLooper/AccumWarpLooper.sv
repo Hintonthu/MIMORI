@@ -31,8 +31,6 @@ module AccumWarpLooper(
 	`clk_port,
 	`rdyack_port(abofs),
 	i_bofs,
-	i_dual_axis,
-	i_dual_order,
 	i_abeg,
 	i_aend,
 `ifdef SD
@@ -40,6 +38,8 @@ module AccumWarpLooper(
 `endif
 	i_linears,
 	i_bboundary,
+	i_dual_axis,
+	i_dual_order,
 	i_bsubofs,
 	i_bsub_up_order,
 	i_bsub_lo_order,
@@ -110,8 +110,6 @@ localparam ST_BW = $clog2(STSIZE+1);
 `clk_input;
 `rdyack_input(abofs);
 input [WBW-1:0]     i_bofs [VDIM];
-input [VDIM_BW-1:0] i_dual_axis;
-input [CW_BW-1:0]   i_dual_order;
 input [WBW-1:0]     i_abeg [VDIM];
 input [WBW-1:0]     i_aend [VDIM];
 `ifdef SD
@@ -119,6 +117,8 @@ input [STO_BW-1:0]  i_syst_type;
 `endif
 input [ABW-1:0]     i_linears [N_CFG];
 input [WBW-1:0]     i_bboundary      [VDIM];
+input [VDIM_BW-1:0] i_dual_axis;
+input [CW_BW-1:0]   i_dual_order;
 input [CV_BW-1:0]   i_bsubofs [VSIZE][VDIM];
 input [CCV_BW-1:0]  i_bsub_up_order  [VDIM];
 input [CCV_BW-1:0]  i_bsub_lo_order  [VDIM];
@@ -288,8 +288,6 @@ AccumWarpLooperIndexStage#(.N_CFG(N_CFG)) u_s1_idx(
 	`clk_connect,
 	`rdyack_connect(src, s1_src),
 	.i_bofs(i_bofs),
-	.i_dual_axis(i_dual_axis),
-	.i_dual_order(i_dual_order),
 	.i_aofs(s01_aofs),
 	.i_alofs(s01_alofs),
 	.i_islast(s01_islast),
@@ -297,6 +295,8 @@ AccumWarpLooperIndexStage#(.N_CFG(N_CFG)) u_s1_idx(
 	.i_id_end(s01_id_end),
 	.i_id_ret(s01_id_ret),
 	.i_bgrid_step(i_bgrid_step),
+	.i_dual_axis(i_dual_axis),
+	.i_dual_order(i_dual_order),
 	.i_bsub_up_order(i_bsub_up_order),
 	.i_bsub_lo_order(i_bsub_lo_order),
 	`rdyack_connect(dst, s12),

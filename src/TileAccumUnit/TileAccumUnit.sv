@@ -39,6 +39,8 @@ module TileAccumUnit(
 	i_i1_systolic_idx,
 `endif
 	i_bboundary,
+	i_dual_axis,
+	i_dual_order,
 	i_bsubofs,
 	i_bsub_up_order,
 	i_bsub_lo_order,
@@ -149,6 +151,7 @@ module TileAccumUnit(
 // Parameter
 //======================================
 localparam WBW = TauCfg::WORK_BW;
+localparam CW_BW = TauCfg::CW_BW;
 localparam GBW = TauCfg::GLOBAL_ADDR_BW;
 localparam LBW0 = TauCfg::LOCAL_ADDR_BW0;
 localparam LBW1 = TauCfg::LOCAL_ADDR_BW1;
@@ -156,6 +159,7 @@ localparam DBW = TauCfg::DATA_BW;
 localparam TDBW = TauCfg::TMP_DATA_BW;
 localparam DIM = TauCfg::DIM;
 localparam VDIM = TauCfg::VDIM;
+localparam VDIM_BW = TauCfg::VDIM_BW;
 localparam N_ICFG = TauCfg::N_ICFG;
 localparam N_OCFG = TauCfg::N_OCFG;
 localparam N_INST = TauCfg::N_INST;
@@ -206,6 +210,8 @@ input [CN_TAU_X1-1:0] i_i1_systolic_gsize;
 input [CN_TAU_Y -1:0] i_i1_systolic_idx;
 `endif
 input [WBW-1:0]     i_bboundary      [VDIM];
+input [VDIM_BW-1:0] i_dual_axis;
+input [CW_BW-1:0]   i_dual_order;
 input [CV_BW-1:0]   i_bsubofs [VSIZE][VDIM];
 input [CCV_BW-1:0]  i_bsub_up_order  [VDIM];
 input [CCV_BW-1:0]  i_bsub_lo_order  [VDIM];
@@ -484,6 +490,8 @@ AluPipeline u_alu(
 	.i_aofs_beg(abl_alu_aofs),
 	.i_aofs_end(abl_alu_aend),
 	.i_bgrid_step(i_bgrid_step),
+	.i_dual_axis(i_dual_axis),
+	.i_dual_order(i_dual_order),
 	.i_bsubofs(i_bsubofs),
 	.i_bsub_up_order(i_bsub_up_order),
 	.i_bsub_lo_order(i_bsub_lo_order),
@@ -515,6 +523,8 @@ WritePipeline u_w(
 	.i_abeg(abl_o_aofs),
 	.i_aend(abl_o_aend),
 	.i_bboundary(i_bboundary),
+	.i_dual_axis(i_dual_axis),
+	.i_dual_order(i_dual_order),
 	.i_bsubofs(i_bsubofs),
 	.i_bsub_up_order(i_bsub_up_order),
 	.i_bsub_lo_order(i_bsub_lo_order),
@@ -549,6 +559,8 @@ ReadPipeline#(.LBW(LBW0)) u_r0(
 `ifdef SD
 	.i_syst_type(abl_i0_syst_type),
 `endif
+	.i_dual_axis(i_dual_axis),
+	.i_dual_order(i_dual_order),
 	.i_bsub_up_order(i_bsub_up_order),
 	.i_bsub_lo_order(i_bsub_lo_order),
 	.i_aboundary(i_aboundary),
@@ -593,6 +605,8 @@ ReadPipeline#(.LBW(LBW1)) u_r1(
 `ifdef SD
 	.i_syst_type(abl_i1_syst_type),
 `endif
+	.i_dual_axis(i_dual_axis),
+	.i_dual_order(i_dual_order),
 	.i_bsub_up_order(i_bsub_up_order),
 	.i_bsub_lo_order(i_bsub_lo_order),
 	.i_aboundary(i_aboundary),

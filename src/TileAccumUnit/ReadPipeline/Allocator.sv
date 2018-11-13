@@ -281,7 +281,7 @@ SFifoReg0D#(.NDATA(N_ICFG*2)) u_sfifo_align_flag(
 	`clk_connect,
 	.i_load_nxt(free_align_load_nxt),
 	.i_load_new(free_align_load_new),
-	.i_data(free_align_in),
+	.i_data(cnt_done),
 	.o_data(free_align_out)
 );
 

@@ -26,11 +26,11 @@ module SimdDriver(
 	`clk_port,
 	`rdyack_port(abofs),
 	i_bofs,
-	i_dual_axis,
-	i_dual_order,
 	i_aofs_beg,
 	i_aofs_end,
 	i_bgrid_step,
+	i_dual_axis,
+	i_dual_order,
 	i_bsub_up_order,
 	i_bsub_lo_order,
 	i_aboundary,
@@ -71,11 +71,11 @@ localparam WID_BW = $clog2(MAX_WARP);
 `clk_input;
 `rdyack_input(abofs);
 input [WBW-1:0]     i_bofs          [VDIM];
-input [VDIM_BW-1:0] i_dual_axis;
-input [CW_BW-1:0]   i_dual_order;
 input [WBW-1:0]     i_aofs_beg      [VDIM];
 input [WBW-1:0]     i_aofs_end      [VDIM];
 input [WBW-1:0]     i_bgrid_step    [VDIM];
+input [VDIM_BW-1:0] i_dual_axis;
+input [CW_BW-1:0]   i_dual_order;
 input [CCV_BW-1:0]  i_bsub_up_order [VDIM];
 input [CCV_BW-1:0]  i_bsub_lo_order [VDIM];
 input [WBW-1:0]     i_aboundary     [VDIM];

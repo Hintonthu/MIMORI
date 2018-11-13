@@ -52,12 +52,12 @@ def main():
 			valid_i0_packed = npd.bitwise_or.reduce(valid_i0 << npi.arange(VSIZE)[newaxis,:], axis=1)
 			# Send source
 			npd.copyto(data_bus.i_bofs          , bofs[i])
-			npd.copyto(data_bus.i_dual_axis     , cfg.pcfg['dual_axis'])
-			npd.copyto(data_bus.i_dual_order    , cfg.pcfg['dual_order'])
 			npd.copyto(data_bus.i_abeg          , abeg_i0[j])
 			npd.copyto(data_bus.i_aend          , aend_i0[j])
 			npd.copyto(data_bus.i_linears       , linear_i0)
 			npd.copyto(data_bus.i_bboundary     , cfg.pcfg["total"][0])
+			npd.copyto(data_bus.i_dual_axis     , cfg.pcfg['dual_axis'])
+			npd.copyto(data_bus.i_dual_order    , cfg.pcfg['dual_order'])
 			npd.copyto(data_bus.i_bsubofs       , cfg.v_nd >> cfg.pcfg["lg_vshuf"][0])
 			npd.copyto(data_bus.i_bsub_up_order , cfg.pcfg["lg_vsize_2x"][0])
 			npd.copyto(data_bus.i_bsub_lo_order , cfg.pcfg["lg_vshuf"][0])
@@ -128,12 +128,12 @@ rst_out_ev, ck_ev = CreateEvents(["rst_out", "ck_ev"])
 bofs_bus, av_bus = CreateBuses([
 	(
 		("dut", "i_bofs", (VDIM,)),
-		(None , "i_dual_axis"),
-		(None , "i_dual_order"),
 		(None , "i_abeg", (VDIM,)),
 		(None , "i_aend", (VDIM,)),
 		(None , "i_linears", (N_CFG,)),
 		(None , "i_bboundary", (VDIM,)),
+		(None , "i_dual_axis"),
+		(None , "i_dual_order"),
 		(None , "i_bsubofs", (VSIZE,VDIM,)),
 		(None , "i_bsub_up_order", (VDIM,)),
 		(None , "i_bsub_lo_order", (VDIM,)),

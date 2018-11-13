@@ -103,7 +103,7 @@ input [1:0]          i_to_dram;
 input                i_to_temp;
 input [SRAM_ABW-1:0] i_reg_waddr;
 input [TDBW-1:0]     i_rdata [VSIZE];
-input [TDBW-1:0]     i_tbuf_rdatas [TBUF_SIZE][VSIZE];
+input [TDBW-1:0]     i_tbuf_rdatas [TBUF_SIZE][2][VSIZE];
 `dval_output(reg_we);
 output logic [SRAM_ABW-1:0] o_reg_waddr;
 output logic [TDBW-1:0]     o_wdata [VSIZE];
@@ -137,6 +137,7 @@ logic signed [TDBW-1:0] sel_c [VSIZE];
 logic signed [TDBW-1:0] result [VSIZE];
 logic [WBW-1:0] bofsz [VDIM];
 logic [WBW-1:0] vector_blockofs [VSIZE][VDIM];
+logic warp_hi;
 
 //======================================
 // Combinational
@@ -171,7 +172,8 @@ function ResultType SelectOp;
 	input [TDBW-1:0] rdata [VSIZE];
 	input [DBW-1:0]  srd0 [VSIZE];
 	input [DBW-1:0]  srd1 [VSIZE];
-	input [TDBW-1:0] tbuf [TBUF_SIZE][VSIZE];
+	input [TDBW-1:0] tbuf [TBUF_SIZE][2][VSIZE];
+	input            warp_hi;
 	priority case (idx)
 		3'd0: for (int i = 0; i < VSIZE; i++) begin
 			SelectOp[i] = const_value;
@@ -186,10 +188,10 @@ function ResultType SelectOp;
 			SelectOp[i] = $signed(srd1[i]);
 		end
 		3'd4: for (int i = 0; i < VSIZE; i++) begin
-			SelectOp[i] = tbuf[0][i];
+			SelectOp[i] = tbuf[0][warp_hi][i];
 		end
 		3'd5: for (int i = 0; i < VSIZE; i++) begin
-			SelectOp[i] = tbuf[1][i];
+			SelectOp[i] = tbuf[1][warp_hi][i];
 		end
 	endcase
 endfunction
@@ -270,9 +272,9 @@ function ResultType AluIdx;
 	end
 endfunction
 
-always_comb sel_a = SelectOp(i_a, i_const_a, i_rdata, i_sramrd0, i_sramrd1, i_tbuf_rdatas);
-always_comb sel_b = SelectOp(i_b, i_const_b, i_rdata, i_sramrd0, i_sramrd1, i_tbuf_rdatas);
-always_comb sel_c = SelectOp(i_c, i_const_c, i_rdata, i_sramrd0, i_sramrd1, i_tbuf_rdatas);
+always_comb sel_a = SelectOp(i_a, i_const_a, i_rdata, i_sramrd0, i_sramrd1, i_tbuf_rdatas, warp_hi);
+always_comb sel_b = SelectOp(i_b, i_const_b, i_rdata, i_sramrd0, i_sramrd1, i_tbuf_rdatas, warp_hi);
+always_comb sel_c = SelectOp(i_c, i_const_c, i_rdata, i_sramrd0, i_sramrd1, i_tbuf_rdatas, warp_hi);
 always_comb for (int i = 0; i < VDIM; i++) begin
 	bofsz[i] = (i_opcode == 3'b111 && i_shamt[4:3] == 2'b01)  ? i_bofs[i] : '0;
 end
@@ -307,5 +309,14 @@ BofsExpand u_bexp(
 	.o_vector_bofs(vector_blockofs),
 	.o_valid()
 );
+
+//======================================
+// Sequential
+//======================================
+`ff_rst
+	warp_hi <= 1'b0;
+`ff_cg(op_ack)
+	warp_hi <= !warp_hi;
+`ff_end
 
 endmodule

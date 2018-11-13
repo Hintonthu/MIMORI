@@ -1,4 +1,4 @@
-// Copyright 2016 Yu Sheng Lin
+// Copyright 2016,2018 Yu Sheng Lin
 
 // This file is part of MIMORI.
 
@@ -16,8 +16,10 @@
 // along with MIMORI.  If not, see <http://www.gnu.org/licenses/>.
 
 `include "common/define.sv"
+`include "common/SRAM.sv"
 `include "TileAccumUnit/AluPipeline/Simd/Alu.sv"
 `include "TileAccumUnit/AluPipeline/Simd/SimdTmpBuffer.sv"
+`include "TileAccumUnit/AluPipeline/Simd/SimdRegister.sv"
 `include "TileAccumUnit/AluPipeline/Simd/SimdOperand.sv"
 
 module Simd(
@@ -106,7 +108,7 @@ logic [FLAT_BW-1:0]  alu_reg_wdata_flat;
 `dval_logic(alu_tbuf_we);
 // shared with alu_reg_wdata (this makes DC happier)
 // logic [TDBW-1:0] alu_tbuf_wdata [VSIZE];
-logic [TDBW-1:0] tbuf_alu_rdatas [TBUF_SIZE][VSIZE];
+logic [TDBW-1:0] tbuf_alu_rdatas [TBUF_SIZE][2][VSIZE];
 // op -> alu
 logic [2:0]          op_alu_opcode;
 logic [4:0]          op_alu_shamt;
@@ -156,7 +158,6 @@ SimdOperand u_op(
 	.o_reg_re(op_reg_re),
 	.o_reg_raddr(op_reg_raddr)
 );
-
 Alu u_alu(
 	`clk_connect,
 	`rdyack_connect(op, op_alu),
@@ -193,9 +194,8 @@ Alu u_alu(
 	.o_dramwd(o_dramwd),
 	`dval_connect(inst_commit, inst_commit)
 );
-
-SRAMTwoPort#(.BW(FLAT_BW), .NDATA(NWORD)) u_register(
-	.i_clk(i_clk),
+SimdRegister u_register(
+	`clk_connect,
 	.i_we(alu_reg_we_dval),
 	.i_re(op_reg_re),
 	.i_waddr(alu_reg_waddr),
@@ -203,7 +203,6 @@ SRAMTwoPort#(.BW(FLAT_BW), .NDATA(NWORD)) u_register(
 	.i_raddr(op_reg_raddr),
 	.o_rdata(reg_alu_rdata_flat)
 );
-
 SimdTmpBuffer u_tbuf(
 	`clk_connect,
 	.i_we(alu_tbuf_we_dval),
