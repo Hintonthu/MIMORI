@@ -20,6 +20,7 @@ module SramWriteCollector(
 	`clk_port,
 	`rdyack_port(alloc),
 	i_id,
+	i_islast_id,
 	i_size,
 	i_padv,
 	`rdyack_port(cmd),
@@ -62,12 +63,15 @@ localparam CV_DIFF_BW = CSIZE>VSIZE ? CSIZE-VSIZE : 1;
 localparam READ_DIFF_BW = VSIZE>CSIZE ? (VSIZE-CSIZE)*DBW : 1;
 localparam [CV_DIFF_BW-1:0] CV_PAD_ZERO = 0;
 localparam [READ_DIFF_BW-1:0] READ_PAD_ZERO = 0;
+localparam HBW0 = LBW0 - CV_BW;
+localparam HBW1 = LBW1 - CV_BW;
 //======================================
 // I/O
 //======================================
 `clk_input;
 `rdyack_input(alloc);
 input [ICFG_BW-1:0] i_id;
+input               i_islast_id;
 input [LBW:0]       i_size;
 input [DBW-1:0]     i_padv;
 `rdyack_input(cmd);
@@ -81,8 +85,8 @@ input [DBW-1:0] i_dramrd [CSIZE];
 `dval_output(w0);
 `dval_output(w1);
 output logic [ICFG_BW-1:0]    o_id;
-output logic [LBW0-CV_BW-1:0] o_hiaddr0;
-output logic [LBW1-CV_BW-1:0] o_hiaddr1;
+output logic [HBW0-1:0] o_hiaddr0;
+output logic [HBW1-1:0] o_hiaddr1;
 output logic [DBW-1:0]        o_data [VSIZE];
 
 //======================================
@@ -95,8 +99,6 @@ logic [CSIZE*DBW-1:0] data_1d;
 logic [CSIZE*DBW-1:0] data_1d_shiftr;
 logic [VSIZE*DBW-1:0] data_1d_shiftl;
 logic [DBW-1:0] data_w [VSIZE];
-logic [LBW0-CV_BW-1:0] o_hiaddr0_w;
-logic [LBW1-CV_BW-1:0] o_hiaddr1_w;
 logic [LBW-1:0] cur_r;
 logic [LBW-1:0] cur_w;
 logic [CV_BW1-1:0] cmd_handled_r;
@@ -253,16 +255,42 @@ end
 	w1_dval <= w1_dval_w;
 `ff_end
 
+//======================================
+// Align address if this is the last one
+//======================================
+logic [HBW0-1:0] o_hiaddr0_1;
+logic [HBW1-1:0] o_hiaddr1_1;
+logic [HBW0-1:0] o_hiaddr0_w;
+logic [HBW1-1:0] o_hiaddr1_w;
+logic force_align;
+typedef logic [HBW0-2:0] HIADDR0_1_T;
+typedef logic [HBW1-2:0] HIADDR1_1_T;
+always_comb begin
+	o_hiaddr0_1 = o_hiaddr0 + 'b1;
+	o_hiaddr0_w = force_align ? {(o_hiaddr0_1[HBW0-1]^(|o_hiaddr0_1[HBW0-2:0])), HIADDR0_1_T'(0)} : o_hiaddr0_1;
+end
+
+always_comb begin
+	o_hiaddr1_1 = o_hiaddr1 + 'b1;
+	o_hiaddr1_w = force_align ? {(o_hiaddr1_1[HBW1-1]^(|o_hiaddr1_1[HBW1-2:0])), HIADDR1_1_T'(0)} : o_hiaddr1_1;
+end
+
+`ff_rst
+	force_align <= 1'b0;
+`ff_nocg
+	force_align <= i_islast_id && fill_done;
+`ff_end
+
 `ff_rst
 	o_hiaddr0 <= 'b0;
 `ff_cg(w0_dval)
-	o_hiaddr0 <= o_hiaddr0 + 'b1;
+	o_hiaddr0 <= o_hiaddr0_w;
 `ff_end
 
 `ff_rst
 	o_hiaddr1 <= 'b0;
 `ff_cg(w1_dval)
-	o_hiaddr1 <= o_hiaddr1 + 'b1;
+	o_hiaddr1 <= o_hiaddr1_w;
 `ff_end
 
 endmodule

@@ -35,6 +35,8 @@ module ReadPipeline(
 `ifdef SD
 	i_syst_type,
 `endif
+	i_dual_axis,
+	i_dual_order,
 	i_bsub_up_order,
 	i_bsub_lo_order,
 	i_aboundary,
@@ -78,11 +80,13 @@ module ReadPipeline(
 import TauCfg::*;
 parameter  LBW = TauCfg::LOCAL_ADDR_BW0;
 localparam WBW = TauCfg::WORK_BW;
+localparam CW_BW = TauCfg::CW_BW;
 localparam GBW = TauCfg::GLOBAL_ADDR_BW;
 localparam DBW = TauCfg::DATA_BW;
 localparam N_ICFG = TauCfg::N_ICFG;
 localparam DIM = TauCfg::DIM;
 localparam VDIM = TauCfg::VDIM;
+localparam VDIM_BW = TauCfg::VDIM_BW;
 localparam SS_BW = TauCfg::STRIDE_BW;
 localparam SF_BW = TauCfg::STRIDE_FRAC_BW;
 localparam VSIZE = TauCfg::VSIZE;
@@ -114,6 +118,8 @@ input [ICFG_BW-1:0] i_end;
 `ifdef SD
 input [STO_BW-1:0]  i_syst_type;
 `endif
+input [VDIM_BW-1:0] i_dual_axis;
+input [CW_BW-1:0]   i_dual_order;
 input [CCV_BW-1:0]  i_bsub_up_order  [VDIM];
 input [CCV_BW-1:0]  i_bsub_lo_order  [VDIM];
 input [WBW-1:0]     i_aboundary      [VDIM];
@@ -254,6 +260,8 @@ AccumWarpLooper #(.N_CFG(N_ICFG), .ABW(LBW), .STENCIL(1), .USE_LOFS(1)) u_awl(
 `endif
 	.i_linears(lc_awl_linears),
 	.i_bboundary(),
+	.i_dual_axis(i_dual_axis),
+	.i_dual_order(i_dual_order),
 	.i_bsubofs(),
 	.i_bsub_up_order(i_bsub_up_order),
 	.i_bsub_lo_order(i_bsub_lo_order),

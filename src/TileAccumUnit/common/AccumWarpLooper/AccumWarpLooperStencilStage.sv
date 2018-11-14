@@ -18,6 +18,9 @@
 `include "common/define.sv"
 `include "common/Controllers.sv"
 
+// With the dual warp scheduling, the all input are repeated twice
+// except the i_linear.
+// We use this property to design this module.
 module AccumWarpLooperStencilStage(
 	`clk_port,
 	`rdyack_port(src),
@@ -74,32 +77,45 @@ output logic               o_islast;
 //======================================
 // Internal
 //======================================
+logic single_rdy_r, single_rdy_w;
+`rdyack_logic(src_2x);
 `rdyack_logic(s1);
 logic last_stencil;
 logic done_cond;
+logic warp_hi;
 logic [ST_BW-1:0] sid1;
 logic [ST_BW-1:0] sid_r;
 logic [ST_BW-1:0] sid_w;
-logic [ABW-1:0]   linear_r;
-logic [ABW-1:0]   linear_w;
+logic [ABW-1:0] linears_r [2];
+logic [ABW-1:0] single_linear_r;
 logic islast_r;
 logic retire_r;
 
 //======================================
 // Combinational
 //======================================
-assign sid1 = sid_r + 'b1;
-assign last_stencil = sid1 == i_stencil_ends[o_id];
-assign done_cond = !i_stencil || last_stencil;
-assign o_linear = linear_r + (i_stencil ? i_stencil_lut[sid_r] : '0);
-assign o_islast = islast_r && done_cond;
-assign o_retire = retire_r && done_cond;
 always_comb begin
-	casez ({src_ack,dst_ack})
-		2'b1?: sid_w = i_stencil_begs[i_id];
-		2'b01: sid_w = sid1;
-		2'b00: sid_w = sid_r;
-	endcase
+	src_2x_rdy = single_rdy_r && src_rdy;
+	src_ack = src_2x_ack || (src_rdy && !single_rdy_r);
+end
+
+always_comb begin
+	sid1 = sid_r + 'b1;
+	last_stencil = sid1 == i_stencil_ends[o_id];
+	done_cond = (!i_stencil || last_stencil) && warp_hi;
+	o_linear = linears_r[warp_hi] + (i_stencil ? i_stencil_lut[sid_r] : '0);
+	o_islast = islast_r && done_cond;
+	o_retire = retire_r && done_cond;
+end
+
+always_comb begin
+	// The hold conditions are not listed (see the register clock gate part)
+	if (src_2x_ack) begin
+		sid_w = i_stencil_begs[i_id];
+	// end else if (dst_ack) begin
+	end else begin
+		sid_w = sid1;
+	end
 end
 
 //======================================
@@ -107,7 +123,7 @@ end
 //======================================
 Forward u_fwd(
 	`clk_connect,
-	`rdyack_connect(src, src),
+	`rdyack_connect(src, src_2x),
 	`rdyack_connect(dst, s1)
 );
 RepeatIf#(0) u_acc(
@@ -121,11 +137,33 @@ RepeatIf#(0) u_acc(
 // Sequential
 //======================================
 `ff_rst
+	single_rdy_r <= 1'b0;
+`ff_nocg
+	single_rdy_r <= single_rdy_r ? !src_2x_ack : src_rdy;
+`ff_end
+
+// Buffer single data
+`ff_rst
+	single_linear_r <= '0;
+`ff_cg(!single_rdy_r && src_rdy)
+	single_linear_r <= i_linear;
+`ff_end
+
+// Warp counter
+`ff_rst
+	warp_hi <= 1'b0;
+`ff_cg(dst_ack)
+	warp_hi <= !warp_hi;
+`ff_end
+
+// Stencil index counter
+`ff_rst
 	sid_r <= '0;
-`ff_cg((src_ack || dst_ack) && i_stencil)
+`ff_cg((src_2x_ack || dst_ack && warp_hi) && i_stencil)
 	sid_r <= sid_w;
 `ff_end
 
+// Buffer single data + input
 `ff_rst
 	o_id <= '0;
 	for (int i = 0; i < VDIM; i++) begin
@@ -133,15 +171,17 @@ RepeatIf#(0) u_acc(
 	end
 	islast_r <= 1'b0;
 	retire_r <= 1'b0;
-	linear_r <= '0;
-`ff_cg(src_ack)
+	linears_r[0] <= '0;
+	linears_r[1] <= '0;
+`ff_cg(src_2x_ack)
 	o_id <= i_id;
 	for (int i = 0; i < VDIM; i++) begin
 		o_bofs[i] <= i_bofs[i];
 	end
 	islast_r <= i_islast;
 	retire_r <= i_retire;
-	linear_r <= i_linear;
+	linears_r[0] <= single_linear_r;
+	linears_r[1] <= i_linear;
 `ff_end
 
 endmodule

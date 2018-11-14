@@ -1,4 +1,4 @@
-// Copyright 2016 Yu Sheng Lin
+// Copyright 2016,2018 Yu Sheng Lin
 
 // This file is part of MIMORI.
 
@@ -37,24 +37,52 @@ localparam TBUF_SIZE = TauCfg::ALU_DELAY_BUF_SIZE;
 `clk_input;
 input                   i_we;
 input        [TDBW-1:0] i_wdata  [VSIZE];
-output logic [TDBW-1:0] o_rdatas [TBUF_SIZE][VSIZE];
+output logic [TDBW-1:0] o_rdatas [TBUF_SIZE][2][VSIZE];
 
 //======================================
 // Sequential
 //======================================
+logic warp_hi;
 `ff_rst
-	for (int i = 0; i < TBUF_SIZE; i++) begin
-		for (int j = 0; j < VSIZE; j++) begin
-			o_rdatas[i][j] <= '0;
+	warp_hi <= 1'b0;
+`ff_cg(i_we)
+	warp_hi <= !warp_hi;
+`ff_end
+
+`ff_rst
+	for (int j = 0; j < VSIZE; j++) begin
+		o_rdatas[0][0][j] <= '0;
+	end
+`ff_cg(i_we && !warp_hi)
+	for (int j = 0; j < VSIZE; j++) begin
+		o_rdatas[0][0][j] <= i_wdata[j];
+	end
+`ff_end
+
+`ff_rst
+	for (int j = 0; j < VSIZE; j++) begin
+		o_rdatas[0][1][j] <= '0;
+	end
+`ff_cg(i_we && warp_hi)
+	for (int j = 0; j < VSIZE; j++) begin
+		o_rdatas[0][1][j] <= i_wdata[j];
+	end
+`ff_end
+
+`ff_rst
+	for (int i = 1; i < TBUF_SIZE; i++) begin
+		for (int w = 0; w < 2; w++) begin
+			for (int j = 0; j < VSIZE; j++) begin
+				o_rdatas[i][w][j] <= '0;
+			end
 		end
 	end
-`ff_cg(i_we)
-	for (int j = 0; j < VSIZE; j++) begin
-		o_rdatas[0][j] <= i_wdata[j];
-	end
+`ff_cg(i_we && !warp_hi)
 	for (int i = 1; i < TBUF_SIZE; i++) begin
-		for (int j = 0; j < VSIZE; j++) begin
-			o_rdatas[i][j] <= o_rdatas[i-1][j];
+		for (int w = 0; w < 2; w++) begin
+			for (int j = 0; j < VSIZE; j++) begin
+				o_rdatas[i][w][j] <= o_rdatas[i-1][w][j];
+			end
 		end
 	end
 `ff_end

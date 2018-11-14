@@ -32,21 +32,22 @@ um_i1 = npd.empty(0, UmiModel.UMCFG_DTYPE)
 um_o = npd.empty(1, UmiModel.UMCFG_DTYPE)
 
 p['total'] = [1,1,1,1,1,100]
-p['local'] = [1,1,1,1,1,32]
+p['local'] = [1,1,1,1,1,64]
 p['vsize'] = [1,1,1,1,1,32]
 p['vshuf'] = [1,1,1,1,1,1]
+p['dual_axis'] = 5
 p['syst0_skip'] = 0
 p['syst0_axis'] = -1
 p['syst1_skip'] = 0
 p['syst1_axis'] = -1
 a['total'] = [1,1,1,1,1,100]
-a['local'] = [1,1,1,1,1,32]
+a['local'] = [1,1,1,1,1,16]
 um_i0['mwrap'].fill(UmiModel.MEM_WRAP)
 um_i0['mlinear'] = [0]
 um_i0['ustart'] = [[0,0,0,0,0,0,0,0,0,0,0,0],]
 um_i0['ustride'] = [[0,0,0,0,0,1,0,0,0,0,0,1],]
 um_i0['udim'] = [[0,0,0,0,0,3,0,0,0,0,0,2],]
-um_i0['lmalign'] = [[1024,1024,1024,32],]
+um_i0['lmalign'] = [[1024,1024,1024,16],]
 um_i0['mwidth'] = [[1,1,100,100],]
 um_o['mwrap'].fill(UmiModel.MEM_WRAP)
 um_o['mlinear'] = [300000]
