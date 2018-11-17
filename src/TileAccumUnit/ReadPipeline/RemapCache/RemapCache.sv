@@ -15,7 +15,7 @@
 // You should have received a copy of the GNU General Public License
 // along with MIMORI.  If not, see <http://www.gnu.org/licenses/>.
 
-`include "common/SRAM.sv"
+`include "TileAccumUnit/ReadPipeline/RemapCache/BankedSram.sv"
 `include "TileAccumUnit/ReadPipeline/RemapCache/BankSramReadIf.sv"
 
 module RemapCache(
@@ -112,6 +112,15 @@ end
 //======================================
 // Submodules
 //======================================
+BankedSram#(.ABW(HBW)) u_sram_banks(
+	`clk_connect,
+	`dval_connect(wad, wad),
+	.i_whiaddr(i_whiaddr),
+	.i_wdata(i_wdata),
+	.i_re(sram_re),
+	.i_ra(sram_ra),
+	.o_rd(sram_rd)
+);
 BankSramReadIf #(
 	.BW(DBW),
 	.NDATA(NDATA),
@@ -143,17 +152,5 @@ BankSramReadIf #(
 	.i_sram_rdata(sram_rd)
 );
 
-genvar gi;
-generate for (gi = 0; gi < VSIZE; gi++) begin: sram
-SRAMTwoPort #(.BW(DBW), .NDATA(NDATA)) u_dp_sram(
-	.i_clk(i_clk),
-	.i_we(wad_dval),
-	.i_re(sram_re[gi]),
-	.i_waddr(i_whiaddr),
-	.i_wdata(i_wdata[gi]),
-	.i_raddr(sram_ra[gi]),
-	.o_rdata(sram_rd[gi])
-);
-end endgenerate
 
 endmodule

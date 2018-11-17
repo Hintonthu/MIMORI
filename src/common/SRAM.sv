@@ -24,7 +24,7 @@
 `define SRAM_CON_RW UNDEF
 `endif
 package SramCfg;
-	typedef enum int {BEHAVIOUR, SYNOPSYS32} GenerateMode;
+	typedef enum int {BEHAVIOUR, SYNOPSYS32, TSMC28} GenerateMode;
 	typedef enum int {UNDEF, OLD, NEW} ConcurrentRW;
 	parameter GenerateMode GEN_MODE = `SRAM_GEN_MODE;
 	parameter ConcurrentRW CON_RW = `SRAM_CON_RW;

@@ -97,4 +97,4 @@ $(NICOTB)/cpp/nicotb.so:
 	make -C $(NICOTB)/cpp/
 
 clean:
-	-rm -rf ncsim* novas* irun* *.rc scoreboard.db __pycache__ INCA_libs
+	-rm -rf ncsim* novas* irun* *.rc scoreboard.db __pycache__ INCA_libs *.fsdb *.log *.X *Log
