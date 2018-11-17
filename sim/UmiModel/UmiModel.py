@@ -85,8 +85,8 @@ class UmiModel(object):
 	VDIM = 6
 	BW = 16
 	ABW = 32
-	LBW0 = 11
-	LBW1 = 10
+	LBW0 = 12
+	LBW1 = 11
 	STRIDE_SIG_BW = 8
 	STRIDE_EXP_BW = 3
 	LG_VSIZE = Clog2(VSIZE, True)
