@@ -40,7 +40,8 @@ module ChunkHead(
 	`rdyack_port(o_mofs),
 	o_which,
 	o_mofs,
-	o_id
+	o_id,
+	o_islast_id
 `ifdef SD
 	,
 	o_skip
@@ -82,8 +83,9 @@ input [N_ICFG-1:0]  i_systolic_skip;
 `endif
 `rdyack_output(o_mofs);
 output logic               o_which;
-output logic [WBW-1:0]     o_mofs   [DIM];
+output logic [WBW-1:0]     o_mofs [DIM];
 output logic [ICFG_BW-1:0] o_id;
+output logic               o_islast_id;
 `ifdef SD
 output logic               o_skip;
 `endif
@@ -100,7 +102,6 @@ logic [DIM_BW-1:0]  global_bshuf_w [VDIM];
 logic [DIM_BW-1:0]  global_ashuf_w [VDIM];
 logic [ICFG_BW-1:0] o_id1;
 logic [ICFG_BW-1:0] o_id_w;
-logic o_islast_id;
 logic [WBW-1:0]     o_mofs_w [DIM];
 
 //======================================

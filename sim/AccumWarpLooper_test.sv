@@ -32,11 +32,11 @@ initial begin
 	$fsdbDumpvars(0, AccumWarpLooper_test, "+mda");
 	i_clk = 0;
 	i_rst = 1;
-	#1 $NicotbInit();
+	#1 `NicotbInit;
 	#11 i_rst = 0;
 	#10 i_rst = 1;
 	#100000 $display("Timeout");
-	$NicotbFinal();
+	`NicotbFinal;
 	$finish;
 end
 

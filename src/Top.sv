@@ -40,6 +40,8 @@ module Top(
 	i_bgrid_step,    // block shape
 	i_bgrid_end,     // block shape * #block
 	i_bboundary,     // block idx boundary
+	i_dual_axis,     // descripe how two warp for a large one
+	i_dual_order,    // descripe how two warp for a large one
 	i_bsubofs,       // describe idx for a warp
 	i_bsub_up_order, // describe idx for a warp
 	i_bsub_lo_order, // describe idx for a warp
@@ -140,6 +142,7 @@ module Top(
 // Parameter
 //======================================
 localparam WBW = TauCfg::WORK_BW;
+localparam CW_BW = TauCfg::CW_BW;
 localparam GBW = TauCfg::GLOBAL_ADDR_BW;
 localparam LBW0 = TauCfg::LOCAL_ADDR_BW0;
 localparam LBW1 = TauCfg::LOCAL_ADDR_BW1;
@@ -147,6 +150,7 @@ localparam DBW = TauCfg::DATA_BW;
 localparam TDBW = TauCfg::TMP_DATA_BW;
 localparam DIM = TauCfg::DIM;
 localparam VDIM = TauCfg::VDIM;
+localparam VDIM_BW = TauCfg::VDIM_BW;
 localparam N_ICFG = TauCfg::N_ICFG;
 localparam N_OCFG = TauCfg::N_OCFG;
 localparam N_INST = TauCfg::N_INST;
@@ -199,6 +203,8 @@ localparam ST_BW = $clog2(STSIZE+1);
 input [WBW-1:0]     i_bgrid_step     [VDIM];
 input [WBW-1:0]     i_bgrid_end      [VDIM];
 input [WBW-1:0]     i_bboundary      [VDIM];
+input [VDIM_BW-1:0] i_dual_axis;
+input [CW_BW-1:0]   i_dual_order;
 input [CV_BW-1:0]   i_bsubofs [VSIZE][VDIM];
 input [CCV_BW-1:0]  i_bsub_up_order  [VDIM];
 input [CCV_BW-1:0]  i_bsub_lo_order  [VDIM];
@@ -451,6 +457,8 @@ TileAccumUnit u_tau(
 	.i_i1_systolic_idx(blk_tau_i1_systolic_idx[i][j]),
 `endif
 	.i_bboundary(i_bboundary),
+	.i_dual_axis(i_dual_axis),
+	.i_dual_order(i_dual_order),
 	.i_bsubofs(i_bsubofs),
 	.i_bsub_up_order(i_bsub_up_order),
 	.i_bsub_lo_order(i_bsub_lo_order),

@@ -85,8 +85,8 @@ class UmiModel(object):
 	VDIM = 6
 	BW = 16
 	ABW = 32
-	LBW0 = 11
-	LBW1 = 10
+	LBW0 = 12
+	LBW1 = 11
 	STRIDE_SIG_BW = 8
 	STRIDE_EXP_BW = 3
 	LG_VSIZE = Clog2(VSIZE, True)
@@ -115,11 +115,11 @@ class UmiModel(object):
 			l.append(l[-1] + i)
 
 	PCFG_DTYPE = ToIntTypes.__func__([
-		'total', 'local', 'vsize', 'vshuf', # user filled
-		'end', 'lg_vsize', 'lg_vshuf',
+		'total', 'local', 'vsize', 'vshuf', 'dual_axis', # user filled
+		'end', 'vsize_2x', 'lg_vsize_2x', 'lg_vshuf', 'dual_order',
 		'syst0_skip', 'syst0_axis',
 		'syst1_skip', 'syst1_axis',
-	], [VDIM,VDIM,VDIM,VDIM,VDIM,VDIM,VDIM,1,1,1,1])
+	], [VDIM,VDIM,VDIM,VDIM,1,VDIM,VDIM,VDIM,VDIM,1,1,1,1,1])
 	ACFG_DTYPE = ToIntTypes.__func__([
 		'total', 'local', # user filled
 		'end'
@@ -313,28 +313,41 @@ class UmiModel(object):
 		return umcfg
 
 	@staticmethod
+	def _Interlace(a, b):
+		stacked = npd.stack((a,b), axis=1)
+		return npd.reshape(stacked, (-1,) + a.shape[1:])
+
+	@staticmethod
 	def _InitApcfg(pcfg, acfg):
 		# Init
 		VDIM = UmiModel.VDIM
 		# Convert some values
+		dual_axis = pcfg['dual_axis']
+		dual_bofs_stride = int(pcfg['vsize'][0,dual_axis] * pcfg['vshuf'][0,dual_axis])
+		pcfg['dual_order'] = Clog2(dual_bofs_stride, True)
 		pcfg['end'] = ((pcfg['total']-1)//pcfg['local']+1)*pcfg['local']
+		pcfg['vsize_2x'] = pcfg['vsize']
+		pcfg['vsize_2x'][0,dual_axis] *= 2
 		acfg['end'] = ((acfg['total']-1)//acfg['local']+1)*acfg['local']
 		hi_nd_stride = pcfg['vsize']*pcfg['vshuf']
 		assert not npd.any(pcfg['local'] % hi_nd_stride)
 		# Convert some more complex values
 		# Since a field of structured array of shape (1,) is [[x,x,x,x]], so [0] is required
 		pl = pcfg['local'][0]
-		pv = pcfg['vsize'][0]
+		pv = pcfg['vsize_2x'][0]
 		pf = pcfg['vshuf'][0]
-		plv = pcfg['lg_vsize'][0]
+		plv = pcfg['lg_vsize_2x'][0]
 		plf = pcfg['lg_vshuf'][0]
 		for i in range(UmiModel.VDIM):
 			plv[i] = Clog2(pv[i], True)
 			plf[i] = Clog2(pf[i], True)
-		v_nd = npi.indices(pv).reshape((VDIM, -1)).T << plf
+		v_nd = npi.indices(pcfg['vsize'][0]).reshape((VDIM, -1)).T << plf
 		warp_nd = npi.indices(pl >> plv).reshape((VDIM, -1)).T
 		warp_nd = (warp_nd >> plf << (plv+plf)) + npd.bitwise_and(warp_nd, (1<<plf)-1)
-		return pcfg, acfg, warp_nd, v_nd
+		warp_nd2 = npd.copy(warp_nd)
+		warp_nd2[:, dual_axis] += dual_bofs_stride
+		warp_nd_2x = UmiModel._Interlace(warp_nd, warp_nd2)
+		return pcfg, acfg, warp_nd_2x, v_nd
 
 	@staticmethod
 	def _BA2M(bofs, aofs, stride_idx, um, is_local):
@@ -393,7 +406,10 @@ class UmiModel(object):
 			npd.copyto(n_i1[1], 1)
 		return n_i0, n_i1, n_o, n_inst
 
-	def __init__(self, pcfg, acfg, umcfg_i0, umcfg_i1, umcfg_o, insts, n_inst, stencil=(False,False), xor_fallback=False):
+	def __init__(self, pcfg, acfg, umcfg_i0, umcfg_i1, umcfg_o, insts, n_inst, **kwargs):
+		stencil = kwargs.get('stencil', (False,False))
+		xor_fallback = kwargs.get('xor_fallback', False)
+		one_warp = kwargs.get('one_warp', False)
 		# convert to internal format
 		self.n_i0, self.n_i1, self.n_o, self.n_inst = UmiModel._InitRange(n_inst, insts, stencil)
 		# v_nd_shuf, v_nd = head of warp, warp sub idx
@@ -405,6 +421,9 @@ class UmiModel(object):
 		self.insts = insts
 		self.n_reg = 1
 		self.luts = dict.fromkeys(UmiModel.limits.keys(), (0, npi.empty((1,))))
+		assert npd.prod(self.pcfg['local']) != UmiModel.VSIZE or one_warp, (
+			"One warp configuration is error-prone and thus disabled; use one_warp=True to enable."
+		)
 
 	def add_lut(self, name, a):
 		limit = UmiModel.limits[name]
@@ -484,27 +503,28 @@ class UmiModel(object):
 	def CreateAccumWarpTransaction(self, agofs, alofs, rt_i, rg_li, rg_ri, n):
 		def FlatRange(rg):
 			n_warp = self.warp_nd.shape[0]
+			n_warp2 = n_warp >> 1
 			accum_idx = npd.concatenate([
 				npi.full(n_warp*(rg[i,1]-rg[i,0]), i) for i in range(rg.shape[0])
 			])
 			warp_idx = npd.concatenate([
-				npd.repeat(npi.arange(n_warp), rg[i,1]-rg[i,0]) for i in range(rg.shape[0])
-			])
+				npd.repeat(npi.arange(0, n_warp2), rg[i,1]-rg[i,0]) for i in range(rg.shape[0])
+			]) * 2
 			rg_flat = npd.concatenate([
-				npd.tile(npi.arange(rg[i,0], rg[i,1]), n_warp) for i in range(rg.shape[0])
+				npd.tile(npd.repeat(npi.arange(rg[i,0], rg[i,1]), 2), n_warp2) for i in range(rg.shape[0])
 			])
-			return accum_idx, warp_idx, rg_flat
+			return accum_idx, UmiModel._Interlace(warp_idx, warp_idx+1), rg_flat
 		def FlatIndex(li, ri, rt_i, n):
 			rg = self._SelRangeSel(li, ri, n)
 			accum_idx, warp_idx, rg_flat = FlatRange(rg)
 			if rt_i is None:
-				return rg, accum_idx, warp_idx, rg_flat
+				return accum_idx, warp_idx, rg_flat
 			else:
 				last_warp = self.warp_nd.shape[0] - 1
 				rt = self._SelRetireSel(rt_i, n)
 				rt_flat = npd.logical_and(rt[accum_idx] > rg_flat, warp_idx == last_warp)
-				return rg, accum_idx, warp_idx, rg_flat, rt_flat
-		return FlatIndex(rg_li, rg_ri, rt_i, n)[1:]
+				return accum_idx, warp_idx, rg_flat, rt_flat
+		return FlatIndex(rg_li, rg_ri, rt_i, n)
 
 	def CreateBofsValidTransaction(self, bofs, warp_idx):
 		# v_nd -> (VSIZE, DIM)

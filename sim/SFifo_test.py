@@ -17,6 +17,7 @@
 from nicotb import *
 from nicotb.utils import Scoreboard, BusGetter, Stacker
 from nicotb.protocol import TwoWire
+from nicotb.primitives import Lock
 import numpy as np
 
 def main():
@@ -24,12 +25,15 @@ def main():
 	print(f"Seed for this run is {seed}")
 	np.random.seed(seed)
 	N = 250
+	# will test probability range(1, MATRIX+1)/MATRIX for both src and test
+	MATRIX = 3
 	scb = Scoreboard("Fifo")
 	test = scb.GetTest("test")
-	st = Stacker(N, callbacks=[test.Get])
+	lk = Lock(locked=True)
+	st = Stacker(N, callbacks=[test.Get, lambda dummy: lk.Release()])
 	bg = BusGetter(callbacks=[st.Get])
-	master = TwoWire.Master(srdy, sack, idata, ck_ev, A=5, B=8)
-	slave = TwoWire.Slave(drdy, dack, odata, ck_ev, callbacks=[bg.Get], A=4, B=8)
+	master = TwoWire.Master(srdy, sack, idata, ck_ev, B=MATRIX)
+	slave = TwoWire.Slave(drdy, dack, odata, ck_ev, callbacks=[bg.Get], B=MATRIX)
 	yield rst_out_ev
 	yield ck_ev
 	i_data = idata.value
@@ -38,11 +42,20 @@ def main():
 			i_data[0] = i
 			yield i_data
 
-	test.Expect((np.arange(N)[:,np.newaxis],))
-	yield from master.SendIter(It())
+	golden = np.arange(N)[:,np.newaxis]
+	for prob_m in range(1, MATRIX+1):
+		for prob_s in range(1, MATRIX+1):
+			test.Expect((golden,))
+			print(f"Test probability master {prob_s}/{MATRIX} and slave {prob_m}/{MATRIX}...")
+			master.A = prob_m
+			slave.A = prob_s
+			yield from master.SendIter(It())
+			# wait until get data and lock it again
+			yield lk.acquire
+			print("Done")
+			for i in range(100):
+				yield ck_ev
 
-	for i in range(3000):
-		yield ck_ev
 	assert st.is_clean
 	FinishSim()
 

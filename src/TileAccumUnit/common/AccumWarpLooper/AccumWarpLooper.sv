@@ -38,6 +38,8 @@ module AccumWarpLooper(
 `endif
 	i_linears,
 	i_bboundary,
+	i_dual_axis,
+	i_dual_order,
 	i_bsubofs,
 	i_bsub_up_order,
 	i_bsub_lo_order,
@@ -87,7 +89,9 @@ parameter STENCIL = 0;
 // This is also used for systolic (WritePipeline do not use systolic information).
 parameter USE_LOFS = 0;
 localparam WBW = TauCfg::WORK_BW;
+localparam CW_BW = TauCfg::CW_BW;
 localparam VDIM = TauCfg::VDIM;
+localparam VDIM_BW = TauCfg::VDIM_BW;
 localparam DIM = TauCfg::DIM;
 localparam DIM_BW = TauCfg::DIM_BW;
 localparam VSIZE = TauCfg::VSIZE;
@@ -113,6 +117,8 @@ input [STO_BW-1:0]  i_syst_type;
 `endif
 input [ABW-1:0]     i_linears [N_CFG];
 input [WBW-1:0]     i_bboundary      [VDIM];
+input [VDIM_BW-1:0] i_dual_axis;
+input [CW_BW-1:0]   i_dual_order;
 input [CV_BW-1:0]   i_bsubofs [VSIZE][VDIM];
 input [CCV_BW-1:0]  i_bsub_up_order  [VDIM];
 input [CCV_BW-1:0]  i_bsub_lo_order  [VDIM];
@@ -289,6 +295,8 @@ AccumWarpLooperIndexStage#(.N_CFG(N_CFG)) u_s1_idx(
 	.i_id_end(s01_id_end),
 	.i_id_ret(s01_id_ret),
 	.i_bgrid_step(i_bgrid_step),
+	.i_dual_axis(i_dual_axis),
+	.i_dual_order(i_dual_order),
 	.i_bsub_up_order(i_bsub_up_order),
 	.i_bsub_lo_order(i_bsub_lo_order),
 	`rdyack_connect(dst, s12),

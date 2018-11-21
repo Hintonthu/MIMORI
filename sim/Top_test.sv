@@ -196,11 +196,11 @@ initial begin
 	i_clk = 0;
 	i_rst = 1;
 	rd_rdy = 0;
-	#0.1 $NicotbInit();
+	#0.1 `NicotbInit;
 	#(`CLK*2) i_rst = 0;
 	#(`CLK*2) i_rst = 1;
 	#(`CLK*20000) $display("Timeout");
-	$NicotbFinal();
+	`NicotbFinal;
 	$finish;
 end
 

@@ -1,4 +1,4 @@
-// Copyright 2016 Yu Sheng Lin
+// Copyright 2016,2018 Yu Sheng Lin
 
 // This file is part of MIMORI.
 
@@ -26,6 +26,8 @@ module AluPipeline(
 	i_aofs_beg,
 	i_aofs_end,
 	i_bgrid_step,
+	i_dual_axis,
+	i_dual_order,
 	i_bsubofs,
 	i_bsub_up_order,
 	i_bsub_lo_order,
@@ -48,10 +50,12 @@ module AluPipeline(
 // Parameter
 //======================================
 localparam WBW = TauCfg::WORK_BW;
+localparam CW_BW = TauCfg::CW_BW;
 localparam DBW = TauCfg::DATA_BW;
 localparam TDBW = TauCfg::TMP_DATA_BW;
 localparam DIM = TauCfg::DIM;
 localparam VDIM = TauCfg::VDIM;
+localparam VDIM_BW = TauCfg::VDIM_BW;
 localparam N_INST = TauCfg::N_INST;
 localparam ISA_BW = TauCfg::ISA_BW;
 localparam VSIZE = TauCfg::VSIZE;
@@ -75,6 +79,8 @@ input [WBW-1:0]     i_bofs     [VDIM];
 input [WBW-1:0]     i_aofs_beg [VDIM];
 input [WBW-1:0]     i_aofs_end [VDIM];
 input [WBW-1:0]     i_bgrid_step     [VDIM];
+input [VDIM_BW-1:0] i_dual_axis;
+input [CW_BW-1:0]   i_dual_order;
 input [CV_BW-1:0]   i_bsubofs [VSIZE][VDIM];
 input [CCV_BW-1:0]  i_bsub_up_order  [VDIM];
 input [CCV_BW-1:0]  i_bsub_lo_order  [VDIM];
@@ -112,6 +118,8 @@ SimdDriver u_simd_drv(
 	.i_aofs_beg(i_aofs_beg),
 	.i_aofs_end(i_aofs_end),
 	.i_bgrid_step(i_bgrid_step),
+	.i_dual_axis(i_dual_axis),
+	.i_dual_order(i_dual_order),
 	.i_bsub_up_order(i_bsub_up_order),
 	.i_bsub_lo_order(i_bsub_lo_order),
 	.i_aboundary(i_aboundary),

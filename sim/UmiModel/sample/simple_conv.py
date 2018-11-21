@@ -33,15 +33,17 @@ a = npd.empty(1, UmiModel.ACFG_DTYPE)
 um_i0 = npd.empty(1, UmiModel.UMCFG_DTYPE)
 um_i1 = npd.empty(1, UmiModel.UMCFG_DTYPE)
 um_o = npd.empty(1, UmiModel.UMCFG_DTYPE)
+H, W = 40, 30
 
 try:
 	PAD = int(environ["PAD_VALUE"])
 except:
 	PAD = None
-p['total'] = [1,1,1,1,20,10]
-p['local'] = [1,1,1,1,16,8]
+p['total'] = [1,1,1,1,H,W]
+p['local'] = [1,1,1,1,16,16]
 p['vsize'] = [1,1,1,1,4,8]
 p['vshuf'] = [1,1,1,1,4,1]
+p['dual_axis'] = 5
 p['syst0_skip'] = 0
 p['syst0_axis'] = -1
 # This comment disables systolic sharing
@@ -56,7 +58,7 @@ um_i0['mlinear'] = [0]
 um_i0['ustart'] = [[0,0,0,0,-1,-1,0,0,0,0,0,0],]
 um_i0['ustride'] = [[0,0,0,0,1,1,0,0,0,0,1,1],]
 um_i0['udim'] = [[0,0,0,0,2,3,0,0,0,0,2,3],]
-um_i0['lmalign'] = [[170,170,170,10],]
+um_i0['lmalign'] = [[306,306,306,18],]
 um_i0['mwidth'] = [[1,1,100,301],]
 um_i0['pad_value'] = 0 if PAD is None else PAD
 
@@ -85,15 +87,15 @@ def VerfFunc(CSIZE):
 	img_2d = npd.reshape(img[:30100], (100,301))
 	conv_2d = npd.reshape(conv[:9], (3,3))
 	result_2d = npd.reshape(result, (1000,1000))
-	gold_2d = npd.zeros((20,10), dtype=i16)
+	gold_2d = npd.zeros((H,W), dtype=i16)
 	yield MemorySpace([
 		(     0, img   ),
 		(100000, conv  ),
 		(300000, result),
 	], CSIZE)
 	# check
-	for y in range(20):
-		for x in range(10):
+	for y in range(H):
+		for x in range(W):
 			yy, xx = npd.ogrid[y-1:y+2, x-1:x+2]
 			yyy = npd.fmax(yy, 0)
 			xxx = npd.fmax(xx, 0)
@@ -101,14 +103,14 @@ def VerfFunc(CSIZE):
 			if not PAD is None:
 				wind[npd.logical_or(yyy != yy, xxx != xx)] = PAD
 			gold_2d[y,x] = (1 + npd.sum(wind * conv_2d, dtype=i16))
-	npd.savetxt("img.txt",    img_2d[:20,:10], "%d")
-	npd.savetxt("ans.txt",   gold_2d[:20,:10], "%d")
-	npd.savetxt("res.txt", result_2d[:20,:10], "%d")
-	for y in range(20):
-		for x in range(10):
+	npd.savetxt("img.txt",    img_2d[:H,:W], "%d")
+	npd.savetxt("ans.txt",   gold_2d[:H,:W], "%d")
+	npd.savetxt("res.txt", result_2d[:H,:W], "%d")
+	for y in range(H):
+		for x in range(W):
 			gold = gold_2d[y,x]
 			got = result_2d[y,x]
 			assert gold == got, f"Error at pixel {y} {x}, {got} != {gold}"
-	result_2d[:20,:10] = 0
+	result_2d[:H,:W] = 0
 	assert npd.all(result_2d == 0)
 	print("SimpConv test result successes")

@@ -46,15 +46,19 @@ def main():
 			cfg.n_inst
 		)
 		bofs_alu, blofs_alu, valid_alu = cfg.CreateBofsValidTransaction(bofs[0], warpid_alu)
-		npd.copyto(data_bus[0], bofs[0])
-		npd.copyto(data_bus[1], abeg_alu[i])
-		npd.copyto(data_bus[2], aend_alu[i])
-		npd.copyto(data_bus[3], cfg.pcfg["local"][0])
-		npd.copyto(data_bus[4], cfg.pcfg["lg_vsize"][0])
-		npd.copyto(data_bus[5], cfg.pcfg["lg_vshuf"][0])
-		npd.copyto(data_bus[6], cfg.acfg["total"][0])
-		npd.copyto(data_bus[7], cfg.n_inst[0])
-		npd.copyto(data_bus[8], cfg.n_inst[1])
+		# /2 since in hardware, we use two warps (2x, 2x+1) to form a large warp x
+		warpid_alu >>= 1
+		npd.copyto(data_bus.i_bofs         , bofs[0])
+		npd.copyto(data_bus.i_aofs_beg     , abeg_alu[i])
+		npd.copyto(data_bus.i_aofs_end     , aend_alu[i])
+		npd.copyto(data_bus.i_dual_axis    , cfg.pcfg['dual_axis'])
+		npd.copyto(data_bus.i_dual_order   , cfg.pcfg['dual_order'])
+		npd.copyto(data_bus.i_bgrid_step   , cfg.pcfg["local"][0])
+		npd.copyto(data_bus.i_bsub_up_order, cfg.pcfg["lg_vsize_2x"][0])
+		npd.copyto(data_bus.i_bsub_lo_order, cfg.pcfg["lg_vshuf"][0])
+		npd.copyto(data_bus.i_aboundary    , cfg.acfg["total"][0])
+		npd.copyto(data_bus.i_inst_id_begs , cfg.n_inst[0])
+		npd.copyto(data_bus.i_inst_id_ends , cfg.n_inst[1])
 		col.Resize(rg_flat_alu.size)
 		tst.Expect((bofs_alu[:,0,:],agofs_alu[accum_alu],rg_flat_alu[:,newaxis],warpid_alu[:,newaxis]))
 		yield from master.Send(data_bus)
@@ -80,6 +84,8 @@ src_bus, inst_bus = CreateBuses([
 		("dut", "i_bofs", (VDIM,)),
 		(None , "i_aofs_beg", (VDIM,)),
 		(None , "i_aofs_end", (VDIM,)),
+		(None , "i_dual_axis"),
+		(None , "i_dual_order"),
 		(None , "i_bgrid_step", (VDIM,)),
 		(None , "i_bsub_up_order", (VDIM,)),
 		(None , "i_bsub_lo_order", (VDIM,)),

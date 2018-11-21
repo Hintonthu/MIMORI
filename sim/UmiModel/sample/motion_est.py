@@ -38,6 +38,7 @@ p['total'] = [1,1,4,4,8,8] ## 4x4 block & 8x8 search range
 p['local'] = [1,1,1,2,4,8]
 p['vsize'] = [1,1,1,1,4,8]
 p['vshuf'] = [1,1,1,1,1,1]
+p['dual_axis'] = 3
 p['syst0_skip'] = 0
 p['syst0_axis'] = -1
 p['syst1_skip'] = 0b1

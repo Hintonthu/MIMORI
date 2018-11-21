@@ -1,11 +1,16 @@
+set TECH TSMC28
+# set TECH=SYNOPSYS32
 # Initialize
 set_host_options -max_cores 8
-analyze -format sverilog -define SRAM_GEN_MODE=SYNOPSYS32,SC ../include/Top_include.sv
+analyze -format sverilog -define SRAM_GEN_MODE=${TECH},SC ../include/Top_include.sv
 elaborate Top
 link
 # Important for making make DC output a reasonable timing
 set high_fanout_net_threshold 20
-set high_fanout_net_pin_capacitance 1
+switch $TECH {
+	TSMC28 { set high_fanout_net_pin_capacitance 0.001 }
+	SYNOPSYS32 { set high_fanout_net_pin_capacitance 1 }
+}
 
 # Ungroup
 ## ungroup the inner of the cells (no-parameter and parametered cells)
@@ -30,19 +35,23 @@ set ungroup_cells {}
 foreach_in_collection d [get_designs { \
 	OffsetStage OffsetStage_* \
 	Semaphore Semaphore_* \
-	ForwardIf ForwardIf_* \
-	AcceptIf AcceptIf_* \
-	IgnoreIf IgnoreIf_* \
+	Forward Forward_* \
+	Pause PauseIf_* \
+	RepeatIf RepeatIf_* \
+	DeleteIf DeleteIf_* \
 	Reverse Reverse_* \
 	FindFromLsb FindFromLsb_* \
 	FindFromMsb FindFromMsb_* \
 	SFifoCtrl SFifoCtrl_* \
 	BroadcastInorder BroadcastInorder_* \
+	LoopController LoopController_* \
 	Broadcast Broadcast_* \
 	ForwardMulti ForwardMulti_* \
 	SRAMTwoPort SRAMTwoPort_* \
+	SRAMOnePort SRAMOnePort_* \
 	IdSelect IdSelect_* \
-	OneCycleInit Forward ForwardSlow
+	FlowControl FlowControl_* \
+	OneCycleInit Forward ForwardSlow SFifoReg*
 }] {
 	set dname [get_object_name $d]
 	echo $dname
@@ -54,7 +63,7 @@ uniquify
 ungroup -flatten $ungroup_cells
 
 # Timing
-set CLK_PERIOD 2.7
+set CLK_PERIOD 2.5
 set TRANSIT 0.1
 set CLK_PIN [get_ports i_clk]
 set RESET_PIN [get_ports i_rst]
@@ -72,7 +81,7 @@ set_input_delay $TRANSIT -clock clk [all_inputs]
 set_output_delay $TRANSIT -clock clk [all_outputs]
 set_max_area 0
 
-# TODO: Try to make a looser condition if DC spends much time on fixing DRC
+# TODO: How do we choose these
 set_max_transition 0.3 [current_design]
 set_max_fanout 100 [current_design]
 # Separate timing path groups.
@@ -86,6 +95,12 @@ set_fix_multiple_port_nets -all -buffer_constants
 # but I add this for safety.
 propagate_constraints
 check_design
+
+switch $TECH {
+	TSMC28 {
+		set_wire_load_model -name ZeroWireload -library tcbn28lpbwp30p140tt1p05v25c_ccs
+	}
+}
 
 # Can we enable boundary_optimization and seq_output_inversion
 compile_ultra -no_autoungroup -no_boundary_optimization -no_seq_output_inversion -gate_clock

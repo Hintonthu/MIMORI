@@ -37,8 +37,6 @@ def main():
 				n_aofs_i0, agofs_i0, alofs_i0,
 				rt_i_i0, rg_li_i0, rg_ri_i0
 			) = cfg.CreateAccumTransaction(abeg_i0[j], aend_i0[j])
-			print(abeg_id_i0[j])
-			print(aend_id_i0[j])
 			cfg.AllocSram(0, abeg_id_i0[j], aend_id_i0[j])
 			linear_i0 = cfg.umcfg_i0['local_adr'][:,0]
 			accum_idx_i0, warpid_i0, rg_flat_i0, rt_flat_i0 = cfg.CreateAccumWarpTransaction(
@@ -52,34 +50,35 @@ def main():
 				rg_flat_i0, linear_i0, cfg.umcfg_i0, True
 			)
 			valid_i0_packed = npd.bitwise_or.reduce(valid_i0 << npi.arange(VSIZE)[newaxis,:], axis=1)
-
 			# Send source
-			npd.copyto(data_bus[ 0], bofs[i])
-			npd.copyto(data_bus[ 1], abeg_i0[j])
-			npd.copyto(data_bus[ 2], aend_i0[j])
-			npd.copyto(data_bus[ 3], linear_i0)
-			npd.copyto(data_bus[ 4], cfg.pcfg["total"][0])
-			npd.copyto(data_bus[ 5], cfg.v_nd >> cfg.pcfg["lg_vshuf"][0])
-			npd.copyto(data_bus[ 6], cfg.pcfg["lg_vsize"][0])
-			npd.copyto(data_bus[ 7], cfg.pcfg["lg_vshuf"][0])
-			npd.copyto(data_bus[ 8], cfg.acfg["total"][0])
-			npd.copyto(data_bus[ 9], cfg.pcfg["local"][0])
-			npd.copyto(data_bus[10], cfg.umcfg_i0["udim"][:,VDIM:])
-			npd.copyto(data_bus[11], cfg.umcfg_i0["ustride_frac"][:,VDIM:])
-			npd.copyto(data_bus[12], cfg.umcfg_i0["ustride_shamt"][:,VDIM:])
-			npd.copyto(data_bus[13], cfg.umcfg_i0["udim"][:,:VDIM])
-			npd.copyto(data_bus[14], cfg.umcfg_i0["ustride_frac"][:,:VDIM])
-			npd.copyto(data_bus[15], cfg.umcfg_i0["ustride_shamt"][:,:VDIM])
-			npd.copyto(data_bus[16], cfg.umcfg_i0["vlinear"][:,1<<npi.arange(CV_BW)])
-			npd.copyto(data_bus[17], cfg.umcfg_i0["lmalign"][:,:DIM])
-			npd.copyto(data_bus[18], cfg.n_i0[0][i])
-			npd.copyto(data_bus[19], cfg.n_i0[1][i])
+			npd.copyto(data_bus.i_bofs          , bofs[i])
+			npd.copyto(data_bus.i_abeg          , abeg_i0[j])
+			npd.copyto(data_bus.i_aend          , aend_i0[j])
+			npd.copyto(data_bus.i_linears       , linear_i0)
+			npd.copyto(data_bus.i_bboundary     , cfg.pcfg["total"][0])
+			npd.copyto(data_bus.i_dual_axis     , cfg.pcfg['dual_axis'])
+			npd.copyto(data_bus.i_dual_order    , cfg.pcfg['dual_order'])
+			npd.copyto(data_bus.i_bsubofs       , cfg.v_nd >> cfg.pcfg["lg_vshuf"][0])
+			npd.copyto(data_bus.i_bsub_up_order , cfg.pcfg["lg_vsize_2x"][0])
+			npd.copyto(data_bus.i_bsub_lo_order , cfg.pcfg["lg_vshuf"][0])
+			npd.copyto(data_bus.i_aboundary     , cfg.acfg["total"][0])
+			npd.copyto(data_bus.i_bgrid_step    , cfg.pcfg["local"][0])
+			npd.copyto(data_bus.i_global_bshufs , cfg.umcfg_i0["udim"][:,VDIM:])
+			npd.copyto(data_bus.i_bstrides_frac , cfg.umcfg_i0["ustride_frac"][:,VDIM:])
+			npd.copyto(data_bus.i_bstrides_shamt, cfg.umcfg_i0["ustride_shamt"][:,VDIM:])
+			npd.copyto(data_bus.i_global_ashufs , cfg.umcfg_i0["udim"][:,:VDIM])
+			npd.copyto(data_bus.i_astrides_frac , cfg.umcfg_i0["ustride_frac"][:,:VDIM])
+			npd.copyto(data_bus.i_astrides_shamt, cfg.umcfg_i0["ustride_shamt"][:,:VDIM])
+			npd.copyto(data_bus.i_mofs_bsubsteps, cfg.umcfg_i0["vlinear"][:,1<<npi.arange(CV_BW)])
+			npd.copyto(data_bus.i_mboundaries   , cfg.umcfg_i0["lmalign"][:,:DIM])
+			npd.copyto(data_bus.i_id_begs       , cfg.n_i0[0][i])
+			npd.copyto(data_bus.i_id_ends       , cfg.n_i0[1][i])
 			if ST_MODE:
 				dc.Resize(accum_idx_i0.shape[0]*2)
-				npd.copyto(data_bus[20], 1)
-				npd.copyto(data_bus[21], 0)
-				npd.copyto(data_bus[22], 2)
-				data_bus[23][:2] = [0,1]
+				npd.copyto(data_bus.i_stencil     , 1)
+				npd.copyto(data_bus.i_stencil_begs, 0)
+				npd.copyto(data_bus.i_stencil_ends, 2)
+				data_bus.i_stencil_lut[:2] = [0,1]
 				tst.Expect((
 					npd.repeat(rg_flat_i0[:,newaxis], 2, axis=0),
 					(accum_idx_i0[:,newaxis,:]+data_bus[17][:2][:,newaxis]).reshape(-1, VSIZE),
@@ -89,7 +88,7 @@ def main():
 				))
 			else:
 				dc.Resize(accum_idx_i0.shape[0])
-				npd.copyto(data_bus[20], 0)
+				npd.copyto(data_bus.i_stencil, 0)
 				tst.Expect((rg_flat_i0[:,newaxis], addr_i0, valid_i0_packed[:,newaxis], rt_flat_i0[:,newaxis]))
 			yield ck_ev
 			yield from master.Send(data_bus)
@@ -133,6 +132,8 @@ bofs_bus, av_bus = CreateBuses([
 		(None , "i_aend", (VDIM,)),
 		(None , "i_linears", (N_CFG,)),
 		(None , "i_bboundary", (VDIM,)),
+		(None , "i_dual_axis"),
+		(None , "i_dual_order"),
 		(None , "i_bsubofs", (VSIZE,VDIM,)),
 		(None , "i_bsub_up_order", (VDIM,)),
 		(None , "i_bsub_lo_order", (VDIM,)),

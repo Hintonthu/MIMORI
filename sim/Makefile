@@ -60,7 +60,9 @@ awl:
 	make COVERAGE=$(COV) AccumWarpLooper
 
 fifo:
-	make COVERAGE=$(COV) SFifo
+	-make ARGS="+define+IMPL=0" COVERAGE=$(COV) SFifo
+	-make ARGS="+define+IMPL=1" COVERAGE=$(COV) SFifo
+	-make ARGS="+define+IMPL=2" COVERAGE=$(COV) SFifo
 
 dump_scoreboard:
 	@echo -e \
@@ -95,4 +97,4 @@ $(NICOTB)/cpp/nicotb.so:
 	make -C $(NICOTB)/cpp/
 
 clean:
-	-rm -rf ncsim* novas* irun* *.rc scoreboard.db __pycache__ INCA_libs
+	-rm -rf ncsim* novas* irun* *.rc scoreboard.db __pycache__ INCA_libs *.fsdb *.log *.X *Log
