@@ -135,6 +135,7 @@ end
 
 SRAMOnePort#(FLAT_BW*2, NWORD) u_sram(
 	.i_clk(i_clk),
+	.i_rst(i_rst),
 	.i_ce(sram_ce),
 	.i_r0w1(sram_we),
 	.i_rwaddr(sram_rwaddr),

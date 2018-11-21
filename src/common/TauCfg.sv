@@ -13,12 +13,12 @@ package TauCfg;
 	parameter STRIDE_FRAC_BW = 3;  // stride (s) ==> actual stride = f<<s
 	parameter TMP_DATA_BW = 20;    // tmp data
 	parameter GLOBAL_ADDR_BW = 32; // global address (DRAM)
-	parameter LOCAL_ADDR_BW0 = 12; // local address (SRAM)
-	parameter LOCAL_ADDR_BW1 = 11; // local address (SRAM)
+	parameter LOCAL_ADDR_BW0 = 13; // local address (SRAM)
+	parameter LOCAL_ADDR_BW1 = 12; // local address (SRAM)
 	parameter VDIM = 6; // #DIM of parallelism/accumumation idx
 	parameter DIM = 4;  // #DIM of actual tensor
 	parameter CACHE_SIZE = 8;
-	parameter SRAM_NWORD = 64;
+	parameter SRAM_NWORD = 32;
 	parameter WARP_REG_ADDR_SPACE = 8;
 	parameter MAX_WARP = 64;
 	parameter CONST_LUT = 4; // Do not modify it owing to the limitataion of ISA
