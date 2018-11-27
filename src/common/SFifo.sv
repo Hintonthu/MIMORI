@@ -297,14 +297,14 @@ generate if (NDATA < 2 || IMPL < 0 || IMPL > 2) begin: error_fifo
 end else if (IMPL == 0) begin: fifo_reg
 	logic [NDATA-2:0] load_nxt;
 	logic [NDATA-1:0] load_new;
-	SFifoCtrl u_ctrl(
+	SFifoCtrl#(NDATA) u_ctrl(
 		`clk_connect,
 		`rdyack_connect(src, src),
 		`rdyack_connect(dst, dst),
 		.o_load_nxt(load_nxt),
 		.o_load_new(load_new)
 	);
-	SFifoReg1D u_reg(
+	SFifoReg1D#(BW,NDATA) u_reg(
 		`clk_connect,
 		.i_load_nxt(load_nxt),
 		.i_load_new(load_new),
@@ -332,6 +332,7 @@ end else if (IMPL == 1) begin: fifo_2p
 	);
 	SRAMTwoPort#(BW,NDATA) u_sram(
 		.i_clk(i_clk),
+		.i_rst(i_rst),
 		.i_we(src_ack),
 		.i_re(re),
 		.i_waddr(wa_r),
@@ -416,6 +417,7 @@ end else if (IMPL == 2) begin: fifo_1p
 	);
 	SRAMOnePort#(BW*2,NDATA2) u_sram(
 		.i_clk(i_clk),
+		.i_rst(i_rst),
 		.i_ce(ce),
 		.i_r0w1(fifo_ack),
 		.i_rwaddr(rwa_r),

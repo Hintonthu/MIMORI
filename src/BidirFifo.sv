@@ -93,7 +93,7 @@ end
 //======================================
 // Submodule
 //======================================
-SFifo#(.IMPL(1), .NDATA(TauCfg::SYSTOLIC_FIFO_DEPTH), .BW(1+TOTAL_BW)) u_fifo(
+SFifo#(.IMPL(0), .NDATA(TauCfg::SYSTOLIC_FIFO_DEPTH), .BW(1+TOTAL_BW)) u_fifo(
 	`clk_connect,
 	`rdyack_connect(src, src),
 	.i_data(s_data),
